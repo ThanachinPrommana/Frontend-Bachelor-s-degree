@@ -1,141 +1,6 @@
-// import React, { useEffect } from "react";
-// import { useNavigate } from "react-router-dom";
-// import { useForm, useFormContext } from "react-hook-form";
-// import { z } from "zod";
-// import { zodResolver } from "@hookform/resolvers/zod";
-
-// import { Input } from "@/components/ui/input";
-// import { Button } from "@/components/ui/button";
-// import {
-//   Form,
-//   FormField,
-//   FormItem,
-//   FormLabel,
-//   FormMessage,
-// } from "@/components/ui/form";
-// import PostLayout from "@/layouts/PostLayout";
-
-// import { FileText } from "lucide-react";
-// import { Card, CardContent } from "@/components/ui/card";
-
-// const schema = z.object({
-//   title: z.string().min(5, "กรุณากรอกหัวข้ออย่างน้อย 5 ตัวอักษร"),
-//   description: z.string().min(10, "กรุณากรอกรายละเอียดอย่างน้อย 10 ตัวอักษร"),
-// });
-// const form = useFormContext()
-// const navigate = useNavigate()
-
-// const PostTitle = () => {
-// //   const navigate = useNavigate();
-
-// //   const form = useForm({
-// //     resolver: zodResolver(schema),
-// //     defaultValues: {
-// //       title: "",
-// //       description: "",
-// //     },
-// //   });
-
-// //   // โหลดค่าจาก localStorage ถ้ามี
-// //   useEffect(() => {
-// //     const saved = localStorage.getItem("postData");
-// //     if (saved) {
-// //       const parsed = JSON.parse(saved);
-// //       form.reset({
-// //         title: parsed.title || "",
-// //         description: parsed.description || "",
-// //       });
-// //     }
-// //   }, [form]);
-
-// //   // บันทึกค่าลง localStorage ทุกครั้งที่เปลี่ยน
-// //   useEffect(() => {
-// //     const subscription = form.watch((value) => {
-// //       const saved = localStorage.getItem("postData");
-// //       const currentData = saved ? JSON.parse(saved) : {};
-// //       localStorage.setItem(
-// //         "postData",
-// //         JSON.stringify({ ...currentData, ...value })
-// //       );
-// //     });
-// //     return () => subscription.unsubscribe();
-// //   }, [form]);
-
-//   const onSubmit = () => navigate("/seller/post-for-sale/location");
-//     // const saved = localStorage.getItem("postData");
-//     // const currentData = saved ? JSON.parse(saved) : {};
-//     // localStorage.setItem(
-//     //   "postData",
-//     //   JSON.stringify({ ...currentData, ...data })
-//     // );
-    
-  
-
-//   return (
-//     <PostLayout currentStep={0}>
-//       <div className="flex justify-center">
-//         <Card className="w-full max-w-3xl shadow-xl">
-//           <CardContent className="py-8 px-6 space-y-6">
-//             <div className="text-center">
-//               <FileText className="mx-auto w-10 h-10 text-primary" />
-//               <h2 className="text-2xl font-semibold mt-2">ตั้งหัวข้อประกาศ</h2>
-//               <p className="text-muted-foreground text-sm">
-//                 โปรดตั้งหัวข้อและรายละเอียดเพื่อดึงดูดความสนใจของผู้ซื้อ
-//               </p>
-//             </div>
-
-            
-//               <form
-//                 onSubmit={form.handleSubmit(onSubmit)}
-//                 className="space-y-6"
-//               >
-//                 <FormField
-//                   control={form.control}
-//                   name="title"
-//                   render={({ field }) => (
-//                     <FormItem>
-//                       <FormLabel>หัวข้อประกาศ</FormLabel>
-//                       <Input
-//                         placeholder="เช่น บ้านเดี่ยว 2 ชั้น ใกล้รถไฟฟ้า"
-//                         {...field}
-//                       />
-//                       <FormMessage />
-//                     </FormItem>
-//                   )}
-//                 />
-
-//                 <FormField
-//                   control={form.control}
-//                   name="description"
-//                   render={({ field }) => (
-//                     <FormItem>
-//                       <FormLabel>รายละเอียด</FormLabel>
-//                       <Input
-//                         placeholder="กรอกรายละเอียดของทรัพย์สิน เช่น ทำเล ขนาด สภาพ"
-//                         {...field}
-//                       />
-//                       <FormMessage />
-//                     </FormItem>
-//                   )}
-//                 />
-
-//                 <div className="flex justify-end">
-//                   <Button type="submit">ถัดไป</Button>
-//                 </div>
-//               </form>
-            
-//           </CardContent>
-//         </Card>
-//       </div>
-//     </PostLayout>
-//   );
-// };
-
-// export default PostTitle;
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useFormContext } from "react-hook-form";
-
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -145,42 +10,62 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import PostLayout from "@/layouts/PostLayout";
-
-import { FileText } from "lucide-react";
+import { FileText, Info } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { postTitleSchema } from "@/components/schemas/postSchemas/postTitleSchema";
+import { validateStep } from "@/lib/zodRHF";
 
 const PostTitle = () => {
   const navigate = useNavigate();
-  const form = useFormContext(); 
-  
+  const form = useFormContext();
+
   const onSubmit = () => {
-    navigate("/seller/post-for-sale/location"); 
-    
+    const ok = validateStep(form, postTitleSchema, [
+      "Property_Name",
+      "Description",
+    ]);
+    if (!ok) return;
+    navigate("/seller/post-for-sale/location");
   };
 
   return (
     <PostLayout currentStep={0}>
       <div className="flex justify-center">
-        <Card className="w-full max-w-3xl shadow-xl">
-          <CardContent className="py-8 px-6 space-y-6">
-            <div className="text-center">
-              <FileText className="mx-auto w-10 h-10 text-primary" />
-              <h2 className="text-2xl font-semibold mt-2">ตั้งหัวข้อประกาศ</h2>
+        <Card className="w-full max-w-3xl shadow-xl border-0 ring-1 ring-black/5">
+          <CardContent className="py-8 px-6 md:px-8 space-y-8">
+            {/* Header */}
+            <div className="text-center space-y-2">
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <FileText className="w-6 h-6 text-primary" />
+              </div>
+              <h2 className="text-2xl font-semibold">ตั้งหัวข้อประกาศ</h2>
               <p className="text-muted-foreground text-sm">
                 โปรดตั้งหัวข้อและรายละเอียดเพื่อดึงดูดความสนใจของผู้ซื้อ
               </p>
             </div>
 
+            {/* Helper banner */}
+            <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground flex items-start gap-3">
+              <Info className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>
+                หัวข้อควรบอก{" "}
+                <span className="font-medium">ประเภท, ขนาด หรือทำเล</span> เช่น
+                “บ้านเดี่ยว 2 ชั้น ใกล้ BTS” และรายละเอียดควรอธิบายจุดเด่น
+              </p>
+            </div>
+
+            {/* Form */}
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <FormField
                 control={form.control}
-                name="Property_Name" 
+                name="Property_Name"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>หัวข้อประกาศ</FormLabel>
                     <Input
                       placeholder="เช่น บ้านเดี่ยว 2 ชั้น ใกล้รถไฟฟ้า"
                       {...field}
+                      className="h-11"
                     />
                     <FormMessage />
                   </FormItem>
@@ -189,21 +74,25 @@ const PostTitle = () => {
 
               <FormField
                 control={form.control}
-                name="Description" 
+                name="Description"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>รายละเอียด</FormLabel>
-                    <Input
-                      placeholder="กรอกรายละเอียดของทรัพย์สิน เช่น ทำเล ขนาด สภาพ"
+                    <textarea
+                      rows={4}
+                      placeholder="กรอกรายละเอียดของทรัพย์สิน เช่น ทำเล ขนาด สภาพ หรือสิ่งอำนวยความสะดวก"
                       {...field}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <div className="flex justify-end">
-                <Button type="submit">ถัดไป</Button>
+              <div className="flex justify-end pt-2">
+                <Button type="submit" className="min-w-[120px]">
+                  ถัดไป
+                </Button>
               </div>
             </form>
           </CardContent>

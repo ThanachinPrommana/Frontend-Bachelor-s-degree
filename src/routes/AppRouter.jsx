@@ -121,16 +121,22 @@ const AppRouter = () => {
             <Route path="support" element={<Support />} />
 
             {/* Post For Sale - Seller Access */}
-            <Route element={<PostFormProvider><Outlet/></PostFormProvider>}>
-            <Route path="post-for-sale" element={<PostForSaleLayout />}>
-              <Route path="title" element={<PostTitle />} />
-              <Route path="location" element={<PostLocation />} />
-              <Route path="detail" element={<PostDetail />} />
-              <Route path="price" element={<PostPrice />} />
-              <Route path="inform" element={<PostInform />} />
-              <Route path="upload" element={<PostUpload />} />
-              <Route path="confirm" element={<PostConfirm />} />
-            </Route>
+            <Route
+              element={
+                <PostFormProvider>
+                  <Outlet />
+                </PostFormProvider>
+              }
+            >
+              <Route path="post-for-sale" element={<PostForSaleLayout />}>
+                <Route path="title" element={<PostTitle />} />
+                <Route path="location" element={<PostLocation />} />
+                <Route path="detail" element={<PostDetail />} />
+                <Route path="price" element={<PostPrice />} />
+                <Route path="inform" element={<PostInform />} />
+                <Route path="upload" element={<PostUpload />} />
+                <Route path="confirm" element={<PostConfirm />} />
+              </Route>
             </Route>
           </Route>
         </Route>
