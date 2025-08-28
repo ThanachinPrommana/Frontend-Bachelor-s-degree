@@ -20,6 +20,7 @@ import { MapPin, Info } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { postLocationSchema } from "@/components/schemas/postSchemas/postLocationSchema";
 import { validateStep } from "@/lib/zodRHF";
+import { Input } from "@headlessui/react";
 
 const PROVINCE_URL =
   "https://raw.githubusercontent.com/kongvut/thai-province-data/master/api_province.json";
@@ -32,18 +33,17 @@ const PostLocation = () => {
   const navigate = useNavigate();
   const form = useFormContext();
 
-  // master lists
   const [provinces, setProvinces] = useState([]);
   const [allAmphures, setAllAmphures] = useState([]);
   const [allDistricts, setAllDistricts] = useState([]);
 
-  // derived lists (ตาม province/district ที่เลือก)
+
   const [amphures, setAmphures] = useState([]);
   const [districts, setDistricts] = useState([]);
 
   const [loading, setLoading] = useState(true);
 
-  // โหลดข้อมูลทั้งสามรายการครั้งเดียว (เร็วและทำให้ hydrate ง่าย)
+
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -73,13 +73,13 @@ const PostLocation = () => {
     };
   }, []);
 
-  // ------- HYDRATE ค่าที่มีอยู่ในฟอร์ม เมื่อเปิดหน้า/ย้อนกลับมา -------
+
   useEffect(() => {
     if (loading) return;
     const currentProvince = form.getValues("Province");
     const currentDistrict = form.getValues("District");
 
-    // ถ้ามี province ในฟอร์ม -> คำนวณอำเภอที่ตรงจังหวัดนั้น
+
     if (currentProvince) {
       const p = provinces.find((x) => x.name_th === currentProvince);
       const amps = p
@@ -87,7 +87,7 @@ const PostLocation = () => {
         : [];
       setAmphures(amps);
 
-      // ถ้ามี district อยู่แล้ว -> เติมรายการตำบลของอำเภอนั้น
+
       if (currentDistrict) {
         const amp = amps.find((a) => a.name_th === currentDistrict);
         const dists = amp
@@ -95,36 +95,36 @@ const PostLocation = () => {
           : [];
         setDistricts(dists);
 
-        // ถ้า district เดิมไม่อยู่ในจังหวัดนี้แล้ว -> เคลียร์
+
         if (!amp) {
           form.resetField("District");
           form.resetField("Subdistrict");
           setDistricts([]);
         }
       } else {
-        // ไม่มี district เดิม -> เคลียร์ตำบลไว้ก่อน
+
         setDistricts([]);
         form.resetField("Subdistrict");
       }
     } else {
-      // ไม่มี province -> เคลียร์ลิสต์ย่อย
+
       setAmphures([]);
       setDistricts([]);
       form.resetField("District");
       form.resetField("Subdistrict");
     }
-  }, [loading, provinces, allAmphures, allDistricts]); // รันเมื่อโหลด master เสร็จ
+  }, [loading, provinces, allAmphures, allDistricts]);
 
-  // --------- handler ตอน "ผู้ใช้เปลี่ยน" จังหวัด/อำเภอ ในหน้านี้ ----------
+
   const handleProvinceChange = (provinceName) => {
-    // อัปเดตค่าในฟอร์ม
+
     form.setValue("Province", provinceName, { shouldDirty: true });
 
-    // reset ฟิลด์ลูก
+
     form.resetField("District");
     form.resetField("Subdistrict");
 
-    // คำนวณอำเภอตามจังหวัดใหม่
+
     const p = provinces.find((x) => x.name_th === provinceName);
     const amps = p
       ? allAmphures.filter((a) => String(a.province_id) === String(p.id))
@@ -152,6 +152,7 @@ const PostLocation = () => {
       "LinkMap",
       "Latitude",
       "Longitude",
+      "Address"
     ]);
     if (!ok) return;
     navigate("/seller/post-for-sale/detail");
@@ -286,6 +287,21 @@ const PostLocation = () => {
                       </SelectContent>
                     </Select>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="Address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ที่อยู่</FormLabel>
+                    <Input
+                    placeholder="เลขที่/หมู่ที่/ตรอก/ซอย/ถนน/รหัสไปรษณีย์"
+                    {...field}
+                    className="w-full rounded border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <FormMessage/>
                   </FormItem>
                 )}
               />

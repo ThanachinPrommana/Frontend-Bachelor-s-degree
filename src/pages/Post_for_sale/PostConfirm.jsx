@@ -43,17 +43,17 @@ function safeJoin(arr, sep = ", ") {
   return Array.isArray(arr) && arr.length ? arr.join(sep) : "-";
 }
 
-/** พยายามแสดงชื่อประเภททรัพย์จากหลายรูปแบบของ API */
+
 function getCategoryName(postData) {
   return (
     postData?.Category?.Property_type ||
-    postData?.categoryName || // เผื่อ backend คืนชื่อไว้ตรง ๆ
-    postData?.Propertytype || // เคสที่เก็บเป็นตัวแปรนี้
+    postData?.categoryName || 
+    postData?.Propertytype || 
     "-"
   );
 }
 
-/** ดูว่าโพสต์เป็นขายหรือเช่า */
+
 function getSellRent(postData) {
   const raw = postData?.Sell_Rent;
   if (!raw) return "-";
@@ -119,7 +119,7 @@ const PostConfirm = () => {
   const handleSubmit = () => {
     // TODO: ทำ action หลังบ้านถ้ามี
     setShowConfirm(false);
-    navigate("/");
+    navigate("/seller");
   };
 
   if (isLoading) {
@@ -405,18 +405,12 @@ const PostConfirm = () => {
             </Section>
 
             {/* ปุ่มยืนยัน */}
-            <div className="flex justify-between pt-2">
-              <Button
-                variant="outline"
-                onClick={() => navigate("/seller/post-for-sale/upload")}
-              >
-                ย้อนกลับ
-              </Button>
+            <div className="flex justify-end pt-2">
               <Button
                 onClick={() => setShowConfirm(true)}
                 className="min-w-[140px]"
               >
-                ยืนยันการโพสต์
+                สำเร็จ
               </Button>
             </div>
           </CardContent>
@@ -427,16 +421,15 @@ const PostConfirm = () => {
       <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>ยืนยันการโพสต์ประกาศ</AlertDialogTitle>
+            <AlertDialogTitle>รอการอนุมัติจากแอดมิน</AlertDialogTitle>
           </AlertDialogHeader>
           <p className="text-sm text-muted-foreground">
-            คุณแน่ใจหรือไม่ว่าต้องการโพสต์ประกาศนี้?
-            หลังจากโพสต์แล้วคุณยังสามารถแก้ไขได้ภายหลัง
+            อยู่ในขั้นตอนตรวจสอบ จะเห็นประกาศได้ภายใน 24 ชม. ทำการ
           </p>
           <AlertDialogFooter>
-            <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+            
             <AlertDialogAction onClick={handleSubmit}>
-              โพสต์ประกาศ
+              สำเร็จ
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

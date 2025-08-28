@@ -7,4 +7,5 @@ export const postLocationSchema = z.object({
   LinkMap: z.string().url("กรุณากรอกลิงก์แผนที่ให้ถูกต้อง").optional().or(z.literal("")),
   Latitude: z.number({ invalid_type_error: "กรุณากรอกละติจูดเป็นตัวเลข" }).optional(),
   Longitude: z.number({ invalid_type_error: "กรุณากรอกลองจิจูดเป็นตัวเลข" }).optional(),
+  Address: z.string().min(1,"กรุณากรอกที่อยู่")
 });

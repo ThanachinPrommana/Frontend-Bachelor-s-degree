@@ -1,8 +1,13 @@
 import axios from "axios";
-const API_URL = "http://localhost:8200"
+import { apiClient } from "./authconfig";
 
-export const createpost = async (id, data) => {
-    const res = await axios.post(`${API_URL}/api/propertypost/${id}`,data)
+
+export const createpost = async (formData) => {
+    const res = await apiClient.post("/propertypost", formData, {
+        headers: {
+            "Content-Type": "multipart/form-data", 
+        }
+    })
     return res.data
 
 }

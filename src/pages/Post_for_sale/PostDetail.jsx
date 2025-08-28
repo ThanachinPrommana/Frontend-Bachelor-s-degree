@@ -15,7 +15,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Home, Info } from "lucide-react";
 import { validateStep } from "@/lib/zodRHF";
 
-// ===== Schema (ใช้ preprocess ป้องกัน NaN และรองรับค่าว่าง) =====
+
 const currentYear = new Date().getFullYear();
 
 const numOpt = z.preprocess(
@@ -43,7 +43,7 @@ const detailSchema = z.object({
   Usable_Area: numOpt, // ตร.ม.
   Land_Size: numOpt, // ตร.วา
   Total_Rooms: numOpt,
-  Year_Built: yearOpt, // ✅ แก้เรื่องปีที่สร้าง
+  Year_Built: yearOpt, 
   Bedrooms: numReq,
   Bathroom: numReq,
   Nearby_Landmarks: z.array(z.string()).optional(),

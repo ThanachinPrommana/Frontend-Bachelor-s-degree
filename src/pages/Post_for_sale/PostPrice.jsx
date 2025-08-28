@@ -240,7 +240,7 @@ function PostPrice() {
                     {/* Deposit_Rent */}
                     <FormField
                       control={form.control}
-                      name="Deposit_Rent"
+                      name="Deposit_Amount"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>ค่ามัดจำ (บาท)</FormLabel>

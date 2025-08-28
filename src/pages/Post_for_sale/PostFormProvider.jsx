@@ -3,14 +3,13 @@ import { useForm, FormProvider } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-// ---- helpers แปลง number แบบปลอดภัย ----
+
 const numberOrUndefined = z.preprocess(
   (v) => (v === "" || v === undefined || v === null ? undefined : Number(v)),
   z.number().optional()
 );
 
-// ---- Soft schema รวมทุกฟิลด์หลัก (optional เกือบทั้งหมด) ----
-// ทำไว้เพื่อให้ต่อ zodResolver แบบ global ได้ โดยไม่บังคับทุก step
+
 const softSchema = z.object({
   // General
   Property_Name: z.string().min(5, "หัวข้ออย่างน้อย 5 ตัว").optional(),
@@ -58,7 +57,7 @@ const softSchema = z.object({
 
 export const PostFormProvider = ({ children }) => {
   const methods = useForm({
-    // 👇 defaultValues เท่าที่คุณใช้อยู่ (JS/JSX)
+    
     defaultValues: {
       // General Info
       Property_Name: "",
@@ -101,7 +100,7 @@ export const PostFormProvider = ({ children }) => {
       Contract_Seller: "",
 
       // Upload
-      images: null, // จะถูก set ตอนอัปโหลด
+      images: null, 
     },
     resolver: zodResolver(softSchema), // ✅ ต่อ global แบบนิ่ม ๆ
     mode: "onSubmit",

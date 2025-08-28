@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { Trash2, Image as ImageIcon, CircleX, Info } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import axios from "axios";
+import { createpost } from "@/api/post";
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_IMAGES = 5;
@@ -112,8 +113,16 @@ function PostUpload() {
 
   const canAddMore = images.length < MAX_IMAGES;
 
-  // ส่งข้อมูล
+
   const handleNext = async () => {
+    const isConfirmed = window.confirm(
+      "กรุณาตรวจสอบรายละเอียดให้ครบถ้วน\nคุณแน่ใจหรือไม่ว่าต้องการสร้างโพสต์นี้?"
+    );
+
+    
+    if (!isConfirmed) {
+      return;
+    }
     if (images.length === 0) {
       setError("กรุณาอัปโหลดรูปภาพอย่างน้อย 1 รูป");
       return;
@@ -124,10 +133,8 @@ function PostUpload() {
     const allData = form.getValues();
     const formData = new FormData();
 
-    // แนบไฟล์รูป
     allData.images.forEach((img) => formData.append("images", img.file));
 
-    // แนบข้อมูลอื่น
     for (const key in allData) {
       if (key === "images") continue;
       const value = allData[key];
@@ -141,22 +148,12 @@ function PostUpload() {
     }
 
     try {
-      const userId = localStorage.getItem("id");
-      if (!userId)
-        throw new Error("ไม่พบ User ID กรุณาเข้าสู่ระบบใหม่อีกครั้ง");
 
-      const response = await axios.post(
-        `${API_URL}/api/propertypost/${userId}`,
-        formData,
-        {
-          headers: {},
-        }
-      );
+      const response = await createpost(formData);
 
-      // สำเร็จ
       form.reset();
       navigate("/seller/post-for-sale/confirm", {
-        state: { postId: response.data.id },
+        state: { postId: response.id },
       });
     } catch (apiError) {
       const message =
@@ -169,6 +166,7 @@ function PostUpload() {
       setIsSubmitting(false);
     }
   };
+
 
   return (
     <PostLayout currentStep={5}>
