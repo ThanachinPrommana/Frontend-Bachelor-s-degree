@@ -1,6 +1,5 @@
 import Logo from "./Logo";
-import Post_for_sale from "./Post_for_sale";
-import Support from "./Support";
+
 import Noti from "./Noti";
 import { useNavigate } from "react-router";
 import {
@@ -13,21 +12,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AlignJustify, UserPen, HeartPlus, StickyNote } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { apiClient } from "@/api/authconfig";
-import ProfileSeller from "@/pages/Profile/ProfileSeller";
-import Profile_Seller from "./Profile_Seller";
-import axios from "axios";
-
 
 const Navbar_Seller = () => {
   const navigate = useNavigate();
   const { authUser, setAuthUser } = useAuth();
   const { logout } = useAuth();
   const handleLogout = async () => {
-    await logout()
-    navigate("/login")
+    await logout();
+    navigate("/login");
   };
-
 
   return (
     <nav className="py-4 px-5 shadow-md border-b border-gray-200 bg-[#2c3e50] text-white">
@@ -40,20 +33,30 @@ const Navbar_Seller = () => {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>
-                {authUser ? `${authUser.First_name} ${authUser.Last_name}` : "Guest"}
+                {authUser
+                  ? `${authUser.First_name} ${authUser.Last_name}`
+                  : "Guest"}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="cursor-pointer" onClick={() => {
-                navigate("/seller/profile")
-              }}>
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => {
+                  navigate("/seller/profile");
+                }}
+              >
                 <div className="flex space-x-2 justify-center items-center">
                   <UserPen />
-                  <p className="text-gray-500 hover:text-black opacity-100">Profile</p>
+                  <p className="text-gray-500 hover:text-black opacity-100">
+                    Profile
+                  </p>
                 </div>
               </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer" onClick={() => {
-                navigate("/seller/post-for-sale/title")
-              }}>
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => {
+                  navigate("/seller/post-for-sale/title");
+                }}
+              >
                 <div className="flex justify-center items-center space-x-2">
                   <StickyNote />
                   <p className="text-gray-500 hover:text-black opacity-100">
@@ -64,17 +67,23 @@ const Navbar_Seller = () => {
               <DropdownMenuItem className="cursor-pointer">
                 <Noti />
               </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer" onClick={() => {
-                navigate("/seller/support")
-              }}>
-                <div
-                  className="flex justify-center items-center space-x-2"
-                >
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => {
+                  navigate("/seller/support");
+                }}
+              >
+                <div className="flex justify-center items-center space-x-2">
                   <HeartPlus />
-                  <p className="text-gray-500 hover:text-black opacity-100">Support</p>
+                  <p className="text-gray-500 hover:text-black opacity-100">
+                    Support
+                  </p>
                 </div>
               </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer" onClick={handleLogout}>
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={handleLogout}
+              >
                 <p className="text-black font-medium">Logout</p>
               </DropdownMenuItem>
             </DropdownMenuContent>

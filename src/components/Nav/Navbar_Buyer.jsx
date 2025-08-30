@@ -9,22 +9,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import Profile_Buyer from "./Profile_Buyer";
-import Support_Buyer from "./Support_Buyer";
-import { AlignJustify, UserPen, HeartPlus } from "lucide-react";  
+import { AlignJustify, UserPen, HeartPlus } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { apiClient } from "@/api/authconfig";
 const Navbar_Buyer = () => {
-  const { authUser, setAuthUser } = useAuth()
+  const { authUser, setAuthUser } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
     try {
-      await apiClient.post("logout")
-      setAuthUser(null)
-      navigate("/login")
+      await apiClient.post("logout");
+      setAuthUser(null);
+      navigate("/login");
     } catch (err) {
-      console.err("Logout failed:", err)
+      console.err("Logout failed:", err);
     }
   };
 
@@ -39,28 +37,38 @@ const Navbar_Buyer = () => {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>
-                {authUser ? `${authUser.First_name} ${authUser.Last_name}` : "Guest"}
+                {authUser
+                  ? `${authUser.First_name} ${authUser.Last_name}`
+                  : "Guest"}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="cursor-pointer" onClick={() => {
-                navigate("/buyer/profile")
-              }}>
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => {
+                  navigate("/buyer/profile");
+                }}
+              >
                 <div className="flex space-x-2 justify-center items-center">
                   <UserPen />
-                  <p className="text-gray-500 hover:text-black opacity-100">Profile</p>
+                  <p className="text-gray-500 hover:text-black opacity-100">
+                    Profile
+                  </p>
                 </div>
               </DropdownMenuItem>
               <DropdownMenuItem className="cursor-pointer">
                 <Noti />
               </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer" onClick={() => {
-                navigate("/buyer/support")
-              }}>
-                <div
-                  className="flex justify-center items-center space-x-2"
-                >
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => {
+                  navigate("/buyer/support");
+                }}
+              >
+                <div className="flex justify-center items-center space-x-2">
                   <HeartPlus />
-                  <p className="text-gray-500 hover:text-black opacity-100">Support</p>
+                  <p className="text-gray-500 hover:text-black opacity-100">
+                    Support
+                  </p>
                 </div>
               </DropdownMenuItem>
               <DropdownMenuItem
