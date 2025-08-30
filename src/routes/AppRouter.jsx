@@ -36,10 +36,6 @@ import PostConfirm from "@/pages/Post_for_sale/PostConfirm";
 // Auth Pages
 import Login from "@/pages/Auth/Login";
 import Register from "@/pages/Auth/Register";
-import Register_buyer from "@/pages/Auth/Register_buyer";
-import Register_buyer2 from "@/pages/Auth/Register_buyer2";
-import Register_buyer3 from "@/pages/Auth/Register_buyer3";
-import Register_seller from "@/pages/Auth/Register_Seller";
 import ForgotPassword from "@/pages/Auth/Forgotpassword";
 import Resetpassword from "@/pages/Auth/Resetpassword";
 import VerifyEmail from "@/pages/Auth/VerifyEmail";
@@ -66,6 +62,7 @@ import PayBank from "@/pages/admin/Payment/PayBank";
 import DescriptionReport from "@/pages/admin/DescriptionReport";
 import { PostFormProvider } from "@/pages/Post_for_sale/PostFormProvider";
 import { AuthProvider } from "@/context/AuthContext";
+import RegisterSeller from "@/pages/Auth/RegisterSeller";
 
 const AppRouter = () => {
   return (
@@ -88,10 +85,10 @@ const AppRouter = () => {
           {/* Auth */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/register_buyer" element={<Register_buyer />} />
+          {/* <Route path="/register_buyer" element={<Register_buyer />} />
           <Route path="/register_buyer2" element={<Register_buyer2 />} />
           <Route path="/register_buyer3" element={<Register_buyer3 />} />
-          <Route path="/register_seller" element={<Register_seller />} />
+          <Route path="/register_seller" element={<Register_seller />} /> */}
           <Route path="/forgot" element={<ForgotPassword />} />
           <Route path="/resetpassword" element={<Resetpassword />} />
           <Route path="/verifyemail" element={<VerifyEmail />} />
@@ -110,6 +107,7 @@ const AppRouter = () => {
             <Route path="support" element={<Support />} />
             <Route path="payment" element={<Payment />} />
             <Route path="deposit/:id" element={<Deposit />} />
+            <Route path="register/seller" element={<RegisterSeller/>}/>
           </Route>
         </Route>
 
