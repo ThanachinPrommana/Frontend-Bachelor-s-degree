@@ -16,7 +16,7 @@ const Register = () => {
     try {
       const payload = {
         ...data,
-        userType,
+        userType:"Buyer",
       };
       console.log(payload);
       const res = await preregister(payload);
@@ -155,7 +155,7 @@ const Register = () => {
             </div>
           </div>
 
-          <div className="mb-4">
+          {/* <div className="mb-4">
             <label className="block text-sm mb-2">User Type</label>
             <div className="flex space-x-4">
               <label className="flex items-center space-x-2">
@@ -177,7 +177,7 @@ const Register = () => {
                 <span>Seller</span>
               </label>
             </div>
-          </div>
+          </div> */}
 
           <button
             type="submit"

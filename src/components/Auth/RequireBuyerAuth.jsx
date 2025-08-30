@@ -12,7 +12,13 @@ const RequireBuyerAuth = () => {
 
   if (!authUser) return <Navigate to="/login" replace />;
 
-  if (authUser.userType !== "Buyer") return <Navigate to="/" replace />;
+  if (authUser.userType === "Seller" && location.pathname === "/buyer/register/seller") {
+    return <Outlet />;
+  }
+  
+  if (authUser.userType !== "Buyer") {
+    return <Navigate to="/" replace />;
+  }
 
   return <Outlet />;
 };
