@@ -1,7 +1,3 @@
-/**
- * ตรวจ subset ของฟอร์มด้วย zod แล้ว map error เข้า react-hook-form
- * ไม่เปลี่ยน UI เดิม — แค่เรียกก่อน navigate เท่านั้น
- */
 export function validateStep(form, schema, fields) {
   const values = form.getValues();
   const subset = Array.isArray(fields) && fields.length

@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AlignJustify } from "lucide-react";
+
 const Navbar = () => {
   return (
     <nav className="py-4 px-5 shadow-md border-b border-gray-200 bg-[#2c3e50] text-white">

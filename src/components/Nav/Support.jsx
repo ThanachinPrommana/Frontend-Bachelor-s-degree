@@ -1,13 +1,11 @@
-import { Breadcrumb, BreadcrumbLink } from "../ui/breadcrumb";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { HeartPlus } from "lucide-react";
-import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 
 const Support = () => {
   const navigate = useNavigate();
-  const {authUser} = useAuth()
-  
+  const { authUser } = useAuth();
+
   const handleSupport = () => {
     if (authUser?.userType === "Buyer") {
       navigate("/buyer/support");

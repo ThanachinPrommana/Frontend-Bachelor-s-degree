@@ -1,6 +1,6 @@
-import { Breadcrumb, BreadcrumbLink } from "../ui/breadcrumb";
-import { Link } from "react-router";
+import { BreadcrumbLink } from "../ui/breadcrumb";
 import { HeartPlus } from "lucide-react";
+
 const Support_Buyer = () => {
   return (
     <BreadcrumbLink href="/buyer/support">

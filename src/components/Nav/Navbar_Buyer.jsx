@@ -9,11 +9,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import Profile_Buyer from "./Profile_Buyer";
-import Support_Buyer from "./Support_Buyer";
 import { AlignJustify, UserPen, HeartPlus, Gem } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { apiClient } from "@/api/authconfig";
+
 const Navbar_Buyer = () => {
   const { authUser, setAuthUser } = useAuth();
   const navigate = useNavigate();

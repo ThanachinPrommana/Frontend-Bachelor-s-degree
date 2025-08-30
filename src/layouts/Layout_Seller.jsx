@@ -1,5 +1,6 @@
 import Navbar_Seller from "@/components/Nav/Navbar_Seller";
 import { Outlet } from "react-router";
+
 const Layout_Seller = () => {
   return (
     <div>

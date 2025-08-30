@@ -1,7 +1,7 @@
-import { Breadcrumb, BreadcrumbLink } from "../ui/breadcrumb";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { UserPen } from "lucide-react";
 import { useEffect, useState } from "react";
+
 const Profile = () => {
   const navigate = useNavigate();
   const [userType, setUserType] = useState(null);
