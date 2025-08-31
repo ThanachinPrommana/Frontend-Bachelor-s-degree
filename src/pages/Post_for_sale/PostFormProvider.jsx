@@ -53,11 +53,12 @@ const softSchema = z.object({
 
   // Upload (ภาพ)
   images: z.any().optional(), // จะตรวจจริงด้วย schema เฉพาะหน้า Upload
+  videos: z.any().optional(),
 });
 
 export const PostFormProvider = ({ children }) => {
   const methods = useForm({
-    
+
     defaultValues: {
       // General Info
       Property_Name: "",
@@ -100,7 +101,8 @@ export const PostFormProvider = ({ children }) => {
       Contract_Seller: "",
 
       // Upload
-      images: null, 
+      images: [],
+      videos: []
     },
     resolver: zodResolver(softSchema), // ✅ ต่อ global แบบนิ่ม ๆ
     mode: "onSubmit",

@@ -201,7 +201,7 @@ const PostLocation = () => {
                       onValueChange={handleProvinceChange}
                       disabled={loading}
                     >
-                      <SelectTrigger className="h-11">
+                      <SelectTrigger className="h-11 cursor-pointer">
                         <SelectValue
                           placeholder={
                             loading ? "กำลังโหลด..." : "เลือกจังหวัด"
@@ -210,7 +210,10 @@ const PostLocation = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {provinces.map((prov) => (
-                          <SelectItem key={prov.id} value={prov.name_th}>
+                          <SelectItem
+                            key={prov.id} value={prov.name_th}
+                            className="cursor-pointer"
+                          >
                             {prov.name_th}
                           </SelectItem>
                         ))}
@@ -233,7 +236,7 @@ const PostLocation = () => {
                       onValueChange={handleDistrictChange}
                       disabled={amphures.length === 0}
                     >
-                      <SelectTrigger className="h-11">
+                      <SelectTrigger className="h-11 cursor-pointer">
                         <SelectValue
                           placeholder={
                             amphures.length
@@ -244,7 +247,10 @@ const PostLocation = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {amphures.map((a) => (
-                          <SelectItem key={a.id} value={a.name_th}>
+                          <SelectItem
+                            key={a.id} value={a.name_th}
+                            className="cursor-pointer"
+                          >
                             {a.name_th}
                           </SelectItem>
                         ))}
@@ -269,7 +275,7 @@ const PostLocation = () => {
                       }
                       disabled={districts.length === 0}
                     >
-                      <SelectTrigger className="h-11">
+                      <SelectTrigger className="h-11 cursor-pointer">
                         <SelectValue
                           placeholder={
                             districts.length
@@ -280,7 +286,10 @@ const PostLocation = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {districts.map((d) => (
-                          <SelectItem key={d.id} value={d.name_th}>
+                          <SelectItem
+                            key={d.id} value={d.name_th}
+                            className="cursor-pointer"
+                          >
                             {d.name_th}
                           </SelectItem>
                         ))}
@@ -297,11 +306,11 @@ const PostLocation = () => {
                   <FormItem>
                     <FormLabel>ที่อยู่</FormLabel>
                     <Input
-                    placeholder="เลขที่/หมู่ที่/ตรอก/ซอย/ถนน/รหัสไปรษณีย์"
-                    {...field}
-                    className="w-full rounded border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="เลขที่/หมู่ที่/ตรอก/ซอย/ถนน/รหัสไปรษณีย์"
+                      {...field}
+                      className="w-full rounded border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
                     />
-                    <FormMessage/>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
