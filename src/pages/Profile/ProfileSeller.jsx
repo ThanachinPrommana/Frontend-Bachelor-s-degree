@@ -1,10 +1,9 @@
-// src/pages/Profile/Seller/ProfileSeller.jsx
+// src/pages/Profile/ProfileSeller.jsx
 import { useState, useMemo } from "react";
 import { FaUser, FaHome, FaBell, FaFileAlt } from "react-icons/fa";
 import { useAuth } from "@/context/AuthContext";
 import SellerInfo from "./SellerInfo";
 import SellerPost from "./SellerPost";
-// ⛔️ ลบ SellerDashboard ออกเรียบร้อย
 import SellerNoti from "./SellerNoti";
 import SellerDoc from "./SellerDoc";
 
@@ -12,7 +11,7 @@ const ProfileSeller = () => {
   const { authUser, loading } = useAuth();
   const [selectedTab, setSelectedTab] = useState("info");
 
-  // ✅ ไม่มี “แดชบอร์ด” แล้ว
+  // ✅ ไม่มี Dashboard แล้ว
   const tabs = useMemo(
     () => [
       { label: "ข้อมูลผู้ขาย", key: "info", icon: <FaUser className="mr-2" /> },
@@ -59,7 +58,12 @@ const ProfileSeller = () => {
           {/* User Info */}
           <div className="mb-8 md:mb-10 flex items-center space-x-4">
             <img
-              src={authUser?.image || "https://ui-avatars.com/api/?name=Seller"}
+              src={
+                authUser?.image ||
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                  displayName
+                )}`
+              }
               alt="รูปโปรไฟล์ผู้ขาย"
               className="w-12 h-12 rounded-full object-cover"
               referrerPolicy="no-referrer"
@@ -72,7 +76,7 @@ const ProfileSeller = () => {
             </div>
           </div>
 
-          {/* Tab Menu */}
+          {/* Tabs */}
           <ul className="space-y-2 text-base md:text-lg">
             {tabs.map((tab) => {
               const isActive = selectedTab === tab.key;
@@ -101,7 +105,7 @@ const ProfileSeller = () => {
           </ul>
         </aside>
 
-        {/* Content Area */}
+        {/* Content */}
         <main className="w-full md:w-3/4 p-6 md:p-10 overflow-y-auto">
           {/* Breadcrumb */}
           <nav className="text-sm text-gray-500 mb-4" aria-label="breadcrumb">
@@ -110,13 +114,13 @@ const ProfileSeller = () => {
             <span className="text-gray-800">{currentTab?.label}</span>
           </nav>
 
-          {/* Page Title */}
+          {/* Title */}
           <h1 className="text-2xl md:text-3xl font-bold flex items-center mb-6 md:mb-8">
             {currentTab?.icon}
             <span>{currentTab?.label}</span>
           </h1>
 
-          {/* Content */}
+          {/* Views */}
           {selectedTab === "info" && <SellerInfo user={authUser} />}
           {selectedTab === "post" && <SellerPost />}
           {selectedTab === "noti" && <SellerNoti />}

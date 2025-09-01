@@ -29,3 +29,6 @@ export const updateImage = async (data) => {
   return res.data;
 };
 
+export const searchFilter = async(data)=>{
+  
+}
