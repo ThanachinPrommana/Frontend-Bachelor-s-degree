@@ -18,8 +18,8 @@ const ProfileSeller = () => {
   }
 
 
-  console.log("authUser:", authUser);
-  console.log("image:", authUser?.image);
+  // console.log("authUser:", authUser);
+  // console.log("image:", authUser?.image);
 
 
   const tabs = [

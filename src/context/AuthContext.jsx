@@ -7,12 +7,13 @@ export const AuthProvider = ({ children }) => {
     const [authUser, setAuthUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    
+
     const revalidateUser = async () => {
         try {
-            const res = await apiClient.get("/profiles/user"); 
-            console.log("revalidateUser result:", res.data.user);
-            setAuthUser(res.data.user);
+            const res = await apiClient.get("/profiles/user");
+            const userData = res.data.user;
+            console.log("revalidateUser result:", userData);
+            setAuthUser({ ...userData });
         } catch (err) {
             setAuthUser(null);
         }
@@ -36,7 +37,7 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    
+
     const value = { authUser, loading, logout, revalidateUser };
 
     return (
