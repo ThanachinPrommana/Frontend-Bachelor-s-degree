@@ -37,12 +37,10 @@ const PostLocation = () => {
   const [allAmphures, setAllAmphures] = useState([]);
   const [allDistricts, setAllDistricts] = useState([]);
 
-
   const [amphures, setAmphures] = useState([]);
   const [districts, setDistricts] = useState([]);
 
   const [loading, setLoading] = useState(true);
-
 
   useEffect(() => {
     let mounted = true;
@@ -73,12 +71,10 @@ const PostLocation = () => {
     };
   }, []);
 
-
   useEffect(() => {
     if (loading) return;
     const currentProvince = form.getValues("Province");
     const currentDistrict = form.getValues("District");
-
 
     if (currentProvince) {
       const p = provinces.find((x) => x.name_th === currentProvince);
@@ -87,7 +83,6 @@ const PostLocation = () => {
         : [];
       setAmphures(amps);
 
-
       if (currentDistrict) {
         const amp = amps.find((a) => a.name_th === currentDistrict);
         const dists = amp
@@ -95,19 +90,16 @@ const PostLocation = () => {
           : [];
         setDistricts(dists);
 
-
         if (!amp) {
           form.resetField("District");
           form.resetField("Subdistrict");
           setDistricts([]);
         }
       } else {
-
         setDistricts([]);
         form.resetField("Subdistrict");
       }
     } else {
-
       setAmphures([]);
       setDistricts([]);
       form.resetField("District");
@@ -115,15 +107,11 @@ const PostLocation = () => {
     }
   }, [loading, provinces, allAmphures, allDistricts]);
 
-
   const handleProvinceChange = (provinceName) => {
-
     form.setValue("Province", provinceName, { shouldDirty: true });
-
 
     form.resetField("District");
     form.resetField("Subdistrict");
-
 
     const p = provinces.find((x) => x.name_th === provinceName);
     const amps = p
@@ -152,7 +140,7 @@ const PostLocation = () => {
       "LinkMap",
       "Latitude",
       "Longitude",
-      "Address"
+      "Address",
     ]);
     if (!ok) return;
     navigate("/seller/post-for-sale/detail");
@@ -211,7 +199,8 @@ const PostLocation = () => {
                       <SelectContent>
                         {provinces.map((prov) => (
                           <SelectItem
-                            key={prov.id} value={prov.name_th}
+                            key={prov.id}
+                            value={prov.name_th}
                             className="cursor-pointer"
                           >
                             {prov.name_th}
@@ -248,7 +237,8 @@ const PostLocation = () => {
                       <SelectContent>
                         {amphures.map((a) => (
                           <SelectItem
-                            key={a.id} value={a.name_th}
+                            key={a.id}
+                            value={a.name_th}
                             className="cursor-pointer"
                           >
                             {a.name_th}
@@ -287,7 +277,8 @@ const PostLocation = () => {
                       <SelectContent>
                         {districts.map((d) => (
                           <SelectItem
-                            key={d.id} value={d.name_th}
+                            key={d.id}
+                            value={d.name_th}
                             className="cursor-pointer"
                           >
                             {d.name_th}

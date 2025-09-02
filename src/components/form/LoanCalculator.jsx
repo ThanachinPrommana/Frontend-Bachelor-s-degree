@@ -18,7 +18,6 @@ const LoanCalculator = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // สามารถเพิ่มสูตรคำนวณตรงนี้
     console.log("คำนวณด้วยข้อมูล:", formData);
   };
 

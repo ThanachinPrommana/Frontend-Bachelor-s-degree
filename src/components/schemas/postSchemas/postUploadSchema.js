@@ -2,11 +2,9 @@ import { z } from "zod";
 
 const hasAtLeastOneFile = (val) => {
   if (!val) return false;
-  // FileList
   if (typeof FileList !== "undefined" && val instanceof FileList) {
     return val.length > 0;
   }
-  // Array<File>
   if (Array.isArray(val)) {
     return val.length > 0;
   }

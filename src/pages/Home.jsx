@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import Iconselect from "@/components/Iconselect";
 import Searchbar from "@/components/form/Searchbar";
-import { Button } from "@/components/ui/button";
 import Buttons from "@/components/Buttons";
 import Cards from "@/components/Cards";
 import { Link } from "react-router";
@@ -12,7 +11,7 @@ import LoanCalculator from "@/components/form/LoanCalculator";
 import { AnimatePresence, motion } from "framer-motion";
 
 const Home = () => {
-  const videos = [""]; // Video list
+  const videos = [""];
 
   const [showLoanPopup, setShowLoanPopup] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState(videos[0]);

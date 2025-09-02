@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 
 export function useFormPersist(form, storageKey) {
-  // โหลดข้อมูลจาก localStorage
   useEffect(() => {
     const savedData = localStorage.getItem(storageKey);
     if (savedData) {
@@ -14,7 +13,6 @@ export function useFormPersist(form, storageKey) {
     }
   }, [form, storageKey]);
 
-  // บันทึกข้อมูลทุกครั้งที่เปลี่ยนค่า
   useEffect(() => {
     const subscription = form.watch((value) => {
       localStorage.setItem(storageKey, JSON.stringify(value));

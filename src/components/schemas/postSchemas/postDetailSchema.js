@@ -16,4 +16,5 @@ export const postDetailSchema = z.object({
   Nearby_Landmarks: z.array(z.string()).optional(),
   Additional_Amenities: z.array(z.string()).optional(),
   Parking_Space: z.string().optional(),
+  floor: numberOrUndefined,
 });

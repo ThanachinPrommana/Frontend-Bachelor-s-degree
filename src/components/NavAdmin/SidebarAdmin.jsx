@@ -15,18 +15,18 @@ const SidebarAdmin = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [activeMenus, setActiveMenus] = useState(["posts"]); // ค้างไว้ได้หลายอัน
+  const [activeMenus, setActiveMenus] = useState(["posts"]);
   const [activeSubMenus, setActiveSubMenus] = useState([]);
 
   const toggleMenu = (key) => {
     setActiveMenus((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
   };
 
   const toggleSubMenu = (key) => {
     setActiveSubMenus((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
   };
 

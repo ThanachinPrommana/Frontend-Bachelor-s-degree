@@ -3,12 +3,10 @@ import { useForm, FormProvider } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-
 const numberOrUndefined = z.preprocess(
   (v) => (v === "" || v === undefined || v === null ? undefined : Number(v)),
   z.number().optional()
 );
-
 
 const softSchema = z.object({
   // General
@@ -34,6 +32,7 @@ const softSchema = z.object({
   Total_Rooms: numberOrUndefined,
   Year_Built: z.string().optional(),
   Parking_Space: numberOrUndefined,
+  floor: numberOrUndefined,
 
   // Arrays
   Nearby_Landmarks: z.array(z.string()).optional(),
@@ -51,14 +50,13 @@ const softSchema = z.object({
   Link_facbook: z.string().optional(),
   Contract_Seller: z.string().optional(),
 
-  // Upload (ภาพ)
-  images: z.any().optional(), // จะตรวจจริงด้วย schema เฉพาะหน้า Upload
+  // Upload (ภาพ/วิดีโอ)
+  images: z.any().optional(),
   videos: z.any().optional(),
 });
 
 export const PostFormProvider = ({ children }) => {
   const methods = useForm({
-
     defaultValues: {
       // General Info
       Property_Name: "",
@@ -83,6 +81,7 @@ export const PostFormProvider = ({ children }) => {
       Total_Rooms: undefined,
       Year_Built: "",
       Parking_Space: undefined,
+      floor: undefined,
 
       // Features
       Nearby_Landmarks: [],
@@ -102,9 +101,9 @@ export const PostFormProvider = ({ children }) => {
 
       // Upload
       images: [],
-      videos: []
+      videos: [],
     },
-    resolver: zodResolver(softSchema), // ✅ ต่อ global แบบนิ่ม ๆ
+    resolver: zodResolver(softSchema),
     mode: "onSubmit",
     reValidateMode: "onSubmit",
   });
