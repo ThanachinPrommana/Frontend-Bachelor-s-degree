@@ -12,6 +12,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { createpost } from "@/api/post";
 
+// --- Constants ---
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_IMAGES = 5;
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50MB
@@ -64,8 +65,8 @@ const generateVideoThumbnail = (videoFile) => {
 };
 
 function PostUpload() {
-  const navigate = useNavigate();
-  const form = useFormContext();
+  const navigate = useNavigate();
+  const form = useFormContext();
 
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -84,10 +85,11 @@ function PostUpload() {
   const isImageFile = (file) => file?.type?.startsWith("image/");
   const isVideoFile = (file) => file?.type?.startsWith("video/"); // --- Image Handlers ---
 
-  const handleAddImages = useCallback(
-    (files) => {
-      const arr = Array.from(files || []);
-      if (!arr.length) return false;
+  // --- Image Handlers ---
+  const handleAddImages = useCallback(
+    (files) => {
+      const arr = Array.from(files || []);
+      if (!arr.length) return false;
 
       for (const file of arr) {
         if (!isImageFile(file)) {
@@ -116,15 +118,12 @@ function PostUpload() {
         return false;
       }
 
-      setError("");
-      form.setValue("images", updated, {
-        shouldValidate: true,
-        shouldDirty: true,
-      });
-      return true;
-    },
-    [form, images]
-  );
+      setError("");
+      form.setValue("images", updated, { shouldValidate: true, shouldDirty: true });
+      return true;
+    },
+    [form, images]
+  );
 
   const handleRemoveImage = (index) => {
     URL.revokeObjectURL(images[index].preview);
@@ -232,8 +231,8 @@ function PostUpload() {
     setError("");
     setIsSubmitting(true);
 
-    const allData = form.getValues();
-    const formData = new FormData();
+    const allData = form.getValues();
+    const formData = new FormData();
 
     (allData.images || []).forEach((img) =>
       formData.append("images", img.file)

@@ -146,6 +146,7 @@ const SellerPost = () => {
       )}
     </div>
   );
+
 };
 
 export default SellerPost;
