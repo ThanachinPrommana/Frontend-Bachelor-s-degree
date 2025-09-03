@@ -8,17 +8,13 @@ export default function NotFound() {
   return (
     <div className="min-h-[80vh] bg-[#FAF0E6] flex items-center">
       <div className="mx-auto max-w-4xl px-6 py-16">
-        {/* Card */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-          {/* Top bar */}
           <div className="h-2 w-full bg-[#2c3e50]" />
 
-          {/* Content */}
           <div className="p-8 md:p-12 grid md:grid-cols-2 gap-8">
             {/* Illustration */}
             <div className="order-2 md:order-1">
               <div className="relative mx-auto max-w-[320px]">
-                {/* บ้านสไตล์มินิมอล */}
                 <svg
                   viewBox="0 0 200 160"
                   className="w-full h-auto"
@@ -56,33 +52,34 @@ export default function NotFound() {
                 ลองกลับไปหน้าแรกหรือดูศูนย์ช่วยเหลือได้เลย
               </p>
 
-              {/* Actions */}
               <div className="mt-6 flex flex-col sm:flex-row gap-3">
                 <Link
                   to="/"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 bg-[#CD853F] text-white hover:bg-[#b77537] motion-safe:transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#CD853F]/40"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 bg-[#CD853F] text-white hover:bg-[#b77537] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#CD853F]/40"
                 >
                   <Home className="w-4 h-4" />
                   กลับหน้าแรก
                 </Link>
                 <button
                   onClick={() => navigate(-1)}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 bg-white border border-gray-200 text-[#2c3e50] hover:bg-gray-50 motion-safe:transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2c3e50]/30"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 bg-white border border-gray-200 text-[#2c3e50] hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2c3e50]/30"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   ย้อนกลับ
                 </button>
                 <Link
                   to="/support"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 bg-white border border-gray-200 text-[#2c3e50] hover:bg-gray-50 motion-safe:transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2c3e50]/30"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 bg-white border border-gray-200 text-[#2c3e50] hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2c3e50]/30"
                 >
                   <LifeBuoy className="w-4 h-4" />
                   ศูนย์ช่วยเหลือ
                 </Link>
               </div>
 
-              {/* Breadcrumb mini */}
-              <nav className="mt-6 text-sm text-gray-500" aria-label="breadcrumb">
+              <nav
+                className="mt-6 text-sm text-gray-500"
+                aria-label="breadcrumb"
+              >
                 <span className="hover:text-gray-700">หน้าหลัก</span> /{" "}
                 <span className="text-gray-800">ไม่พบหน้า</span>
               </nav>
@@ -90,9 +87,11 @@ export default function NotFound() {
           </div>
         </div>
 
-        {/* Footer helper line */}
         <div className="mt-6 text-center text-xs text-gray-500">
-          ถ้าเจอปัญหาในการใช้งาน กรุณาแจ้งทีมงานผ่านหน้า <Link to="/support" className="underline">ศูนย์ช่วยเหลือ</Link>
+          ถ้าเจอปัญหาในการใช้งาน กรุณาแจ้งทีมงานผ่านหน้า{" "}
+          <Link to="/support" className="underline">
+            ศูนย์ช่วยเหลือ
+          </Link>
         </div>
       </div>
     </div>

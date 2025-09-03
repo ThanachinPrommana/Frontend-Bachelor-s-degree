@@ -1,12 +1,14 @@
-import Navbar_Buyer from "@/components/Nav/Navbar_Buyer";
-import { Outlet } from "react-router";
+// src/layouts/Layout_Buyer.jsx
+import Navbar from "@/components/Nav/Navbar";
+import { Outlet } from "react-router-dom";
 
-const Layout_Buyer = () => {
+export default function Layout_Buyer() {
   return (
-    <div>
-      <Navbar_Buyer />
-      <Outlet />
-    </div>
+    <>
+      <Navbar />
+      <main className="min-h-screen bg-[#FAF0E6]">
+        <Outlet />
+      </main>
+    </>
   );
-};
-export default Layout_Buyer;
+}

@@ -11,7 +11,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogFooter,
-  AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import axios from "axios";
@@ -43,17 +42,23 @@ function safeJoin(arr, sep = ", ") {
   return Array.isArray(arr) && arr.length ? arr.join(sep) : "-";
 }
 
-
+// ===== helper สำหรับชื่อ "ประเภททรัพย์" =====
+function getCategoryNameFromObject(obj) {
+  if (!obj) return null;
+  // รองรับหลาย key ที่อาจใช้ใน schema เดิม
+  return obj.Property_type || obj.name || obj.title || null;
+}
 function getCategoryName(postData) {
   return (
-    postData?.Category?.Property_type ||
-    postData?.categoryName || 
-    postData?.Propertytype || 
+    getCategoryNameFromObject(postData?.Category) ||
+    getCategoryNameFromObject(postData?.category) ||
+    postData?.categoryName ||
+    postData?.Propertytype ||
     "-"
   );
 }
 
-
+// ===== แปลง Sell/Rent ให้แสดงสวย =====
 function getSellRent(postData) {
   const raw = postData?.Sell_Rent;
   if (!raw) return "-";
@@ -63,6 +68,7 @@ function getSellRent(postData) {
   return raw;
 }
 
+// ===== UI Partials =====
 const Row = ({ label, value, right = false }) => (
   <div className="flex justify-between border-b py-2 text-sm">
     <span className="text-muted-foreground">{label}</span>
@@ -87,9 +93,10 @@ const Section = ({ title, onEdit, children }) => (
 const PostConfirm = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [showConfirm, setShowConfirm] = useState(false);
 
+  const [showConfirm, setShowConfirm] = useState(false);
   const [postData, setPostData] = useState(null);
+  const [resolvedCategoryName, setResolvedCategoryName] = useState("-");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -114,10 +121,38 @@ const PostConfirm = () => {
     })();
   }, [postId]);
 
+  // resolve ประเภททรัพย์ (อ่านจาก payload ก่อน → ถ้าไม่ได้ค่อย fallback ด้วย /api/category/:id)
+  useEffect(() => {
+    if (!postData) return;
+
+    const nameNow = getCategoryName(postData);
+    if (nameNow && nameNow !== "-") {
+      setResolvedCategoryName(nameNow);
+      return;
+    }
+
+    const cid =
+      postData?.categoryId || postData?.Category?.id || postData?.category?.id;
+
+    if (!cid) return;
+
+    axios
+      .get(`${API_URL}/api/category/${cid}`)
+      .then((r) => {
+        const n =
+          getCategoryNameFromObject(r.data) ||
+          r.data?.name ||
+          r.data?.categoryName ||
+          "-";
+        setResolvedCategoryName(n || "-");
+      })
+      .catch(() => setResolvedCategoryName("-"));
+  }, [postData]);
+
   const sellRentView = useMemo(() => getSellRent(postData), [postData]);
 
   const handleSubmit = () => {
-    // TODO: ทำ action หลังบ้านถ้ามี
+    // TODO: call action หลังบ้านถ้ามี (เช่นเปลี่ยน Status_post → PENDING/REVIEW)
     setShowConfirm(false);
     navigate("/seller");
   };
@@ -147,7 +182,7 @@ const PostConfirm = () => {
 
   if (!postData) return null;
 
-  const images = postData?.Image || postData?.Images || []; // เผื่อชื่อฟิลด์ต่างกัน
+  const images = postData?.Image || postData?.Images || [];
   const hasImages = Array.isArray(images) && images.length > 0;
 
   return (
@@ -185,7 +220,7 @@ const PostConfirm = () => {
               <div className="space-y-1">
                 <Row label="หัวข้อ" value={postData?.Property_Name || "-"} />
                 <Row label="รายละเอียด" value={postData?.Description || "-"} />
-                <Row label="ประเภททรัพย์" value={getCategoryName(postData)} />
+                <Row label="ประเภททรัพย์" value={resolvedCategoryName} />
               </div>
             </Section>
 
@@ -195,6 +230,7 @@ const PostConfirm = () => {
               onEdit={() => navigate("/seller/post-for-sale/location")}
             >
               <div className="space-y-1">
+                <Row label="ที่อยู่" value={postData?.Address || "-"} />
                 <Row label="จังหวัด" value={postData?.Province || "-"} />
                 <Row label="อำเภอ/เขต" value={postData?.District || "-"} />
                 <Row label="ตำบล/แขวง" value={postData?.Subdistrict || "-"} />
@@ -273,7 +309,6 @@ const PostConfirm = () => {
             >
               <div className="space-y-1">
                 <Row label="ประเภทประกาศ" value={sellRentView} />
-                {/* แสดงตามประเภท */}
                 {String(postData?.Sell_Rent).toUpperCase() === "RENT" ? (
                   <>
                     <Row
@@ -427,10 +462,7 @@ const PostConfirm = () => {
             อยู่ในขั้นตอนตรวจสอบ จะเห็นประกาศได้ภายใน 24 ชม. ทำการ
           </p>
           <AlertDialogFooter>
-            
-            <AlertDialogAction onClick={handleSubmit}>
-              สำเร็จ
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleSubmit}>สำเร็จ</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
