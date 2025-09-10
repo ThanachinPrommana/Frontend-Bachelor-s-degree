@@ -64,6 +64,8 @@ import { PostFormProvider } from "@/pages/Post_for_sale/PostFormProvider";
 import { AuthProvider } from "@/context/AuthContext";
 import RegisterSeller from "@/pages/Auth/RegisterSeller";
 
+import NotFound from "@/pages/NotFound";
+
 const AppRouter = () => {
   return (
     <BrowserRouter>
@@ -75,6 +77,7 @@ const AppRouter = () => {
             <Route path="/compare" element={<Compare />} />
             <Route path="/support" element={<Support />} />
             <Route path="/noti" element={<BuyerNoti />} />
+            <Route path="*" element={<NotFound />} />
 
             {/* Profile Selection */}
             <Route

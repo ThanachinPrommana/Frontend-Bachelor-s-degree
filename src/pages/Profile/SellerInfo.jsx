@@ -9,17 +9,16 @@ import {
   CheckCircle2,
   Image as ImageIcon,
   FileText,
+  LockKeyhole,
 } from "lucide-react";
 import Frominput from "@/components/form/Frominput";
 import Formuploadimage from "@/components/form/Formuploadimage";
 import { useForm } from "react-hook-form";
-import { useEffect, useState, useMemo } from "react";
-import { updateSeller } from "@/api/user";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { sellerSchema } from "@/components/schemas/profileSchemas/sellerinfo";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { updateSeller, updateImage } from "@/api/user";
 import { useAuth } from "@/context/AuthContext";
 
-// ========== utils ==========
+/* ===================== utils ===================== */
 const formatDateThai = (dateString) => {
   if (!dateString) return "-";
   const date = new Date(dateString);
@@ -46,8 +45,10 @@ const maskThaiID = (id) => {
   if (digits.length !== 13) return "-";
   return `${digits[0]}-xxxx-xxxxx-xx-${digits[12]}`;
 };
+const toNum = (v) =>
+  v === "" || v === null || v === undefined ? undefined : Number(v);
 
-// ========== small UI parts ==========
+/* ===================== small UI parts ===================== */
 const DetailRow = ({ label, value, chip }) => {
   const isCopyable = !!value && value !== "-" && !chip;
   return (
@@ -81,9 +82,16 @@ const DetailRow = ({ label, value, chip }) => {
   );
 };
 
-// เปลือกโมดัลสวย ๆ ใช้ซ้ำได้
-const ModalShell = ({ title, description, icon, onClose, children }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center">
+/* ===================== Modal shell (scrollable + header/footer fixed) ===================== */
+const ModalShell = ({
+  title,
+  description,
+  icon,
+  onClose,
+  children,
+  stepper,
+}) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain">
     <div
       className="absolute inset-0 bg-black/40 backdrop-blur-sm"
       onClick={onClose}
@@ -91,12 +99,12 @@ const ModalShell = ({ title, description, icon, onClose, children }) => (
     <div
       role="dialog"
       aria-modal="true"
-      className="relative w-11/12 max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden"
+      className="relative w-[95vw] sm:w-[90vw] max-w-3xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
     >
-      <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-[#2c3e50] via-[#3b4b63] to-[#2c3e50] text-white">
+      <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-[#2c3e50] via-[#3b4b63] to-[#2c3e50] text-white shrink-0">
         {icon}
-        <div className="flex-1">
-          <h3 className="text-lg font-semibold">{title}</h3>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-lg font-semibold truncate">{title}</h3>
           {description ? (
             <p className="text-xs text-white/80">{description}</p>
           ) : null}
@@ -109,56 +117,161 @@ const ModalShell = ({ title, description, icon, onClose, children }) => (
           <CircleX className="w-5 h-5" />
         </button>
       </div>
-      <div className="p-6">{children}</div>
+
+      {/* stepper header (optional) */}
+      {stepper}
+
+      {/* scrollable body */}
+      <div className="p-6 overflow-y-auto min-w-0">{children}</div>
     </div>
   </div>
 );
 
+/* ===================== Thai locations (inline hook) ===================== */
+function useThaiLocations() {
+  const [provinces, setProvinces] = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [loadingProvinces, setLoadingProvinces] = useState(true);
+  const [loadingDistricts, setLoadingDistricts] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoadingProvinces(true);
+        const res = await fetch(
+          "https://raw.githubusercontent.com/kongvut/thai-province-data/master/api_province.json"
+        );
+        const data = await res.json();
+        setProvinces(data);
+      } catch (e) {
+        console.error("โหลดจังหวัดไม่สำเร็จ", e);
+      } finally {
+        setLoadingProvinces(false);
+      }
+    })();
+  }, []);
+
+  const loadDistrictsByProvinceNameTH = async (provinceNameTH) => {
+    const target = provinces.find((p) => p.name_th === provinceNameTH);
+    if (!target) {
+      setDistricts([]);
+      return;
+    }
+    try {
+      setLoadingDistricts(true);
+      const res = await fetch(
+        "https://raw.githubusercontent.com/kongvut/thai-province-data/master/api_amphure.json"
+      );
+      const amphures = await res.json();
+      setDistricts(amphures.filter((d) => d.province_id === target.id));
+    } catch (e) {
+      console.error("โหลดอำเภอไม่สำเร็จ", e);
+    } finally {
+      setLoadingDistricts(false);
+    }
+  };
+
+  return {
+    provinces,
+    districts,
+    loadingProvinces,
+    loadingDistricts,
+    loadDistrictsByProvinceNameTH,
+  };
+}
+
+/* ===================== main ===================== */
 const SellerInfo = () => {
   const [showModal, setShowModal] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const { authUser: user, revalidateUser } = useAuth();
   const [isSubmittingInfo, setIsSubmittingInfo] = useState(false);
 
+  // ✅ keep values when fields unmount across steps
   const {
     register,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting, isDirty },
-  } = useForm({ resolver: zodResolver(sellerSchema) });
+    setValue,
+    formState: { isSubmitting, isDirty },
+    getValues,
+    watch,
+  } = useForm({ shouldUnregister: false });
+
+  const {
+    provinces,
+    districts,
+    loadingProvinces,
+    loadingDistricts,
+    loadDistrictsByProvinceNameTH,
+  } = useThaiLocations();
+
+  // steps state
+  const [stepIndex, setStepIndex] = useState(0);
+  const scrollBodyRef = useRef(null);
+
+  const hasBuyer = !!user?.Buyer;
+  const hasSeller = !!user?.Seller;
+  const steps = useMemo(() => {
+    const arr = [{ key: "user", label: "บัญชีผู้ใช้" }];
+    if (hasBuyer) arr.push({ key: "buyer", label: "ผู้ซื้อ" });
+    if (hasSeller) arr.push({ key: "seller", label: "ผู้ขาย" });
+    return arr;
+  }, [hasBuyer, hasSeller]);
+
+  const isLastStep = stepIndex === steps.length - 1;
 
   // โหลดค่าเดิมเข้าฟอร์ม
   useEffect(() => {
-    if (user && user.Seller) {
-      reset({
-        First_name: user.First_name || "",
-        Last_name: user.Last_name || "",
-        Phone: user.Phone || "",
-        National_ID: user.Seller.National_ID || "",
-        Company_Name: user.Seller.Company_Name || "",
-        RealEstate_License: user.Seller.RealEstate_License || "",
-      });
-    }
+    if (!user) return;
+    reset({
+      // USER
+      First_name: user?.First_name || "",
+      Last_name: user?.Last_name || "",
+      Phone: user?.Phone || "",
+      // BUYER
+      DateofBirth: user?.Buyer?.DateofBirth
+        ? String(user.Buyer.DateofBirth).slice(0, 10)
+        : "",
+      Occupation: user?.Buyer?.Occupation || user?.Buyer?.Occaaption || "",
+      Monthly_Income: user?.Buyer?.Monthly_Income ?? "",
+      Family_Size: user?.Buyer?.Family_Size ?? "",
+      Preferred_Province: user?.Buyer?.Preferred_Province || "",
+      Preferred_District: user?.Buyer?.Preferred_District || "",
+      Parking_Needs: user?.Buyer?.Parking_Needs || "",
+      Nearby_Facilities: user?.Buyer?.Nearby_Facilities || "",
+      Lifestyle_Preferences: user?.Buyer?.Lifestyle_Preferences || "",
+      Special_Requirements: user?.Buyer?.Special_Requirements || "",
+      // SELLER
+      National_ID: user?.Seller?.National_ID || "",
+      Company_Name: user?.Seller?.Company_Name || "",
+      RealEstate_License: user?.Seller?.RealEstate_License || "",
+    });
   }, [user, reset]);
 
-  const onSubmit = async (data) => {
-    setIsSubmittingInfo(true);
-    try {
-      const filteredData = Object.fromEntries(
-        Object.entries(data).filter(([_, v]) => v !== undefined && v !== "")
-      );
-      await updateSeller(filteredData);
-      await revalidateUser();
-      setShowModal(false);
-    } catch (err) {
-      console.error("Error updating seller:", err);
-      alert("ไม่สามารถบันทึกข้อมูลได้");
-    } finally {
-      setIsSubmittingInfo(false);
-    }
+  // เปิดโมดัล → set step แรก และเตรียมอำเภอถ้ามีจังหวัด
+  useEffect(() => {
+    if (!showModal) return;
+    setStepIndex(0);
+    const province = user?.Buyer?.Preferred_Province;
+    if (province) loadDistrictsByProvinceNameTH(province);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showModal]);
+
+  // สลับ step → เลื่อน scroll ไปบนสุดของ body
+  useEffect(() => {
+    const el = document.querySelector("[data-modal-scroll-body]");
+    if (el) el.scrollTo({ top: 0, behavior: "smooth" });
+  }, [stepIndex]);
+
+  const handleProvinceChange = async (e) => {
+    const selectedProvince = e.target.value;
+    setValue("Preferred_Province", selectedProvince, { shouldDirty: true });
+    setValue("Preferred_District", "", { shouldDirty: true });
+    await loadDistrictsByProvinceNameTH(selectedProvince);
   };
 
-  // รายละเอียดแสดงผล (Buyer ก่อน → Seller)
+  // แสดงรายละเอียดด้านนอก
   const detailRows = useMemo(() => {
     const b = user?.Buyer || {};
     const s = user?.Seller || {};
@@ -170,6 +283,12 @@ const SellerInfo = () => {
       { label: "ขนาดครอบครัว", value: b?.Family_Size ?? "-" },
       { label: "จังหวัดที่สนใจ", value: b?.Preferred_Province || "-" },
       { label: "เขต/อำเภอที่สนใจ", value: b?.Preferred_District || "-" },
+    ];
+    const buyerMore = [
+      { label: "ที่จอดรถ", value: b?.Parking_Needs || "-" },
+      { label: "สิ่งอำนวยความสะดวก", value: b?.Nearby_Facilities || "-" },
+      { label: "ไลฟ์สไตล์", value: b?.Lifestyle_Preferences || "-" },
+      { label: "ความต้องการพิเศษ", value: b?.Special_Requirements || "-" },
     ];
     const sellerAfter = [
       { label: "เลขบัตรประชาชน", value: maskThaiID(s?.National_ID) },
@@ -191,8 +310,369 @@ const SellerInfo = () => {
             : "bg-red-500",
       },
     ];
-    return [...buyerFirst, ...sellerAfter];
+    return [...buyerFirst, ...buyerMore, ...sellerAfter];
   }, [user]);
+
+  /* ===================== SUBMIT: partial diff → PATCH /profileseller ===================== */
+  const onSubmit = handleSubmit(async (values) => {
+    setIsSubmittingInfo(true);
+    try {
+      const cleaned = Object.fromEntries(
+        Object.entries(values).map(([k, v]) => [
+          k,
+          typeof v === "string" ? v.trim() : v,
+        ])
+      );
+      if (cleaned.Monthly_Income !== undefined)
+        cleaned.Monthly_Income = toNum(cleaned.Monthly_Income);
+      if (cleaned.Family_Size !== undefined)
+        cleaned.Family_Size = toNum(cleaned.Family_Size);
+
+      const initial = {
+        First_name: user?.First_name || "",
+        Last_name: user?.Last_name || "",
+        Phone: user?.Phone || "",
+        DateofBirth: user?.Buyer?.DateofBirth
+          ? String(user.Buyer.DateofBirth).slice(0, 10)
+          : "",
+        Occupation: user?.Buyer?.Occupation || user?.Buyer?.Occaaption || "",
+        Monthly_Income: user?.Buyer?.Monthly_Income ?? "",
+        Family_Size: user?.Buyer?.Family_Size ?? "",
+        Preferred_Province: user?.Buyer?.Preferred_Province || "",
+        Preferred_District: user?.Buyer?.Preferred_District || "",
+        Parking_Needs: user?.Buyer?.Parking_Needs || "",
+        Nearby_Facilities: user?.Buyer?.Nearby_Facilities || "",
+        Lifestyle_Preferences: user?.Buyer?.Lifestyle_Preferences || "",
+        Special_Requirements: user?.Buyer?.Special_Requirements || "",
+        National_ID: user?.Seller?.National_ID || "",
+        Company_Name: user?.Seller?.Company_Name || "",
+        RealEstate_License: user?.Seller?.RealEstate_License || "",
+      };
+
+      const diff = Object.fromEntries(
+        Object.entries(cleaned).filter(
+          ([k, v]) => String(v ?? "") !== String(initial[k] ?? "")
+        )
+      );
+
+      if (Object.keys(diff).length === 0) {
+        alert("ไม่มีการแก้ไขข้อมูล");
+        setIsSubmittingInfo(false);
+        return;
+      }
+
+      await updateSeller(diff);
+      await revalidateUser();
+      setShowModal(false);
+    } catch (err) {
+      console.error("Error updating profile:", err);
+      alert(err?.response?.data?.message || "ไม่สามารถบันทึกข้อมูลได้");
+    } finally {
+      setIsSubmittingInfo(false);
+    }
+  });
+
+  /* ===================== Step contents ===================== */
+  const StepUser = (
+    <div>
+      <h4 className="text-sm font-semibold text-gray-800 mb-1">ข้อมูลบัญชี</h4>
+      <p className="text-xs text-gray-500">
+        ชื่อ-นามสกุลและเบอร์โทรจะใช้แสดงในประกาศ • อีเมลถูกล็อกไว้
+      </p>
+
+      <div className="grid grid-cols-2 gap-4 mt-3">
+        {/* Email (read-only) */}
+        <div className="col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            อีเมล (ล็อกไว้)
+          </label>
+          <div className="relative">
+            <input
+              type="email"
+              value={user?.Email || ""}
+              readOnly
+              className="w-full rounded-md border bg-gray-100 cursor-not-allowed px-3 py-2 pr-9"
+            />
+            <LockKeyhole className="w-4 h-4 text-gray-500 absolute right-2 top-1/2 -translate-y-1/2" />
+          </div>
+        </div>
+
+        <Frominput
+          label="ชื่อจริง (First Name)"
+          name="First_name"
+          placeholder="เช่น สมชาย"
+          defaultValue={user?.First_name || ""}
+          register={register}
+        />
+        <Frominput
+          label="นามสกุล (Last Name)"
+          name="Last_name"
+          placeholder="เช่น ใจดี"
+          defaultValue={user?.Last_name || ""}
+          register={register}
+        />
+        <Frominput
+          type="tel"
+          label="เบอร์โทร"
+          name="Phone"
+          placeholder="เช่น 0812345678"
+          defaultValue={user?.Phone || ""}
+          register={register}
+          onChange={(e) => {
+            e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10);
+          }}
+          registerOptions={{
+            pattern: { value: /^\d{10}$/, message: "กรุณากรอกเบอร์ 10 หลัก" },
+          }}
+        />
+      </div>
+    </div>
+  );
+
+  const StepBuyer = !hasBuyer ? null : (
+    <div>
+      <h4 className="text-sm font-semibold text-gray-800 mb-1">
+        ข้อมูลผู้ซื้อ
+      </h4>
+      <p className="text-xs text-gray-500">
+        ใช้สำหรับปรับแต่งคำแนะนำอสังหาฯ และแสดงบางส่วนในโปรไฟล์
+      </p>
+
+      <div className="grid grid-cols-2 gap-4 mt-3">
+        <Frominput
+          type="date"
+          label="วันเกิด"
+          name="DateofBirth"
+          defaultValue={
+            user?.Buyer?.DateofBirth
+              ? String(user.Buyer.DateofBirth).slice(0, 10)
+              : ""
+          }
+          register={register}
+        />
+        <Frominput
+          label="อาชีพ"
+          name="Occupation"
+          placeholder="เช่น นักศึกษา / พนักงานบริษัท / ธุรกิจส่วนตัว"
+          defaultValue={
+            user?.Buyer?.Occupation || user?.Buyer?.Occaaption || ""
+          }
+          register={register}
+        />
+        <Frominput
+          type="number"
+          label="รายได้ต่อเดือน (บาท)"
+          name="Monthly_Income"
+          placeholder="เช่น 30000"
+          defaultValue={user?.Buyer?.Monthly_Income ?? ""}
+          register={register}
+        />
+        <Frominput
+          type="number"
+          label="จำนวนสมาชิกครอบครัว (คน)"
+          name="Family_Size"
+          placeholder="เช่น 3"
+          defaultValue={user?.Buyer?.Family_Size ?? ""}
+          register={register}
+        />
+
+        {/* จังหวัด */}
+        <div>
+          <label className="block mb-1 text-sm font-medium text-gray-700">
+            จังหวัดที่ต้องการ
+          </label>
+          <select
+            {...register("Preferred_Province")}
+            className="w-full border rounded-md p-2 disabled:bg-gray-100"
+            onChange={handleProvinceChange}
+            disabled={loadingProvinces}
+            defaultValue={user?.Buyer?.Preferred_Province || ""}
+          >
+            <option value="">
+              {loadingProvinces ? "กำลังโหลดจังหวัด..." : "เลือกจังหวัด"}
+            </option>
+            {provinces.map((province) => (
+              <option key={province.id} value={province.name_th}>
+                {province.name_th}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* อำเภอ */}
+        <div>
+          <label className="block mb-1 text-sm font-medium text-gray-700">
+            อำเภอ/เขตที่ต้องการ
+          </label>
+          <select
+            {...register("Preferred_District")}
+            className="w-full border rounded-md p-2 disabled:bg-gray-100"
+            disabled={loadingDistricts}
+            defaultValue={user?.Buyer?.Preferred_District || ""}
+          >
+            <option value="">
+              {loadingDistricts ? "กำลังโหลดอำเภอ..." : "เลือกอำเภอ/เขต"}
+            </option>
+            {districts.map((district) => (
+              <option key={district.id} value={district.name_th}>
+                {district.name_th}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Parking_Needs */}
+        <div>
+          <label className="block mb-1 text-sm font-medium text-gray-700">
+            ความต้องการที่จอดรถ
+          </label>
+          <select
+            {...register("Parking_Needs")}
+            className="w-full border rounded-md p-2"
+            defaultValue={user?.Buyer?.Parking_Needs || ""}
+          >
+            <option value="">เลือกความต้องการที่จอดรถ</option>
+            <option value="oneCar">1 คัน</option>
+            <option value="twoCars">2 คัน</option>
+            <option value="Not_required">ไม่ต้องการ</option>
+          </select>
+        </div>
+
+        {/* Nearby_Facilities */}
+        <div>
+          <label className="block mb-1 text-sm font-medium text-gray-700">
+            สิ่งอำนวยความสะดวกใกล้เคียง
+          </label>
+          <select
+            {...register("Nearby_Facilities")}
+            className="w-full border rounded-md p-2"
+            defaultValue={user?.Buyer?.Nearby_Facilities || ""}
+          >
+            <option value="">เลือกสิ่งอำนวยความสะดวก</option>
+            <option value="School">โรงเรียน</option>
+            <option value="Hospital">โรงพยาบาล</option>
+            <option value="Mall_Market">ห้าง/ตลาด</option>
+            <option value="Park_Nature">สวนสาธารณะ</option>
+          </select>
+        </div>
+
+        {/* Lifestyle_Preferences */}
+        <div className="col-span-2">
+          <label className="block mb-1 text-sm font-medium text-gray-700">
+            รูปแบบการใช้ชีวิต
+          </label>
+          <select
+            {...register("Lifestyle_Preferences")}
+            className="w-full border rounded-md p-2"
+            defaultValue={user?.Buyer?.Lifestyle_Preferences || ""}
+          >
+            <option value="">เลือกรูปแบบการใช้ชีวิต</option>
+            <option value="Work_from_Home">ทำงานที่บ้าน</option>
+            <option value="Have_Pets">เลี้ยงสัตว์</option>
+            <option value="Need_a_Home_Office">ต้องการห้องทำงาน</option>
+            <option value="Like_Gardening">ชอบทำสวน</option>
+          </select>
+        </div>
+
+        {/* Special_Requirements */}
+        <div className="col-span-2">
+          <label className="block mb-1 text-sm font-medium text-gray-700">
+            ความต้องการพิเศษ (ถ้ามี)
+          </label>
+          <textarea
+            {...register("Special_Requirements")}
+            placeholder="เช่น ต้องการที่เงียบสงบ ใกล้ถนนใหญ่"
+            className="w-full border rounded-md p-2"
+            rows="3"
+            defaultValue={user?.Buyer?.Special_Requirements || ""}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const StepSeller = !hasSeller ? null : (
+    <div>
+      <h4 className="text-sm font-semibold text-gray-800 mb-1">
+        ข้อมูลผู้ขาย/บริษัท
+      </h4>
+      <p className="text-xs text-gray-500">
+        กรอกให้ตรงเอกสารทางราชการ (บัตรประชาชน 13 หลัก)
+      </p>
+
+      <div className="grid grid-cols-2 gap-4 mt-3">
+        <Frominput
+          label="เลขบัตรประชาชน"
+          name="National_ID"
+          placeholder="13 หลัก"
+          defaultValue={user?.Seller?.National_ID || ""}
+          register={register}
+          onChange={(e) => {
+            e.target.value = e.target.value.replace(/\D/g, "").slice(0, 13);
+          }}
+          registerOptions={{
+            pattern: { value: /^\d{13}$/, message: "ต้องมี 13 หลัก" },
+          }}
+        />
+        <Frominput
+          label="ชื่อบริษัท"
+          name="Company_Name"
+          placeholder="เช่น บริษัท สมาร์ทโฮม จำกัด"
+          defaultValue={user?.Seller?.Company_Name || ""}
+          register={register}
+        />
+        <Frominput
+          label="เลขที่ใบอนุญาตนายหน้า"
+          name="RealEstate_License"
+          placeholder="เช่น 62-xxxxxxxx"
+          defaultValue={user?.Seller?.RealEstate_License || ""}
+          register={register}
+        />
+      </div>
+    </div>
+  );
+
+  // สร้าง stepper UI
+  const Stepper = (
+    <div className="px-6 py-3 border-b bg-white/60 backdrop-blur-sm sticky top-0 z-10">
+      <ol className="flex items-center gap-2 text-xs">
+        {steps.map((s, idx) => {
+          const active = idx === stepIndex;
+          const done = idx < stepIndex;
+          return (
+            <li key={s.key} className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setStepIndex(idx)}
+                className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${
+                  active
+                    ? "bg-[#2c3e50] text-white border-[#2c3e50]"
+                    : done
+                    ? "bg-green-50 text-green-700 border-green-200"
+                    : "bg-gray-50 text-gray-700 border-gray-200"
+                }`}
+              >
+                <span className="font-semibold">{idx + 1}</span>
+                <span className="hidden sm:inline">{s.label}</span>
+              </button>
+              {idx !== steps.length - 1 && (
+                <span className="text-gray-300">—</span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+
+  // เปลี่ยนคอนเทนต์ตาม step
+  const renderStep = () => {
+    const key = steps[stepIndex]?.key;
+    if (key === "user") return StepUser;
+    if (key === "buyer") return StepBuyer;
+    if (key === "seller") return StepSeller;
+    return null;
+  };
 
   return (
     <div className="space-y-6">
@@ -263,15 +743,13 @@ const SellerInfo = () => {
 
           {/* รายละเอียด */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-1 gap-x-6 text-sm">
-            {detailRows.slice(0, 7).map((row) => (
+            {detailRows.slice(0, 11).map((row) => (
               <DetailRow key={row.label} label={row.label} value={row.value} />
             ))}
-
             <div className="col-span-1 sm:col-span-2 my-2">
               <div className="h-px bg-gray-200" />
             </div>
-
-            {detailRows.slice(7).map((row) => (
+            {detailRows.slice(11).map((row) => (
               <DetailRow
                 key={row.label}
                 label={row.label}
@@ -285,7 +763,7 @@ const SellerInfo = () => {
 
       {/* =================== MODALS =================== */}
 
-      {/* โมดัลอัปโหลดรูป — สวยงาม + คำอธิบาย + พรีวิวรูปปัจจุบัน */}
+      {/* โมดัลอัปโหลดรูป */}
       {showImageModal && (
         <ModalShell
           title="อัปโหลดรูปโปรไฟล์"
@@ -309,12 +787,18 @@ const SellerInfo = () => {
           </div>
 
           <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 mb-4 bg-gray-50">
-            {/* คอมโพเนนต์อัปโหลดเดิมของโปรเจกต์ */}
             <Formuploadimage
               onUploadSuccess={async (imageData) => {
-                if (!imageData?.url) return alert("ไม่พบ URL รูปภาพ");
                 try {
-                  await updateSeller({ image: imageData.url });
+                  if (imageData?.file) {
+                    const fd = new FormData();
+                    fd.append("image", imageData.file);
+                    await updateImage(fd);
+                  } else if (imageData?.url) {
+                    await updateSeller({ image: imageData.url });
+                  } else {
+                    return alert("ไม่พบไฟล์หรือ URL รูปภาพ");
+                  }
                   await revalidateUser();
                   setShowImageModal(false);
                 } catch (err) {
@@ -332,118 +816,105 @@ const SellerInfo = () => {
         </ModalShell>
       )}
 
-      {/* โมดัลแก้ไขข้อมูล — จัดกลุ่ม/หัวข้อ/คำอธิบาย + helper text + ปุ่มชัด */}
+      {/* โมดัลแก้ไขข้อมูล (3 ขั้น) */}
       {showModal && (
         <ModalShell
-          title="แก้ไขข้อมูลผู้ขาย"
-          description="ตรวจสอบความถูกต้องก่อนบันทึก โดยเฉพาะเลขบัตรประชาชนและหมายเลขใบอนุญาต"
+          title="แก้ไขข้อมูลโปรไฟล์"
+          description="แก้ไขข้อมูลทีละส่วน • User → Buyer → Seller • อีเมลถูกล็อกไว้เพื่อความปลอดภัย"
           icon={<FileText className="w-5 h-5" />}
-          onClose={() => setShowModal(false)}
+          onClose={() => {
+            if (
+              isDirty &&
+              !confirm("ยังไม่ได้บันทึกการแก้ไข ต้องการปิดหรือไม่?")
+            )
+              return;
+            setShowModal(false);
+          }}
+          stepper={
+            steps.length > 1 ? (
+              <div className="px-6 py-3 border-b bg-white/60 backdrop-blur-sm sticky top-0 z-10">
+                <ol className="flex items-center gap-2 text-xs">
+                  {steps.map((s, idx) => {
+                    const active = idx === stepIndex;
+                    const done = idx < stepIndex;
+                    return (
+                      <li key={s.key} className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setStepIndex(idx)}
+                          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${
+                            active
+                              ? "bg-[#2c3e50] text-white border-[#2c3e50]"
+                              : done
+                              ? "bg-green-50 text-green-700 border-green-200"
+                              : "bg-gray-50 text-gray-700 border-gray-200"
+                          }`}
+                        >
+                          <span className="font-semibold">{idx + 1}</span>
+                          <span className="hidden sm:inline">{s.label}</span>
+                        </button>
+                        {idx !== steps.length - 1 && (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            ) : null
+          }
         >
-          {/* หัวข้อย่อย */}
-          <div className="mb-3">
-            <h4 className="text-sm font-semibold text-gray-800 mb-1">
-              ข้อมูลส่วนตัว
-            </h4>
-            <p className="text-xs text-gray-500">
-              ชื่อ-นามสกุล และเบอร์โทรจะใช้สำหรับการติดต่อและแสดงในประกาศ
-            </p>
-          </div>
-
           <form
-            onSubmit={handleSubmit(onSubmit)}
-            className="grid grid-cols-2 gap-4"
+            onSubmit={onSubmit}
+            className="space-y-6"
+            data-modal-scroll-body
+            ref={scrollBodyRef}
           >
-            <Frominput
-              label="ชื่อจริง (First Name)"
-              name="First_name"
-              placeholder="เช่น สมชาย"
-              defaultValue={user?.First_name || ""}
-              register={register}
-              error={errors.First_name?.message}
-            />
-            <Frominput
-              label="นามสกุล (Last Name)"
-              name="Last_name"
-              placeholder="เช่น ใจดี"
-              defaultValue={user?.Last_name || ""}
-              register={register}
-              error={errors.Last_name?.message}
-            />
-            <Frominput
-              type="tel"
-              label="เบอร์โทร"
-              name="Phone"
-              placeholder="เช่น 0812345678"
-              defaultValue={user?.Phone || ""}
-              register={register}
-              error={errors.Phone?.message}
-            />
+            {renderStep()}
 
-            <div className="col-span-2 h-px bg-gray-200 my-1" />
+            {/* Footer (Prev/Next/Save) */}
+            <div className="sticky bottom-0 bg-white pt-3 px-6 -mx-6 border-t flex items-center justify-between">
+              <div className="text-xs text-gray-500">
+                ขั้นที่ {stepIndex + 1} / {steps.length}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    if (stepIndex > 0) setStepIndex(stepIndex - 1);
+                  }}
+                  disabled={stepIndex === 0 || isSubmittingInfo || isSubmitting}
+                >
+                  ย้อนกลับ
+                </Button>
 
-            <div className="col-span-2">
-              <h4 className="text-sm font-semibold text-gray-800 mb-1">
-                ข้อมูลผู้ขาย/บริษัท
-              </h4>
-              <p className="text-xs text-gray-500">
-                กรอกให้ตรงตามเอกสารทางราชการเพื่อความถูกต้อง
-              </p>
-            </div>
-
-            <Frominput
-              label="เลขบัตรประชาชน"
-              name="National_ID"
-              placeholder="13 หลัก"
-              defaultValue={user?.Seller?.National_ID || ""}
-              register={register}
-              error={errors.National_ID?.message}
-            />
-            <Frominput
-              label="ชื่อบริษัท"
-              name="Company_Name"
-              placeholder="เช่น บริษัท สมาร์ทโฮม จำกัด"
-              defaultValue={user?.Seller?.Company_Name || ""}
-              register={register}
-              error={errors.Company_Name?.message}
-            />
-            <Frominput
-              label="เลขที่ใบอนุญาตนายหน้า"
-              name="RealEstate_License"
-              placeholder="เช่น 62-xxxxxxxx"
-              defaultValue={user?.Seller?.RealEstate_License || ""}
-              register={register}
-              error={errors.RealEstate_License?.message}
-            />
-
-            <div className="col-span-2 text-xs text-gray-500 -mt-2">
-              * ข้อมูลจะถูกตรวจสอบเพื่อยืนยันตัวตน หากมีข้อสงสัย
-              ทีมงานอาจติดต่อกลับ
-            </div>
-
-            <div className="col-span-2 mt-1 flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="hover:shadow-sm"
-                onClick={() => setShowModal(false)}
-                disabled={isSubmittingInfo || isSubmitting}
-              >
-                ยกเลิก
-              </Button>
-              <Button
-                type="submit"
-                className="bg-[#2C3E50] hover:bg-[#1a252f]"
-                disabled={isSubmittingInfo || isSubmitting || !isDirty}
-              >
-                {isSubmittingInfo || isSubmitting ? (
-                  <span className="inline-flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" /> กำลังบันทึก...
-                  </span>
+                {!isLastStep ? (
+                  <Button
+                    type="button"
+                    className="bg-[#2C3E50] hover:bg-[#1a252f]"
+                    onClick={() => setStepIndex(stepIndex + 1)}
+                    disabled={isSubmittingInfo || isSubmitting}
+                  >
+                    ถัดไป
+                  </Button>
                 ) : (
-                  "บันทึก"
+                  <Button
+                    type="submit"
+                    className="bg-[#2C3E50] hover:bg-[#1a252f]"
+                    disabled={isSubmittingInfo || isSubmitting || !isDirty}
+                  >
+                    {isSubmittingInfo || isSubmitting ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />{" "}
+                        กำลังบันทึก...
+                      </span>
+                    ) : (
+                      "บันทึกทั้งหมด"
+                    )}
+                  </Button>
                 )}
-              </Button>
+              </div>
             </div>
           </form>
         </ModalShell>

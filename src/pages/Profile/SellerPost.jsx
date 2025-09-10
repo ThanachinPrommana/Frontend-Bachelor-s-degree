@@ -1,7 +1,7 @@
 // src/pages/Profile/SellerPost.jsx
 import React, { useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { apiClient } from "@/api/authconfig"; // ถ้ายังไม่มี ให้คอมเมนต์ส่วนลบไว้ก่อน
+import { apiClient } from "@/api/authconfig";
 import { Home } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -36,8 +36,8 @@ const SellerPost = () => {
     if (!confirm("ยืนยันลบโพสต์นี้?")) return;
     try {
       setDeleting(postId);
-      await apiClient.delete(`/seller/remove/post/${postId}`); // <- ปรับ path ให้ตรง backend ของคุณ
-      await revalidateUser(); // ดึงข้อมูลล่าสุดกลับมา
+      await apiClient.delete(`/propertypost/${postId}`);
+      await revalidateUser();
     } catch (e) {
       alert(e?.response?.data?.message || "ลบไม่สำเร็จ");
     } finally {
@@ -69,7 +69,8 @@ const SellerPost = () => {
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    // 👇 เพิ่ม h-[80vh] + overflow-y-auto
+    <div className="p-6 max-w-3xl mx-auto h-[80vh] overflow-y-auto">
       {/* Search */}
       <div className="flex items-center justify-between mb-6 space-x-4">
         <input
@@ -131,7 +132,7 @@ const SellerPost = () => {
                   </p>
                 </div>
 
-                {/* ปุ่มลบ (ต่อ API แล้ว) */}
+                {/* ปุ่มลบ */}
                 <button
                   onClick={() => handleDelete(post.id)}
                   disabled={deleting === post.id}
@@ -146,7 +147,6 @@ const SellerPost = () => {
       )}
     </div>
   );
-
 };
 
 export default SellerPost;
