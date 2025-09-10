@@ -36,7 +36,7 @@ const SellerPost = () => {
     if (!confirm("ยืนยันลบโพสต์นี้?")) return;
     try {
       setDeleting(postId);
-      await apiClient.delete(`/propertypost/${postId}`); // <- ปรับ path ให้ตรง backend ของคุณ
+      await apiClient.delete(`/seller/remove/post/${postId}`); // <- ปรับ path ให้ตรง backend ของคุณ
       await revalidateUser(); // ดึงข้อมูลล่าสุดกลับมา
     } catch (e) {
       alert(e?.response?.data?.message || "ลบไม่สำเร็จ");
