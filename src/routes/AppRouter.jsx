@@ -17,9 +17,9 @@ import Compare from "@/pages/Compare";
 
 // Profile Pages
 import ProfileTypeSelector from "@/pages/Profile/ProfileTypeSelector";
-import ProfileSeller from "@/pages/Profile/ProfileSeller";
-import ProfileBuyer from "@/pages/Profile/ProfileBuyer";
-import BuyerNoti from "@/pages/Profile/BuyerNoti";
+import ProfileSeller from "@/pages/Profile/Seller/ProfileSeller";
+import ProfileBuyer from "@/pages/Profile/Buyer/ProfileBuyer";
+import BuyerNoti from "@/pages/Profile/Buyer/BuyerNoti";
 
 // Post for Sale Layout
 import PostForSaleLayout from "@/pages/Post_for_sale/PostForSaleLayout";
