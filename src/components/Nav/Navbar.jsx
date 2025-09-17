@@ -21,6 +21,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { MENU_CONFIG } from "@/config/menuConfig";
 import LogoImg from "@/assets/Yuuyen.jpg";
+import BellMenu from "../Notification/BellMenu";
 
 export default function Navbar() {
   const { authUser, logout } = useAuth?.() || {};
@@ -197,28 +198,19 @@ export default function Navbar() {
 
   return (
     <>
-      <style>{`
-        .ripple-wrap { position: relative; overflow: hidden; }
-        .ripple-dot { position: absolute; inset: 0; margin: auto; width: 0; height: 0; border-radius: 9999px;
-          background: rgba(255,255,255,0.35); transform: scale(0); pointer-events: none; }
-        .ripple-wrap:active .ripple-dot { width: 160%; height: 160%; animation: ripple-burst 450ms ease-out forwards; }
-        @keyframes ripple-burst { from { transform: scale(0); opacity: .4 } to { transform: scale(1); opacity: 0 } }
-      `}</style>
-
       <header className="w-full border-b bg-[#2c3e50] text-white">
         <div className="mx-auto max-w-7xl px-4 h-14 flex items-center justify-between">
           {/* Left: โลโก้ + role badge + เมนูซ้าย */}
           <div className="flex items-center gap-3">
             <Link
               to="/"
-              className="ripple-wrap flex items-center rounded-full p-0.5 motion-safe:transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              className="flex items-center rounded-full p-0.5 hover:opacity-90"
               title="กลับหน้าแรก"
               aria-label="กลับหน้าแรก"
             >
-              <span className="ripple-dot" aria-hidden="true" />
               <img
                 src={LogoImg}
-                alt="โลโก้ บ้านดีดี"
+                alt="โลโก้ Yuuyen"
                 className="h-10 w-10 rounded-full object-cover border-2 border-white/70"
               />
             </Link>
@@ -226,7 +218,7 @@ export default function Navbar() {
             {/* Role badge */}
             <span
               className={
-                "hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs motion-safe:transition " +
+                "hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs " +
                 (role === "PUBLIC"
                   ? "bg-white/10 text-gray-100"
                   : role === "BUYER"
@@ -234,15 +226,6 @@ export default function Navbar() {
                     : role === "SELLER"
                       ? "bg-sky-500/20 text-sky-200"
                       : "bg-rose-500/20 text-rose-200")
-              }
-              title={
-                role === "PUBLIC"
-                  ? "สถานะ: ผู้เข้าชม"
-                  : role === "BUYER"
-                    ? "สถานะ: ผู้ซื้อ"
-                    : role === "SELLER"
-                      ? "สถานะ: ผู้ขาย"
-                      : "สถานะ: แอดมิน"
               }
             >
               {role === "PUBLIC" && <Globe className="w-4 h-4" />}
@@ -263,13 +246,12 @@ export default function Navbar() {
             <MenuLinksDesktop />
           </div>
 
-          {/* Right: CTA  + Account Dropdown + Mobile */}
+          {/* Right: CTA + Bell + Account Dropdown + Mobile */}
           <div className="flex items-center gap-2">
-            {/* CTA  */}
             {cta && (
               <Link
                 to={cta.to}
-                className="hidden md:inline-flex items-center gap-2 rounded px-3 py-2 bg-emerald-500 text-white hover:bg-emerald-600 motion-safe:transition mr-6"
+                className="hidden md:inline-flex items-center gap-2 rounded px-3 py-2 bg-emerald-500 text-white hover:bg-emerald-600 mr-2"
                 title={cta.label}
               >
                 {cta.icon || <PlusCircle className="w-4 h-4" />}
@@ -277,14 +259,15 @@ export default function Navbar() {
               </Link>
             )}
 
-            {/* Account Dropdown */}
+            {/* ✅ BellMenu จะแสดงเฉพาะถ้า login */}
+            {authUser && <BellMenu />}
+
             {authUser ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    className="rounded px-2 py-1.5 hover:bg-white/10 motion-safe:transition flex items-center gap-2"
+                    className="rounded px-2 py-1.5 hover:bg-white/10 flex items-center gap-2"
                     title="เมนูโปรไฟล์"
-                    aria-label="เมนูโปรไฟล์"
                   >
                     <img
                       src={avatarSrc}
@@ -299,7 +282,7 @@ export default function Navbar() {
                   {rightDropdown.map(({ to, label, icon: Icon }) => (
                     <DropdownMenuItem key={to} onClick={() => navigate(to)}>
                       <div className="flex items-center gap-2">
-                        {Icon && <Icon className="w-4 h-4" />}{" "}
+                        {Icon && <Icon className="w-4 h-4" />}
                         <span>{label}</span>
                       </div>
                     </DropdownMenuItem>
@@ -313,14 +296,14 @@ export default function Navbar() {
               <div className="hidden md:flex gap-2">
                 <Link
                   to="/login"
-                  className="rounded px-3 py-2 bg-white text-[#2c3e50] hover:bg-gray-100 motion-safe:transition"
+                  className="rounded px-3 py-2 bg-white text-[#2c3e50] hover:bg-gray-100"
                   title="เข้าสู่ระบบ"
                 >
                   เข้าสู่ระบบ
                 </Link>
                 <Link
                   to="/register"
-                  className="rounded px-3 py-2 bg-emerald-500 text-white hover:bg-emerald-600 motion-safe:transition"
+                  className="rounded px-3 py-2 bg-emerald-500 text-white hover:bg-emerald-600"
                   title="สมัครสมาชิก"
                 >
                   สมัครสมาชิก
@@ -332,9 +315,8 @@ export default function Navbar() {
             <Sheet open={open} onOpenChange={setOpen}>
               <SheetTrigger asChild>
                 <button
-                  className="md:hidden rounded px-3 py-2 hover:bg-white/10 motion-safe:transition"
+                  className="md:hidden rounded px-3 py-2 hover:bg-white/10"
                   aria-label="เปิดเมนู"
-                  title="เปิดเมนู"
                 >
                   <Menu className="w-6 h-6" />
                 </button>
@@ -347,24 +329,6 @@ export default function Navbar() {
                   เมนู
                 </div>
                 <MenuLinksMobile />
-                {!authUser && (
-                  <div className="px-4 pb-4 flex gap-2">
-                    <Link
-                      to="/login"
-                      onClick={() => setOpen(false)}
-                      className="rounded px-3 py-2 bg-white text-[#2c3e50]"
-                    >
-                      เข้าสู่ระบบ
-                    </Link>
-                    <Link
-                      to="/register"
-                      onClick={() => setOpen(false)}
-                      className="rounded px-3 py-2 bg-emerald-500 text-white hover:bg-emerald-600"
-                    >
-                      สมัครสมาชิก
-                    </Link>
-                  </div>
-                )}
               </SheetContent>
             </Sheet>
           </div>

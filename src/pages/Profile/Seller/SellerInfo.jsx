@@ -15,7 +15,7 @@ import Frominput from "@/components/form/Frominput";
 import Formuploadimage from "@/components/form/Formuploadimage";
 import { useForm } from "react-hook-form";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { updateSeller, updateImage } from "@/api/user";
+import { updateSeller } from "@/api/user";
 import { useAuth } from "@/context/AuthContext";
 
 /* ===================== utils ===================== */
@@ -47,6 +47,18 @@ const maskThaiID = (id) => {
 };
 const toNum = (v) =>
   v === "" || v === null || v === undefined ? undefined : Number(v);
+
+// cache-busting helper
+const withBust = (url, bust) =>
+  url ? `${url}${url.includes("?") ? "&" : "?"}cb=${bust}` : url;
+
+// make relative path absolute (e.g. /uploads/a.jpg -> https://api.example.com/uploads/a.jpg)
+const absolutize = (maybeUrl) => {
+  if (!maybeUrl) return null;
+  if (/^https?:\/\//i.test(maybeUrl)) return maybeUrl;
+  const base = import.meta.env.VITE_API_URL || window.location.origin;
+  return `${base.replace(/\/$/, "")}/${String(maybeUrl).replace(/^\//, "")}`;
+};
 
 /* ===================== small UI parts ===================== */
 const DetailRow = ({ label, value, chip }) => {
@@ -82,7 +94,7 @@ const DetailRow = ({ label, value, chip }) => {
   );
 };
 
-/* ===================== Modal shell (scrollable + header/footer fixed) ===================== */
+/* ===================== Modal shell (scrollable) ===================== */
 const ModalShell = ({
   title,
   description,
@@ -117,17 +129,15 @@ const ModalShell = ({
           <CircleX className="w-5 h-5" />
         </button>
       </div>
-
-      {/* stepper header (optional) */}
       {stepper}
-
-      {/* scrollable body */}
-      <div className="p-6 overflow-y-auto min-w-0">{children}</div>
+      <div className="p-6 overflow-y-auto min-w-0" data-modal-scroll-body>
+        {children}
+      </div>
     </div>
   </div>
 );
 
-/* ===================== Thai locations (inline hook) ===================== */
+/* ===================== Thai locations ===================== */
 function useThaiLocations() {
   const [provinces, setProvinces] = useState([]);
   const [districts, setDistricts] = useState([]);
@@ -187,15 +197,16 @@ const SellerInfo = () => {
   const { authUser: user, revalidateUser } = useAuth();
   const [isSubmittingInfo, setIsSubmittingInfo] = useState(false);
 
-  // ✅ keep values when fields unmount across steps
+  // สำหรับเปลี่ยนรูปให้เด้งทันที
+  const [avatarBust, setAvatarBust] = useState(0); // cache-busting
+  const [localAvatar, setLocalAvatar] = useState(null); // พรีวิวจากไฟล์
+
   const {
     register,
     handleSubmit,
     reset,
     setValue,
     formState: { isSubmitting, isDirty },
-    getValues,
-    watch,
   } = useForm({ shouldUnregister: false });
 
   const {
@@ -632,7 +643,7 @@ const SellerInfo = () => {
     </div>
   );
 
-  // สร้าง stepper UI
+  // stepper
   const Stepper = (
     <div className="px-6 py-3 border-b bg-white/60 backdrop-blur-sm sticky top-0 z-10">
       <ol className="flex items-center gap-2 text-xs">
@@ -684,7 +695,12 @@ const SellerInfo = () => {
             <div className="flex items-center space-x-4">
               <div className="relative">
                 <img
-                  src={user?.image || "https://via.placeholder.com/80"}
+                  key={localAvatar ? "local" : avatarBust} // remount บังคับโหลดใหม่
+                  src={
+                    localAvatar ||
+                    withBust(absolutize(user?.image), avatarBust) ||
+                    "https://via.placeholder.com/80"
+                  }
                   alt="avatar"
                   className="w-20 h-20 rounded-full object-cover border ring-2 ring-[#2c3e50]/20"
                   onError={(e) => {
@@ -724,7 +740,10 @@ const SellerInfo = () => {
                 variant="outline"
                 size="sm"
                 className="hover:shadow-sm focus:ring-2 focus:ring-blue-300"
-                onClick={() => setShowImageModal(true)}
+                onClick={() => {
+                  setLocalAvatar(null);
+                  setShowImageModal(true);
+                }}
               >
                 แก้ไขรูป
               </Button>
@@ -762,17 +781,25 @@ const SellerInfo = () => {
 
       {/* =================== MODALS =================== */}
 
-      {/* โมดัลอัปโหลดรูป */}
+      {/* โมดัลอัปโหลดรูป (ปรับใหม่: พรีวิวทันที + รองรับ string/object + ไม่ต้องมี URL ก็อัปเดตผ่าน revalidate) */}
       {showImageModal && (
         <ModalShell
           title="อัปโหลดรูปโปรไฟล์"
           description="รองรับไฟล์ JPG/PNG ขนาดแนะนำ 400×400px (ไม่เกิน ~5MB)"
           icon={<ImageIcon className="w-5 h-5" />}
-          onClose={() => setShowImageModal(false)}
+          onClose={() => {
+            setShowImageModal(false);
+            setLocalAvatar(null); // ล้างพรีวิวชั่วคราวเมื่อปิด
+          }}
         >
           <div className="flex items-center gap-4 mb-4">
             <img
-              src={user?.image || "https://via.placeholder.com/80"}
+              key={`modal-${localAvatar ? "local" : avatarBust}`}
+              src={
+                localAvatar ||
+                withBust(absolutize(user?.image), avatarBust) ||
+                "https://via.placeholder.com/80"
+              }
               className="w-16 h-16 rounded-full object-cover border"
               alt="current avatar"
               onError={(e) => {
@@ -780,18 +807,40 @@ const SellerInfo = () => {
               }}
             />
             <div className="text-xs text-gray-500">
-              <div>รูปปัจจุบัน</div>
+              <div>รูปปัจจุบัน / พรีวิวใหม่</div>
               <div>เคล็ดลับ: ใช้รูปสว่าง ชัดเจน เห็นใบหน้า</div>
             </div>
           </div>
 
           <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 mb-4 bg-gray-50">
             <Formuploadimage
-              onUploadSuccess={async (imageData) => {
-                if (!imageData?.url) return alert("ไม่พบ URL รูปภาพ");
+              onUploadSuccess={async (payloadOrUrl) => {
                 try {
-                  // ✅ ถูกต้อง: ไม่ต้องบันทึกซ้ำ แค่ดึงข้อมูลใหม่แล้วปิด Modal
+                  // รองรับทั้งแบบเก่า (string URL) และแบบใหม่ (object { url, preview })
+                  const payload =
+                    typeof payloadOrUrl === "string"
+                      ? { url: payloadOrUrl }
+                      : payloadOrUrl || {};
+
+                  // 1) โชว์พรีวิวทันที
+                  if (payload.preview) setLocalAvatar(payload.preview);
+
+                  // 2) ถ้ามี URL → อัปเดต profile.image เลย (เผื่อ backend ไม่ได้เซ็ตให้)
+                  if (payload.url) {
+                    const abs = absolutize(payload.url);
+                    try {
+                      await updateSeller({ image: abs });
+                    } catch (e) {
+                      console.warn("updateSeller(image) failed, continue:", e);
+                    }
+                  }
+
+                  // 3) ดึง user ใหม่จาก server เสมอ (รองรับเคส backend เซ็ต image เองแต่ไม่คืน URL)
                   await revalidateUser();
+
+                  // 4) กันแคช + ปิดโมดัล
+                  setAvatarBust(Date.now());
+                  setLocalAvatar(null);
                   setShowImageModal(false);
                 } catch (err) {
                   // ส่วนนี้จะทำงานก็ต่อเมื่อ revalidateUser มีปัญหา
@@ -823,38 +872,7 @@ const SellerInfo = () => {
               return;
             setShowModal(false);
           }}
-          stepper={
-            steps.length > 1 ? (
-              <div className="px-6 py-3 border-b bg-white/60 backdrop-blur-sm sticky top-0 z-10">
-                <ol className="flex items-center gap-2 text-xs">
-                  {steps.map((s, idx) => {
-                    const active = idx === stepIndex;
-                    const done = idx < stepIndex;
-                    return (
-                      <li key={s.key} className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setStepIndex(idx)}
-                          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${active
-                            ? "bg-[#2c3e50] text-white border-[#2c3e50]"
-                            : done
-                              ? "bg-green-50 text-green-700 border-green-200"
-                              : "bg-gray-50 text-gray-700 border-gray-200"
-                            }`}
-                        >
-                          <span className="font-semibold">{idx + 1}</span>
-                          <span className="hidden sm:inline">{s.label}</span>
-                        </button>
-                        {idx !== steps.length - 1 && (
-                          <span className="text-gray-300">—</span>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ol>
-              </div>
-            ) : null
-          }
+          stepper={steps.length > 1 ? Stepper : null}
         >
           <form
             onSubmit={onSubmit}
