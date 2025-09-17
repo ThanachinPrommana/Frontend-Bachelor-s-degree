@@ -24,9 +24,9 @@ const Formuploadimage = ({ onUploadSuccess }) => {
     try {
       setUploading(true);
       const result = await updateImage(formData);
-
+      console.log('ข้อมูลที่ได้รับจาก API:', result);
       if (onUploadSuccess) {
-        onUploadSuccess(result.image);
+        onUploadSuccess({ url: result.user.image });
       }
     } catch (err) {
       console.error("Upload failed:", err);

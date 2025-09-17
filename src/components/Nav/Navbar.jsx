@@ -46,8 +46,8 @@ export default function Navbar() {
         role === "SELLER"
           ? "/seller/support"
           : role === "BUYER"
-          ? "/buyer/support"
-          : "/support",
+            ? "/buyer/support"
+            : "/support",
     },
   ];
 
@@ -74,10 +74,9 @@ export default function Navbar() {
   })();
 
   const linkCls = ({ isActive }) =>
-    `px-3 py-2 text-sm rounded motion-safe:transition ${
-      isActive
-        ? "bg-white/10 text-white underline underline-offset-4"
-        : "text-white/90 hover:text-white hover:underline"
+    `px-3 py-2 text-sm rounded motion-safe:transition ${isActive
+      ? "bg-white/10 text-white underline underline-offset-4"
+      : "text-white/90 hover:text-white hover:underline"
     }`;
 
   const handleLogout = async () => {
@@ -117,10 +116,9 @@ export default function Navbar() {
           to={m.to}
           onClick={() => setOpen(false)}
           className={({ isActive }) =>
-            `block rounded px-3 py-3 ${
-              isActive
-                ? "bg-white/10 text-white"
-                : "text-white/90 hover:bg-white/10 hover:text-white"
+            `block rounded px-3 py-3 ${isActive
+              ? "bg-white/10 text-white"
+              : "text-white/90 hover:bg-white/10 hover:text-white"
             }`
           }
         >
@@ -140,10 +138,9 @@ export default function Navbar() {
               to={to}
               onClick={() => setOpen(false)}
               className={({ isActive }) =>
-                `block rounded px-3 py-3 ${
-                  isActive
-                    ? "bg-white/10 text-white"
-                    : "text-white/90 hover:bg-white/10 hover:text-white"
+                `block rounded px-3 py-3 ${isActive
+                  ? "bg-white/10 text-white"
+                  : "text-white/90 hover:bg-white/10 hover:text-white"
                 }`
               }
             >
@@ -233,19 +230,19 @@ export default function Navbar() {
                 (role === "PUBLIC"
                   ? "bg-white/10 text-gray-100"
                   : role === "BUYER"
-                  ? "bg-emerald-500/20 text-emerald-200"
-                  : role === "SELLER"
-                  ? "bg-sky-500/20 text-sky-200"
-                  : "bg-rose-500/20 text-rose-200")
+                    ? "bg-emerald-500/20 text-emerald-200"
+                    : role === "SELLER"
+                      ? "bg-sky-500/20 text-sky-200"
+                      : "bg-rose-500/20 text-rose-200")
               }
               title={
                 role === "PUBLIC"
                   ? "สถานะ: ผู้เข้าชม"
                   : role === "BUYER"
-                  ? "สถานะ: ผู้ซื้อ"
-                  : role === "SELLER"
-                  ? "สถานะ: ผู้ขาย"
-                  : "สถานะ: แอดมิน"
+                    ? "สถานะ: ผู้ซื้อ"
+                    : role === "SELLER"
+                      ? "สถานะ: ผู้ขาย"
+                      : "สถานะ: แอดมิน"
               }
             >
               {role === "PUBLIC" && <Globe className="w-4 h-4" />}
@@ -256,10 +253,10 @@ export default function Navbar() {
                 {role === "PUBLIC"
                   ? "ผู้เข้าชม"
                   : role === "BUYER"
-                  ? "ผู้ซื้อ"
-                  : role === "SELLER"
-                  ? "ผู้ขาย"
-                  : "แอดมิน"}
+                    ? "ผู้ซื้อ"
+                    : role === "SELLER"
+                      ? "ผู้ขาย"
+                      : "แอดมิน"}
               </span>
             </span>
 

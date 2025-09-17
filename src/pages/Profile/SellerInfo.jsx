@@ -300,14 +300,14 @@ const SellerInfo = () => {
           user?.Status === "APPROVED"
             ? "ยืนยันแล้ว"
             : user?.Status === "PENDING"
-            ? "รอดำเนินการ"
-            : "ถูกปฏิเสธ",
+              ? "รอดำเนินการ"
+              : "ถูกปฏิเสธ",
         chip:
           user?.Status === "APPROVED"
             ? "bg-green-500"
             : user?.Status === "PENDING"
-            ? "bg-yellow-500"
-            : "bg-red-500",
+              ? "bg-yellow-500"
+              : "bg-red-500",
       },
     ];
     return [...buyerFirst, ...buyerMore, ...sellerAfter];
@@ -644,13 +644,12 @@ const SellerInfo = () => {
               <button
                 type="button"
                 onClick={() => setStepIndex(idx)}
-                className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${
-                  active
-                    ? "bg-[#2c3e50] text-white border-[#2c3e50]"
-                    : done
+                className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${active
+                  ? "bg-[#2c3e50] text-white border-[#2c3e50]"
+                  : done
                     ? "bg-green-50 text-green-700 border-green-200"
                     : "bg-gray-50 text-gray-700 border-gray-200"
-                }`}
+                  }`}
               >
                 <span className="font-semibold">{idx + 1}</span>
                 <span className="hidden sm:inline">{s.label}</span>
@@ -789,21 +788,15 @@ const SellerInfo = () => {
           <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 mb-4 bg-gray-50">
             <Formuploadimage
               onUploadSuccess={async (imageData) => {
+                if (!imageData?.url) return alert("ไม่พบ URL รูปภาพ");
                 try {
-                  if (imageData?.file) {
-                    const fd = new FormData();
-                    fd.append("image", imageData.file);
-                    await updateImage(fd);
-                  } else if (imageData?.url) {
-                    await updateSeller({ image: imageData.url });
-                  } else {
-                    return alert("ไม่พบไฟล์หรือ URL รูปภาพ");
-                  }
+                  // ✅ ถูกต้อง: ไม่ต้องบันทึกซ้ำ แค่ดึงข้อมูลใหม่แล้วปิด Modal
                   await revalidateUser();
                   setShowImageModal(false);
                 } catch (err) {
-                  console.error("รูปภาพอัปเดตล้มเหลว:", err);
-                  alert("ไม่สามารถบันทึกรูปได้");
+                  // ส่วนนี้จะทำงานก็ต่อเมื่อ revalidateUser มีปัญหา
+                  console.error("เกิดข้อผิดพลาดหลังอัปเดตรูปภาพ:", err);
+                  alert("ไม่สามารถรีเฟรชข้อมูลผู้ใช้ได้");
                 }
               }}
             />
@@ -842,13 +835,12 @@ const SellerInfo = () => {
                         <button
                           type="button"
                           onClick={() => setStepIndex(idx)}
-                          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${
-                            active
-                              ? "bg-[#2c3e50] text-white border-[#2c3e50]"
-                              : done
+                          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${active
+                            ? "bg-[#2c3e50] text-white border-[#2c3e50]"
+                            : done
                               ? "bg-green-50 text-green-700 border-green-200"
                               : "bg-gray-50 text-gray-700 border-gray-200"
-                          }`}
+                            }`}
                         >
                           <span className="font-semibold">{idx + 1}</span>
                           <span className="hidden sm:inline">{s.label}</span>
