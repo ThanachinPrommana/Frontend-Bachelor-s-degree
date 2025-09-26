@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFormContext } from "react-hook-form";
 import { Button } from "@/components/ui/button";
@@ -20,48 +20,55 @@ import { MapPin, Info } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { postLocationSchema } from "@/components/schemas/postSchemas/postLocationSchema";
 import { validateStep } from "@/lib/zodRHF";
-import { Input } from "@headlessui/react";
+import { Input } from "@/components/ui/input";
 
+/** ===== New latest endpoints ===== */
 const PROVINCE_URL =
-  "https://raw.githubusercontent.com/kongvut/thai-province-data/master/api_province.json";
-const AMPHURE_URL =
-  "https://raw.githubusercontent.com/kongvut/thai-province-data/master/api_amphure.json";
-const TAMBON_URL =
-  "https://raw.githubusercontent.com/kongvut/thai-province-data/master/api_tambon.json";
+  "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/province.json";
+const DISTRICT_URL =
+  "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/district.json";
+const SUBDISTRICT_URL =
+  "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/sub_district.json";
 
 const PostLocation = () => {
   const navigate = useNavigate();
   const form = useFormContext();
 
+  /** master lists */
   const [provinces, setProvinces] = useState([]);
-  const [allAmphures, setAllAmphures] = useState([]);
   const [allDistricts, setAllDistricts] = useState([]);
+  const [allSubDistricts, setAllSubDistricts] = useState([]);
 
-  const [amphures, setAmphures] = useState([]);
+  /** filtered lists for current selection */
   const [districts, setDistricts] = useState([]);
+  const [subDistricts, setSubDistricts] = useState([]);
 
+  /** loading flags */
   const [loading, setLoading] = useState(true);
 
+  // โหลด master ทั้งหมดครั้งเดียว
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const [provRes, ampRes, disRes] = await Promise.all([
+        setLoading(true);
+        const [provRes, distRes, subRes] = await Promise.all([
           fetch(PROVINCE_URL),
-          fetch(AMPHURE_URL),
-          fetch(TAMBON_URL),
+          fetch(DISTRICT_URL),
+          fetch(SUBDISTRICT_URL),
         ]);
-        const [prov, amp, dis] = await Promise.all([
+        const [prov, dist, sub] = await Promise.all([
           provRes.json(),
-          ampRes.json(),
-          disRes.json(),
+          distRes.json(),
+          subRes.json(),
         ]);
         if (!mounted) return;
-        setProvinces(prov);
-        setAllAmphures(amp);
-        setAllDistricts(dis);
+
+        setProvinces(prov || []);
+        setAllDistricts(dist || []);
+        setAllSubDistricts(sub || []);
       } catch (err) {
-        console.error("โหลดข้อมูลจังหวัด/อำเภอ/ตำบล error:", err);
+        console.error("โหลดจังหวัด/อำเภอ/ตำบล (latest) ไม่สำเร็จ:", err);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -71,65 +78,74 @@ const PostLocation = () => {
     };
   }, []);
 
+  // เมื่อ master พร้อมแล้ว → เติมค่าอำเภอ/ตำบลตามค่าที่เคยเลือกไว้ (ถ้ามี)
   useEffect(() => {
     if (loading) return;
+
     const currentProvince = form.getValues("Province");
     const currentDistrict = form.getValues("District");
 
     if (currentProvince) {
       const p = provinces.find((x) => x.name_th === currentProvince);
-      const amps = p
-        ? allAmphures.filter((a) => String(a.province_id) === String(p.id))
+      const ds = p
+        ? allDistricts.filter((d) => String(d.province_id) === String(p.id))
         : [];
-      setAmphures(amps);
+      setDistricts(ds);
 
       if (currentDistrict) {
-        const amp = amps.find((a) => a.name_th === currentDistrict);
-        const dists = amp
-          ? allDistricts.filter((d) => String(d.amphure_id) === String(amp.id))
+        const d = ds.find((x) => x.name_th === currentDistrict);
+        const subs = d
+          ? allSubDistricts.filter(
+              (sd) => String(sd.district_id) === String(d.id)
+            )
           : [];
-        setDistricts(dists);
+        setSubDistricts(subs);
 
-        if (!amp) {
+        if (!d) {
+          // district เดิมไม่ match กับจังหวัดนี้แล้ว → รีเซ็ต
           form.resetField("District");
           form.resetField("Subdistrict");
-          setDistricts([]);
+          setSubDistricts([]);
         }
       } else {
-        setDistricts([]);
+        setSubDistricts([]);
         form.resetField("Subdistrict");
       }
     } else {
-      setAmphures([]);
       setDistricts([]);
+      setSubDistricts([]);
       form.resetField("District");
       form.resetField("Subdistrict");
     }
-  }, [loading, provinces, allAmphures, allDistricts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, provinces, allDistricts, allSubDistricts]);
 
+  /** province changed */
   const handleProvinceChange = (provinceName) => {
     form.setValue("Province", provinceName, { shouldDirty: true });
 
+    // reset หลังเลือกจังหวัด
     form.resetField("District");
     form.resetField("Subdistrict");
 
     const p = provinces.find((x) => x.name_th === provinceName);
-    const amps = p
-      ? allAmphures.filter((a) => String(a.province_id) === String(p.id))
+    const ds = p
+      ? allDistricts.filter((d) => String(d.province_id) === String(p.id))
       : [];
-    setAmphures(amps);
-    setDistricts([]);
+    setDistricts(ds);
+    setSubDistricts([]);
   };
 
+  /** district changed */
   const handleDistrictChange = (districtName) => {
     form.setValue("District", districtName, { shouldDirty: true });
     form.resetField("Subdistrict");
 
-    const amp = allAmphures.find((a) => a.name_th === districtName);
-    const dists = amp
-      ? allDistricts.filter((d) => String(d.amphure_id) === String(amp.id))
+    const d = allDistricts.find((x) => x.name_th === districtName);
+    const subs = d
+      ? allSubDistricts.filter((sd) => String(sd.district_id) === String(d.id))
       : [];
-    setDistricts(dists);
+    setSubDistricts(subs);
   };
 
   const onSubmit = () => {
@@ -137,10 +153,8 @@ const PostLocation = () => {
       "Province",
       "District",
       "Subdistrict",
-      "LinkMap",
-      "Latitude",
-      "Longitude",
       "Address",
+      "LinkMap",
     ]);
     if (!ok) return;
     navigate("/seller/post-for-sale/detail");
@@ -169,9 +183,9 @@ const PostLocation = () => {
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
                 เมื่อเปลี่ยน <span className="font-medium">จังหวัด</span>{" "}
-                ระบบจะรีเซ็ตอำเภอและตำบล อัตโนมัติ หากย้อนกลับมา
+                ระบบจะรีเซ็ตอำเภอและตำบลอัตโนมัติ หากย้อนกลับมา
                 หน้าจะเติมอำเภอ/ตำบลเดิมให้โดยอัตโนมัติ
-                (ถ้ายังสอดคล้องกับจังหวัดที่เลือก)
+                (ถ้าสอดคล้องกับจังหวัดที่เลือก)
               </p>
             </div>
 
@@ -213,7 +227,7 @@ const PostLocation = () => {
                 )}
               />
 
-              {/* อำเภอ */}
+              {/* อำเภอ/เขต */}
               <FormField
                 control={form.control}
                 name="District"
@@ -223,54 +237,14 @@ const PostLocation = () => {
                     <Select
                       value={field.value || ""}
                       onValueChange={handleDistrictChange}
-                      disabled={amphures.length === 0}
-                    >
-                      <SelectTrigger className="h-11 cursor-pointer">
-                        <SelectValue
-                          placeholder={
-                            amphures.length
-                              ? "เลือกอำเภอ/เขต"
-                              : "เลือกจังหวัดก่อน"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {amphures.map((a) => (
-                          <SelectItem
-                            key={a.id}
-                            value={a.name_th}
-                            className="cursor-pointer"
-                          >
-                            {a.name_th}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* ตำบล */}
-              <FormField
-                control={form.control}
-                name="Subdistrict"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>ตำบล/แขวง</FormLabel>
-                    <Select
-                      value={field.value || ""}
-                      onValueChange={(v) =>
-                        form.setValue("Subdistrict", v, { shouldDirty: true })
-                      }
-                      disabled={districts.length === 0}
+                      disabled={loading || districts.length === 0}
                     >
                       <SelectTrigger className="h-11 cursor-pointer">
                         <SelectValue
                           placeholder={
                             districts.length
-                              ? "เลือกตำบล/แขวง"
-                              : "เลือกอำเภอก่อน"
+                              ? "เลือกอำเภอ/เขต"
+                              : "เลือกจังหวัดก่อน"
                           }
                         />
                       </SelectTrigger>
@@ -290,6 +264,48 @@ const PostLocation = () => {
                   </FormItem>
                 )}
               />
+
+              {/* ตำบล/แขวง */}
+              <FormField
+                control={form.control}
+                name="Subdistrict"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ตำบล/แขวง</FormLabel>
+                    <Select
+                      value={field.value || ""}
+                      onValueChange={(v) =>
+                        form.setValue("Subdistrict", v, { shouldDirty: true })
+                      }
+                      disabled={loading || subDistricts.length === 0}
+                    >
+                      <SelectTrigger className="h-11 cursor-pointer">
+                        <SelectValue
+                          placeholder={
+                            subDistricts.length
+                              ? "เลือกตำบล/แขวง"
+                              : "เลือกอำเภอก่อน"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {subDistricts.map((sd) => (
+                          <SelectItem
+                            key={sd.id}
+                            value={sd.name_th}
+                            className="cursor-pointer"
+                          >
+                            {sd.name_th}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* ที่อยู่ */}
               <FormField
                 control={form.control}
                 name="Address"

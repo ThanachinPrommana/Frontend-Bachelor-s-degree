@@ -1,3 +1,4 @@
+// src/pages/Auth/VerifyEmail.jsx
 import { useForm } from "react-hook-form";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,15 +8,27 @@ import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import Logo from "@/components/Logo";
 
+const PROVINCE_URL =
+  "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/province.json";
+const DISTRICT_URL =
+  "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/district.json";
+
+function assertOk(res, errMsg) {
+  if (!res.ok) throw new Error(`${errMsg} (HTTP ${res.status})`);
+  return res;
+}
+
 const VerifyEmail = () => {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
   const navigate = useNavigate();
 
-  const [districts, setDistricts] = useState([]);
+  // ทำงานกับจังหวัด/อำเภอ
   const [provinces, setProvinces] = useState([]);
+  const [districtsAll, setDistrictsAll] = useState([]); // v2 ใช้ชื่อ district
+  const [selectedProvinceId, setSelectedProvinceId] = useState(null);
+
   const [loadingProvinces, setLoadingProvinces] = useState(true);
-  const [loadingDistricts, setLoadingDistricts] = useState(false);
   const [serverError, setServerError] = useState("");
 
   const {
@@ -27,60 +40,57 @@ const VerifyEmail = () => {
     resolver: zodResolver(verifyEmailSchema),
   });
 
-  // โหลดรายชื่อจังหวัด
+  // โหลดจังหวัด + อำเภอ (ครั้งเดียว)
   useEffect(() => {
+    let aborted = false;
     (async () => {
       try {
+        setServerError("");
         setLoadingProvinces(true);
-        const res = await fetch(
-          "https://raw.githubusercontent.com/kongvut/thai-province-data/master/api_province.json"
-        );
-        const data = await res.json();
-        setProvinces(data);
+        const [provRes, distRes] = await Promise.all([
+          fetch(PROVINCE_URL, { cache: "no-store" })
+            .then((r) => assertOk(r, "โหลดข้อมูลจังหวัดล้มเหลว"))
+            .then((r) => r.json()),
+          fetch(DISTRICT_URL, { cache: "no-store" })
+            .then((r) => assertOk(r, "โหลดข้อมูลอำเภอล้มเหลว"))
+            .then((r) => r.json()),
+        ]);
+        if (aborted) return;
+        setProvinces(provRes);
+        setDistrictsAll(distRes);
       } catch (e) {
-        setServerError("โหลดข้อมูลจังหวัดไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+        if (!aborted)
+          setServerError("โหลดข้อมูลจังหวัดไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
       } finally {
-        setLoadingProvinces(false);
+        if (!aborted) setLoadingProvinces(false);
       }
     })();
+    return () => {
+      aborted = true;
+    };
   }, []);
 
-  // เปลี่ยนจังหวัด → โหลดอำเภอ
-  const handleProvinceChange = async (e) => {
-    const selectedProvince = e.target.value;
-    setValue("Preferred_Province", selectedProvince);
-    setValue("Preferred_District", "");
+  // เมื่อเลือกจังหวัด → เก็บ id และชื่อจังหวัดลงฟอร์ม, reset อำเภอ
+  const handleProvinceChange = (e) => {
+    const id = Number(e.target.value || 0);
+    setSelectedProvinceId(id || null);
+    setValue("Preferred_District", ""); // reset ค่าอำเภอในฟอร์ม
 
-    const selectedProvinceId = provinces.find(
-      (p) => p.name_th === selectedProvince
-    )?.id;
-
-    if (!selectedProvinceId) {
-      setDistricts([]);
-      return;
-    }
-
-    try {
-      setLoadingDistricts(true);
-      const res = await fetch(
-        "https://raw.githubusercontent.com/kongvut/thai-province-data/master/api_amphure.json"
-      );
-      const amphures = await res.json();
-      const filtered = amphures.filter(
-        (d) => d.province_id === selectedProvinceId
-      );
-      setDistricts(filtered);
-    } catch (e) {
-      setServerError("โหลดข้อมูลอำเภอไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
-    } finally {
-      setLoadingDistricts(false);
-    }
+    const province = provinces.find((p) => p.id === id);
+    setValue("Preferred_Province", province?.name_th || "");
   };
+
+  // อำเภอที่ต้องแสดง (derive จาก selectedProvinceId)
+  const districts = useMemo(() => {
+    if (!selectedProvinceId) return [];
+    // district.json: มี field province_id เหมือนเดิม
+    return districtsAll.filter((d) => d.province_id === selectedProvinceId);
+  }, [districtsAll, selectedProvinceId]);
 
   const onSubmit = async (formData) => {
     setServerError("");
     try {
-      const payload = { token, ...formData }; // flow นี้สมัครเป็น Buyer เสมอ
+      const payload = { token, ...formData }; // flow นี้สมัครเป็น Buyer ตามสคีมาเดิม
       const res = await verifyandregister(payload);
       alert(res.message || "ยืนยันอีเมลสำเร็จ");
       navigate("/login");
@@ -91,11 +101,8 @@ const VerifyEmail = () => {
     }
   };
 
-  // ปุ่ม disabled ถ้ายังโหลดจังหวัดอยู่
-  const submitDisabled = useMemo(
-    () => isSubmitting || loadingProvinces,
-    [isSubmitting, loadingProvinces]
-  );
+  // ปุ่ม disable ถ้ายังโหลดจังหวัดอยู่หรือกำลัง submit
+  const submitDisabled = isSubmitting || loadingProvinces;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200 flex items-center justify-center py-10 px-4">
@@ -194,26 +201,29 @@ const VerifyEmail = () => {
               )}
             </div>
 
-            {/* จังหวัด */}
+            {/* จังหวัด (ใช้ id เป็น value) */}
             <div>
               <label className="block mb-1 text-sm font-medium text-gray-700">
                 จังหวัดที่ต้องการ <span className="text-red-500">*</span>
               </label>
               <select
-                {...register("Preferred_Province")}
-                className="w-full border border-gray-300 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 rounded-md p-2 disabled:bg-gray-100"
                 onChange={handleProvinceChange}
                 disabled={loadingProvinces}
+                className="w-full border border-gray-300 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 rounded-md p-2 disabled:bg-gray-100"
               >
                 <option value="">
                   {loadingProvinces ? "กำลังโหลดจังหวัด..." : "เลือกจังหวัด"}
                 </option>
-                {provinces.map((province) => (
-                  <option key={province.id} value={province.name_th}>
-                    {province.name_th}
+                {provinces.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name_th}
                   </option>
                 ))}
               </select>
+
+              {/* เก็บชื่อจังหวัดในฟอร์ม */}
+              <input type="hidden" {...register("Preferred_Province")} />
+
               {errors.Preferred_Province && (
                 <p className="text-red-500 text-sm mt-1">
                   {errors.Preferred_Province.message}
@@ -228,15 +238,15 @@ const VerifyEmail = () => {
               </label>
               <select
                 {...register("Preferred_District")}
+                disabled={!selectedProvinceId || loadingProvinces}
                 className="w-full border border-gray-300 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 rounded-md p-2 disabled:bg-gray-100"
-                disabled={loadingDistricts || !provinces.length}
               >
                 <option value="">
-                  {loadingDistricts ? "กำลังโหลดอำเภอ..." : "เลือกอำเภอ/เขต"}
+                  {selectedProvinceId ? "เลือกอำเภอ/เขต" : "เลือกจังหวัดก่อน"}
                 </option>
-                {districts.map((district) => (
-                  <option key={district.id} value={district.name_th}>
-                    {district.name_th}
+                {districts.map((d) => (
+                  <option key={d.id} value={d.name_th}>
+                    {d.name_th}
                   </option>
                 ))}
               </select>
@@ -322,7 +332,7 @@ const VerifyEmail = () => {
                 {...register("Special_Requirements")}
                 placeholder="เช่น ต้องการที่เงียบสงบ ใกล้ถนนใหญ่"
                 className="w-full border border-gray-300 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 rounded-md p-2"
-                rows="3"
+                rows={3}
               />
             </div>
           </div>
@@ -350,7 +360,6 @@ const VerifyEmail = () => {
             </button>
           </div>
 
-          {/* หมายเหตุเล็ก ๆ */}
           <p className="text-xs text-gray-500 mt-3 text-center">
             *
             ข้อมูลของคุณจะถูกเก็บเป็นความลับและใช้เพื่อการแนะนำที่อยู่อาศัยเท่านั้น
