@@ -1,12 +1,15 @@
+// src/pages/Profile/Seller/RegisterSeller.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerSeller } from "@/api/auth";
 import { useAuth } from "@/context/AuthContext";
-import { Loader2 } from "lucide-react";
+import { Loader2, Image as ImageIcon } from "lucide-react";
 import Logo from "@/components/Logo";
 import { registerSellerSchema } from "@/components/schemas/authSchemas";
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 const RegisterSeller = () => {
   const { authUser, revalidateUser } = useAuth();
@@ -24,20 +27,72 @@ const RegisterSeller = () => {
   const [serverError, setServerError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
 
+  // state สำหรับไฟล์บัตรประชาชน
+  const [nationalIdFile, setNationalIdFile] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
+  const [fileError, setFileError] = useState(null);
+
   useEffect(() => {
     if (authUser && authUser.userType === "Seller") {
       navigate("/seller");
     }
   }, [authUser, navigate]);
 
+  // cleanup object URL
+  useEffect(() => {
+    return () => {
+      if (filePreview) URL.revokeObjectURL(filePreview);
+    };
+  }, [filePreview]);
+
+  const handleFileChange = (e) => {
+    const f = e.target.files?.[0];
+    setFileError(null);
+    if (!f) {
+      setNationalIdFile(null);
+      setFilePreview(null);
+      return;
+    }
+    if (!f.type.startsWith("image/")) {
+      setFileError("โปรดเลือกไฟล์รูปภาพ (JPG/PNG)");
+      setNationalIdFile(null);
+      setFilePreview(null);
+      return;
+    }
+    if (f.size > MAX_FILE_SIZE) {
+      setFileError("ขนาดไฟล์ต้องไม่เกิน 5MB");
+      setNationalIdFile(null);
+      setFilePreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(f);
+    setNationalIdFile(f);
+    setFilePreview(url);
+  };
+
   const onSubmit = async (data) => {
     setServerError(null);
     setSuccessMessage(null);
+
+    // ต้องมีไฟล์บัตรประชาชน
+    if (!nationalIdFile) {
+      setFileError("กรุณาอัปโหลดรูปภาพบัตรประชาชน");
+      return;
+    }
+
     try {
-      const response = await registerSeller(data);
+      // สร้าง FormData ตามชื่อ field ที่ backend รอรับ
+      const fd = new FormData();
+      fd.append("National_ID", (data.National_ID || "").replace(/\D/g, ""));
+      if (data.Company_Name)
+        fd.append("Company_Name", data.Company_Name.trim());
+      if (data.RealEstate_License)
+        fd.append("RealEstate_License", data.RealEstate_License.trim());
+      fd.append("nationalIdImage", nationalIdFile); // <<< สำคัญ: ต้องชื่อ field นี้
+
+      const response = await registerSeller(fd); // ฟังก์ชันนี้ต้องส่ง multipart/form-data
       setSuccessMessage(response?.message || "สมัครเป็นผู้ขายสำเร็จ");
       await revalidateUser();
-      // ไปหน้า Seller หลังแสดงผลลัพธ์สั้น ๆ
       setTimeout(() => navigate("/seller"), 1200);
     } catch (err) {
       console.error("Caught Error on Frontend:", err);
@@ -74,7 +129,7 @@ const RegisterSeller = () => {
             สมัครเป็นผู้ขาย
           </h2>
           <p className="text-sm text-gray-500 mt-1">
-            กรอกข้อมูลด้านล่างเพื่ออัปเกรดบัญชีของคุณเป็นผู้ขาย
+            กรอกข้อมูลและอัปโหลดรูปบัตรประชาชนเพื่ออัปเกรดบัญชีของคุณเป็นผู้ขาย
           </p>
         </div>
 
@@ -100,6 +155,11 @@ const RegisterSeller = () => {
               pattern="[0-9]*"
               maxLength={13}
               {...register("National_ID")}
+              onInput={(e) => {
+                e.currentTarget.value = e.currentTarget.value
+                  .replace(/\D/g, "")
+                  .slice(0, 13);
+              }}
               className={`mt-1 block w-full px-3 py-2 border ${
                 errors.National_ID ? "border-red-500" : "border-gray-300"
               } rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-400`}
@@ -162,6 +222,43 @@ const RegisterSeller = () => {
                 {errors.RealEstate_License.message}
               </p>
             )}
+          </div>
+
+          {/* Upload National ID Image */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              รูปภาพบัตรประชาชน <span className="text-red-500">*</span>
+            </label>
+
+            <div className="mt-1 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4">
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 rounded-md border bg-white overflow-hidden flex items-center justify-center">
+                  {filePreview ? (
+                    <img
+                      src={filePreview}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <ImageIcon className="w-8 h-8 text-gray-400" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-[#2C3E50] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-[#1a252f] cursor-pointer"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    รองรับ JPG/PNG ขนาดไม่เกิน 5MB
+                  </p>
+                  {fileError && (
+                    <p className="mt-1 text-sm text-red-600">{fileError}</p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Submit */}

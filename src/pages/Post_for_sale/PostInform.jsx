@@ -15,7 +15,6 @@ import PostLayout from "@/layouts/PostLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { User, Phone, MessageCircle, Facebook, Info } from "lucide-react";
 
-
 import { postInformSchema } from "@/components/schemas/postSchemas/postInformSchema";
 import { validateStep } from "@/lib/zodRHF";
 
@@ -29,7 +28,6 @@ const PostInform = () => {
       "Phone",
       "Link_line",
       "Link_facbook",
-      "Contract_Seller", 
     ]);
     if (!ok) return;
     navigate("/seller/post-for-sale/upload");
@@ -57,7 +55,7 @@ const PostInform = () => {
               <p>
                 กรุณากรอกเบอร์โทรที่ติดต่อได้จริง และใส่ลิงก์แบบเต็ม{" "}
                 <span className="font-medium">https://</span>{" "}
-                เพื่อให้ผู้ซื้อคลิกได้ทันที          
+                เพื่อให้ผู้ซื้อคลิกได้ทันที
               </p>
             </div>
 

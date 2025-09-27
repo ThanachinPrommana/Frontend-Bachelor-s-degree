@@ -41,6 +41,18 @@ const formatBaht = (n) => {
 const toNum = (v) =>
   v === "" || v === null || v === undefined ? undefined : Number(v);
 
+// cache-busting helper (เหมือนของ Seller)
+const withBust = (url, bust) =>
+  url ? `${url}${url.includes("?") ? "&" : "?"}cb=${bust}` : url;
+
+// make relative path absolute (เหมือนของ Seller)
+const absolutize = (maybeUrl) => {
+  if (!maybeUrl) return null;
+  if (/^https?:\/\//i.test(maybeUrl)) return maybeUrl;
+  const base = import.meta.env.VITE_API_URL || window.location.origin;
+  return `${base.replace(/\/$/, "")}/${String(maybeUrl).replace(/^\//, "")}`;
+};
+
 /* ========== small UI parts ========== */
 const DetailRow = ({ label, value }) => {
   const isCopyable = !!value && value !== "-";
@@ -170,6 +182,10 @@ const BuyerInfo = () => {
   const [showImageModal, setShowImageModal] = useState(false);
   const { authUser: user, revalidateUser } = useAuth();
   const [isSubmittingInfo, setIsSubmittingInfo] = useState(false);
+
+  // เหมือน Seller: รองรับพรีวิว + กันแคช
+  const [avatarBust, setAvatarBust] = useState(0);
+  const [localAvatar, setLocalAvatar] = useState(null);
 
   // two-step wizard: user -> buyer
   const [stepIndex, setStepIndex] = useState(0);
@@ -573,7 +589,12 @@ const BuyerInfo = () => {
             <div className="flex items-center space-x-4">
               <div className="relative">
                 <img
-                  src={user?.image || "https://via.placeholder.com/80"}
+                  key={localAvatar ? "local" : avatarBust} // remount ให้โหลดใหม่เมื่อ bust เปลี่ยน
+                  src={
+                    localAvatar ||
+                    withBust(absolutize(user?.image), avatarBust) ||
+                    "https://via.placeholder.com/80"
+                  }
                   alt="Profile"
                   className="w-20 h-20 rounded-full object-cover border ring-2 ring-[#2c3e50]/20"
                   onError={(e) => {
@@ -615,7 +636,10 @@ const BuyerInfo = () => {
                 className="cursor-pointer hover:shadow-sm focus:ring-2 focus:ring-blue-300"
                 variant="outline"
                 size="sm"
-                onClick={() => setShowImageModal(true)}
+                onClick={() => {
+                  setLocalAvatar(null); // รีเซ็ตพรีวิวชั่วคราวทุกครั้งก่อนเปิด
+                  setShowImageModal(true);
+                }}
               >
                 แก้ไขรูป
               </Button>
@@ -631,17 +655,25 @@ const BuyerInfo = () => {
             </div>
           </div>
 
-          {/* โมดัลอัปโหลดรูป */}
+          {/* โมดัลอัปโหลดรูป — ทำเหมือน Seller */}
           {showImageModal && (
             <ModalShell
               title="อัปโหลดรูปโปรไฟล์"
               description="รองรับไฟล์ JPG/PNG ขนาดแนะนำ 400×400px (ไม่เกิน ~5MB)"
               icon={<ImageIcon className="w-5 h-5" />}
-              onClose={() => setShowImageModal(false)}
+              onClose={() => {
+                setShowImageModal(false);
+                setLocalAvatar(null); // ล้างพรีวิวเมื่อปิด
+              }}
             >
               <div className="flex items-center gap-4 mb-4">
                 <img
-                  src={user?.image || "https://via.placeholder.com/80"}
+                  key={`modal-${localAvatar ? "local" : avatarBust}`}
+                  src={
+                    localAvatar ||
+                    withBust(absolutize(user?.image), avatarBust) ||
+                    "https://via.placeholder.com/80"
+                  }
                   className="w-16 h-16 rounded-full object-cover border"
                   alt="current avatar"
                   onError={(e) => {
@@ -650,22 +682,47 @@ const BuyerInfo = () => {
                   }}
                 />
                 <div className="text-xs text-gray-500">
-                  <div>รูปปัจจุบัน</div>
+                  <div>รูปปัจจุบัน / พรีวิวใหม่</div>
                   <div>เคล็ดลับ: ใช้รูปสว่าง ชัดเจน เห็นใบหน้า</div>
                 </div>
               </div>
 
               <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 mb-4 bg-gray-50">
                 <Formuploadimage
-                  onUploadSuccess={async (imageData) => {
-                    if (!imageData?.url) return alert("ไม่พบ URL รูปภาพ");
+                  onUploadSuccess={async (payloadOrUrl) => {
                     try {
-                      await updateprofile({ image: imageData.url });
+                      // รองรับทั้ง string URL แบบเก่า และ object { url, preview } แบบใหม่
+                      const payload =
+                        typeof payloadOrUrl === "string"
+                          ? { url: payloadOrUrl }
+                          : payloadOrUrl || {};
+
+                      // 1) โชว์พรีวิวทันที
+                      if (payload.preview) setLocalAvatar(payload.preview);
+
+                      // 2) ถ้ามี URL → อัปเดต profile.image ไว้ก่อน (กันเคส backend ไม่ set ให้)
+                      if (payload.url) {
+                        const abs = absolutize(payload.url);
+                        try {
+                          await updateprofile({ image: abs });
+                        } catch (e) {
+                          console.warn(
+                            "updateprofile(image) failed, continue:",
+                            e
+                          );
+                        }
+                      }
+
+                      // 3) ดึง user ใหม่จาก server เสมอ
                       await revalidateUser();
+
+                      // 4) กันแคช + ปิดโมดัล
+                      setAvatarBust(Date.now());
+                      setLocalAvatar(null);
                       setShowImageModal(false);
                     } catch (err) {
-                      console.error("อัปเดตรูปภาพล้มเหลว:", err);
-                      alert("ไม่สามารถอัปเดตรูปได้");
+                      console.error("รูปภาพอัปเดตล้มเหลว:", err);
+                      alert("ไม่สามารถบันทึกรูปได้");
                     }
                   }}
                 />
@@ -692,37 +749,7 @@ const BuyerInfo = () => {
                   return;
                 setShowModal(false);
               }}
-              stepper={
-                <div className="px-6 py-3 border-b bg-white/60 backdrop-blur-sm sticky top-0 z-10">
-                  <ol className="flex items-center gap-2 text-xs">
-                    {steps.map((s, idx) => {
-                      const active = idx === stepIndex;
-                      const done = idx < stepIndex;
-                      return (
-                        <li key={s.key} className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setStepIndex(idx)}
-                            className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${
-                              active
-                                ? "bg-[#2c3e50] text-white border-[#2c3e50]"
-                                : done
-                                ? "bg-green-50 text-green-700 border-green-200"
-                                : "bg-gray-50 text-gray-700 border-gray-200"
-                            }`}
-                          >
-                            <span className="font-semibold">{idx + 1}</span>
-                            <span className="hidden sm:inline">{s.label}</span>
-                          </button>
-                          {idx !== steps.length - 1 && (
-                            <span className="text-gray-300">—</span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ol>
-                </div>
-              }
+              stepper={Stepper}
             >
               <form onSubmit={onSubmit} className="space-y-6">
                 {renderStep()}
