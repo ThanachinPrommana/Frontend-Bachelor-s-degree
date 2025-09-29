@@ -1,13 +1,13 @@
-import { Button } from "./ui/button";
-
-const Buttons = ({ text, color, lenghbutton, onClick }) => {
+const Buttons = ({ onClick, text, color, className, ...props }) => {
   return (
-    <Button
-      className={`${lenghbutton} py-2 shadow-md text-white ${color} cursor-pointer`}
+    <button
       onClick={onClick}
+      className={`p-3 rounded-lg text-white ${color} ${className}`}
+      {...props} // <-- KEY FIX: เพิ่มบรรทัดนี้เพื่อส่งต่อ props ทั้งหมด
     >
       {text}
-    </Button>
+    </button>
   );
 };
+
 export default Buttons;
