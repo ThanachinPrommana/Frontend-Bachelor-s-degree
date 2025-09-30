@@ -65,31 +65,106 @@ const ContractForm = () => {
                 <div ref={contractRef} className="bg-white p-12 md:p-16 shadow-2xl">
                     <style>{fontStyles}</style>
                     {/* Header */}
-                    <h1 className="text-2xl font-bold text-center mb-8">หนังสือสัญญาจะซื้อจะขายหรือวางเงินมัดจำ</h1>
+                    <h1 className="text-2xl font-bold text-center mb-8">สัญญาจะซื้อจะขาย หรือ สัญญาวางเงินมัดจำ</h1>
 
                     {/* Date and Place */}
-                    <div className="flex justify-end mb-6 text-lg">
+                    {/* <div className="flex justify-end mb-6 text-lg">
                         <div className="w-full sm:w-1/2">
-                            <div className="flex items-baseline mb-2">
-                                <label className="mr-2 whitespace-nowrap">ทำที่:</label>
-                                <input type="text" {...register("madeAt")} className="border-b-2 border-dotted border-gray-400 w-full focus:outline-none focus:border-black" />
-                            </div>
+
                             <div className="flex items-baseline">
                                 <label className="mr-2 whitespace-nowrap">วันที่:</label>
                                 <input type="text" {...register("date")} className="border-b-2 border-dotted border-gray-400 w-full focus:outline-none focus:border-black" />
                             </div>
                         </div>
-                    </div>
+                    </div> */}
 
                     {/* Parties */}
-                    <p className="leading-loose text-lg mb-6">
+
+                    {/* <p className="leading-loose text-lg mb-6">
+                        สัญญานี้ทำที่ <input type="text" {...register("contractPlace")} placeholder="สถานที่ทำสัญญา" className="border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-black mx-1 px-1 w-full sm:w-auto" />
                         สัญญานี้ทำขึ้นระหว่าง <input type="text" {...register("sellerName")} placeholder="ชื่อผู้จะขาย" className="border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-black mx-1 px-1 w-full sm:w-auto" />
                         อยู่บ้านเลขที่ <input type="text" {...register("sellerAddress")} placeholder="ที่อยู่ผู้จะขาย" className="border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-black mx-1 px-1 w-full" />
                         ซึ่งต่อไปในสัญญานี้จะเรียกว่า **"ผู้จะขาย"** ฝ่ายหนึ่ง กับ
                         <input type="text" {...register("buyerName")} placeholder="ชื่อผู้จะซื้อ" className="border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-black mx-1 px-1 w-full sm:w-auto" />
                         อยู่บ้านเลขที่ <input type="text" {...register("buyerAddress")} placeholder="ที่อยู่ผู้จะซื้อ" className="border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-black mx-1 px-1 w-full" />
                         ซึ่งต่อไปในสัญญานี้จะเรียกว่า **"ผู้จะซื้อ"** อีกฝ่ายหนึ่ง
-                    </p>
+                    </p> */}
+                    <div className="flex flex-col">
+                        <div className="space-y-4">
+
+                            {/* --- กลุ่มที่ 1: สถานที่ --- */}
+                            <p className="text-lg flex flex-wrap items-center leading-tight">
+                                <span className="whitespace-nowrap">สัญญานี้ทำที่ </span>
+                                <input
+                                    type="text"
+                                    {...register("contractPlace")}
+                                    placeholder="สถานที่ทำสัญญา"
+                                    className=" border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-black mx-1 px-1 w-auto flex-grow min-w-[150px]"
+                                />
+                            </p>
+
+                            {/* --- กลุ่มที่ 2: วัน เดือน ปี --- */}
+                            <p className="text-lg flex flex-wrap items-center leading-tight">
+                                <span className="whitespace-nowrap">ในวันที่ </span>
+
+                                <span className="whitespace-nowrap">วัน</span>
+                                <input
+                                    type="text"
+                                    {...register("date")}
+                                    placeholder="วันที่"
+                                    className="border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-black mx-1 px-1 min-w-[50px] w-auto flex-grow"
+                                />
+
+                                <span className="whitespace-nowrap">เดือน</span>
+                                <input
+                                    type="text"
+                                    {...register("month")}
+                                    placeholder="เดือน"
+                                    className="border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-black mx-1 px-1 min-w-[100px] w-auto flex-grow"
+                                />
+
+                                <span className="whitespace-nowrap">พ.ศ.</span>
+                                <input
+                                    type="text"
+                                    {...register("year")}
+                                    placeholder="ปี พ.ศ."
+                                    className="border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-black mx-1 px-1 min-w-[70px] w-auto flex-grow"
+                                />
+                            </p>
+
+                            {/* --- กลุ่มที่ 3: ระหว่าง ชื่อผู้จะขาย อายุ --- */}
+                            <p className="text-lg flex flex-wrap items-center leading-tight">
+                                <span className="whitespace-nowrap">ระหว่าง</span>
+                                <input
+                                    type="text"
+                                    {...register("sellerName")}
+                                    placeholder="ชื่อผู้จะขาย"
+                                    className="border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-black mx-1 px-1 w-auto flex-grow min-w-[150px]"
+                                />
+
+                                <span className="whitespace-nowrap ml-4">อายุ</span>
+                                <input
+                                    type="text"
+                                    {...register("sellerAge")}
+                                    placeholder="อายุ"
+                                    className="border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-black mx-1 px-1 min-w-[50px] w-auto flex-grow"
+                                />
+                                <span className="whitespace-nowrap">ปี</span>
+
+                            </p>
+                            <p className="text-lg flex flex-wrap items-center leading-tight ml-15">
+                                <span className="whitespace-nowrap">หมายเลขบัตรประจำตัวประชาชน</span>
+                                <input
+                                    type="text"
+                                    {...register("sellerID")}
+                                    placeholder="เลขที่บัตรประชาชน"
+                                    className="border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-black mx-1 px-1 min-w-[50px] w-auto flex-grow"
+                                />
+                            </p>
+
+                        </div>
+                    </div>
+
 
                     {/* Clause 1: Property Details */}
                     <div className="mb-6 text-lg">
