@@ -65,6 +65,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import RegisterSeller from "@/pages/Auth/RegisterSeller";
 
 import NotFound from "@/pages/NotFound";
+import ContractForm from "@/pages/ContractForm";
 
 const AppRouter = () => {
   return (
@@ -95,6 +96,7 @@ const AppRouter = () => {
             {/* Deposit & Payment */}
             <Route path="/deposit/:id" element={<Deposit />} />
             <Route path="/deposit_doc" element={<Deposit_doc />} />
+            <Route path="/contract" element={<ContractForm />} />
             <Route path="/payment" element={<Payment />} />
           </Route>
 

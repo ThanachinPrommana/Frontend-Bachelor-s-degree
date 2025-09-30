@@ -4,7 +4,6 @@ import {
   BedSingle, Bath, Grid2x2, Calendar, Car, Home,
   Building, Phone, MapPin, Tag, CheckCircle, Info, Video
 } from "lucide-react";
-import ReactPlayer from "react-player";
 
 import { apiClient } from "@/api/authconfig";
 import { useCompare } from "@/context/CompareContext";
@@ -21,7 +20,7 @@ const Deposit = () => {
   const navigate = useNavigate();
   const { addToCompare, compareList } = useCompare();
   const { authUser } = useAuth();
-  
+
 
   // ✅ เก็บเฉพาะ id ของยูนิตที่เลือก
   const [selectedUnitId, setSelectedUnitId] = useState();
@@ -127,26 +126,9 @@ const Deposit = () => {
         {/* --- Main Content Area --- */}
         <div className="flex flex-col lg:flex-row mt-8 gap-8">
           {/* Left Column - Details */}
-          <div className="w-full lg:w-[65%] space-y-8">
+          <div className="w-full lg:w-[65%] space-y-4">
             {/* --- Video --- */}
-            {post.Video && post.Video.length > 0 && (
-              <div className="bg-white p-6 rounded-2xl shadow-md border">
-                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <Video className="text-blue-600" />
-                  วิดีโอแนะนำ
-                </h3>
-                <div className="rounded-lg overflow-hidden">
-                  <ReactPlayer
-                    className="aspect-video"
-                    url={post.Video[0].secure_url}
-                    controls={true}
-                    width="100%"
-                    height="100%"
-                    playing={false}
-                  />
-                </div>
-              </div>
-            )}
+            
 
             {/* --- Property Details --- */}
             <div className="bg-white p-6 rounded-2xl shadow-md border">
@@ -182,8 +164,8 @@ const Deposit = () => {
                       disabled={!isAvailable}
                       className={`p-2 px-4 border rounded-lg transition-all duration-200 
                         ${!isAvailable && "bg-gray-200 opacity-50 cursor-not-allowed"}
-                        ${isAvailable && !isSelected && "bg-green-200 hover:bg-green-300"}
-                        ${isAvailable && isSelected && "bg-blue-600 text-white ring-2 ring-blue-700 scale-105"}
+                        ${isAvailable && !isSelected && "bg-green-200 hover:bg-green-300 cursor-pointer"}
+                        ${isAvailable && isSelected && "bg-blue-600 text-white ring-2 ring-blue-700 scale-105 cursor-pointer"}
                       `}
                     >
                       {unit.Unit_Number} - {unit.Status}
@@ -226,6 +208,35 @@ const Deposit = () => {
                 </a>
               </div>
             )}
+
+            {post.Video && post.Video.length > 0 && (
+              <div className="bg-white p-6 rounded-2xl shadow-md border">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <Video className="text-blue-600" />
+                  วิดีโอแนะนำ
+                </h3>
+                <div className="rounded-lg overflow-hidden space-y-2">
+                  <video
+                    src={post.Video[0].secure_url}
+                    controls
+                    width="100%"
+                    height="100%"
+                    playing={false}
+                    className="rounded-lg"
+                    loop
+                  />
+                  <video
+                    src={post.Video[1].secure_url}
+                    controls
+                    width="100%"
+                    height="100%"
+                    playing={false}
+                    className="rounded-lg"
+                    loop
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right Column - Pricing & Agent Info */}
@@ -245,9 +256,9 @@ const Deposit = () => {
 
               <Buttons
                 onClick={() => {
-                  
+
                   if (!authUser) {
-                    conslog.log("User:",authUser);
+                    conslog.log("User:", authUser);
                     // ถ้าไม่มี user (ยังไม่ล็อกอิน) ให้เด้งไปหน้า login
                     navigate("/login", { state: { from: location } });
                   } else {
@@ -324,4 +335,4 @@ const Deposit = () => {
   );
 };
 
-export default Deposit;
+export default Deposit; 
