@@ -12,14 +12,14 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { fetchUserNoti, fetchUnreadCount } from "@/api/notification";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useNotifications } from "@/hooks/useNotifications"; // ✅ ใช้ hook ใหม่
 
 function getProfilePath(userType) {
   if (userType === "Buyer") return "/buyer/profile?tab=notifications";
   if (userType === "Seller") return "/seller/profile?tab=notifications";
-  return "/Login";
+  return "/login";
 }
 
 const TYPE_META = {
@@ -62,10 +62,12 @@ const TYPE_META = {
 
 export default function BellMenu() {
   const { authUser } = useAuth();
+  const userId = authUser?.userId || authUser?.id || null;
+
+  // ✅ อ่าน unreadCount จากคุกกี้ได้ทันที + sync จาก BE โดย hook
+  const { items, unreadCount, loading, refresh } = useNotifications(userId);
+
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
   const menuRef = useRef(null);
   const navigate = useNavigate();
 
@@ -73,33 +75,16 @@ export default function BellMenu() {
     authUser?.userType || localStorage.getItem("userType")
   );
 
-  const refreshUnreadCount = async () => {
-    if (!authUser?.id) return;
-    try {
-      const count = await fetchUnreadCount(authUser.id);
-      setUnreadCount(count);
-    } catch {}
-  };
-
-  const loadLatest = async () => {
-    if (!authUser?.id) return;
-    setLoading(true);
-    try {
-      const { notifications } = await fetchUserNoti(authUser.id, { limit: 5 });
-      setItems(notifications);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // เปิดเมนูเมื่อไหร่ให้ refresh ล่าสุด (ดึงจริงจาก BE)
   const toggle = async () => {
     const willOpen = !open;
     setOpen(willOpen);
     if (willOpen) {
-      await Promise.all([refreshUnreadCount(), loadLatest()]);
+      await refresh();
     }
   };
 
+  // ปิดเมื่อคลิกนอก
   useEffect(() => {
     const onClickOutside = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target))
@@ -109,27 +94,32 @@ export default function BellMenu() {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
+  // อัปเดต badge เป็นระยะ + เมื่อกลับมาโฟกัสแท็บ
   useEffect(() => {
-    if (!authUser?.id) return;
-    const onVis = () =>
-      document.visibilityState === "visible" && refreshUnreadCount();
+    if (!userId) return;
+    const onVis = () => document.visibilityState === "visible" && refresh();
     document.addEventListener("visibilitychange", onVis);
-    const t = setInterval(refreshUnreadCount, 90_000);
-    refreshUnreadCount();
+    const t = setInterval(refresh, 90_000);
+    refresh(); // โหลดครั้งแรก
+
     return () => {
       document.removeEventListener("visibilitychange", onVis);
       clearInterval(t);
     };
-  }, [authUser?.id]);
+  }, [userId, refresh]);
 
+  // แสดงแค่ 5 อันล่าสุดในเมนู (UI เดิมใช้ limit=5)
+  const latest5 = useMemo(() => items.slice(0, 5), [items]);
+
+  // map meta สำหรับเรนเดอร์
   const normalized = useMemo(
     () =>
-      items.map((n) => {
+      latest5.map((n) => {
         const t = (n.type || "general").toLowerCase();
         const meta = TYPE_META[t] || TYPE_META.general;
         return { ...n, _meta: meta, _typeKey: t };
       }),
-    [items]
+    [latest5]
   );
 
   if (!authUser) return null;
@@ -178,7 +168,6 @@ export default function BellMenu() {
                 ยังไม่มีการแจ้งเตือน
               </div>
             ) : (
-              // ลดช่องว่างบน: ลด padding ของ ul และ margin ของ li
               <ul className="max-h-[360px] overflow-auto py-1">
                 {normalized.map((n, idx) => {
                   const Icon = n._meta.icon;
@@ -232,7 +221,6 @@ export default function BellMenu() {
                 })}
               </ul>
             )}
-            {/* ลบปุ่ม “ไปยังหน้าโปรไฟล์” ออกแล้ว */}
           </CardContent>
         </Card>
       )}

@@ -17,7 +17,9 @@ export const fetchUserNoti = async (
   if (page != null) params.page = page;
   if (pageSize != null) params.pageSize = pageSize;
 
-  const { data } = await apiClient.get(`/user/notification/${userId}`, { params });
+  const { data } = await apiClient.get(`/user/notification/${userId}`, {
+    params,
+  });
 
   // รองรับทั้ง {notifications,total} และ array แบบเก่า
   const list = Array.isArray(data) ? data : data?.notifications ?? [];

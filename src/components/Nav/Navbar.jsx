@@ -21,10 +21,11 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { MENU_CONFIG } from "@/config/menuConfig";
 import LogoImg from "@/assets/Yuuyen.jpg";
-import BellMenu from "../Notification/BellMenu";
+import BellMenu from "@/components/Notification/BellMenu";
 
 export default function Navbar() {
-  const { authUser, logout } = useAuth?.() || {};
+  // ✅ เรียก useAuth() ตรง ๆ
+  const { authUser, logout } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
@@ -83,7 +84,7 @@ export default function Navbar() {
 
   const handleLogout = async () => {
     try {
-      await logout?.();
+      await logout(); // ✅ จะลบ noti_hint + เคลียร์ session ใน AuthContext ให้แล้ว
     } finally {
       navigate("/login");
     }
@@ -107,6 +108,7 @@ export default function Navbar() {
           onClick={() => setOpen(false)}
           className="mb-3 inline-flex items-center justify-center rounded px-3 py-2 bg-emerald-500 text-white hover:bg-emerald-600 motion-safe:transition"
         >
+          {cta.icon || <PlusCircle className="w-4 h-4" />}
           {cta.label}
         </Link>
       )}
@@ -262,7 +264,7 @@ export default function Navbar() {
               </Link>
             )}
 
-            {/* ✅ BellMenu จะแสดงเฉพาะถ้า login */}
+            {/* ✅ แสดง BellMenu เมื่อ login */}
             {authUser && <BellMenu />}
 
             {authUser ? (
@@ -290,7 +292,7 @@ export default function Navbar() {
                       </div>
                     </DropdownMenuItem>
                   ))}
-                  <DropdownMenuItem onClick={async () => handleLogout()}>
+                  <DropdownMenuItem onClick={handleLogout}>
                     <span className="text-red-600 font-medium">ออกจากระบบ</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
