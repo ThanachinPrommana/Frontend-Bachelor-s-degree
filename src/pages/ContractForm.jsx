@@ -103,11 +103,32 @@ const ContractForm = () => {
                             <div className="flex-grow min-w-[150px]"><InputField id="buyerAddress" placeholder="เลขที่" register={register} /></div>
                             <span>หมู่ที่</span>
                             <div className="w-24"><InputField id="buyerVillageNo" placeholder="หมู่" register={register} /></div>
+                            <span>ซอย</span>
+                            <div className="flex-grow min-w-[150px]"><InputField id="buyerSoi" placeholder="ซอย" register={register} /></div>
+                            <span>ถนน</span>
+                            <div className="flex-grow min-w-[150px]"><InputField id="buyerRoad" placeholder="ถนน" register={register} /></div>
+                            <span>ตำบล/แขวง</span>   
+                            <div className="flex-grow min-w-[150px]"><InputField id="buyerSubDistrict" placeholder="ตำบล/แขวง" register={register} /></div>
+                            <span>อำเภอ/เขต</span>
+                            <div className="flex-grow min-w-[150px]"><InputField id="buyerDistrict" placeholder="อำเภอ/เขต" register={register} /></div>
+                            <span>จังหวัด</span>
+                            <div className="flex-grow min-w-[150px]"><InputField id="buyerProvince" placeholder="จังหวัด" register={register} /></div>
                         </div>
-                        <p>ซึ่งต่อไปในสัญญานี้จะเรียกว่า "ผู้จะซื้อ" อีกฝ่ายหนึ่ง</p>
+                        <p>ซึ่งต่อไปในสัญญานี้จะเรียกว่า "ผู้จะซื้อ" ฝ่ายหนึ่ง</p>
                     </div>
-                    
                     {/* ... (เนื้อหาส่วนที่เหลือของสัญญา) ... */}
+                    <div className="text-lg leading-relaxed space-y-2">
+                        <p>ทั้งสองฝ่ายตกลงทำสัญญาฉบับนี้ขึ้นด้วยความสมัครใจมีข้อความดังต่อไปนี้</p>
+                        <div className="flex flex-wrap items-baseline gap-x-4">
+                            <span className="font">ข้อ 1. ผู้ขายเป็นเจ้าของ</span>
+                            <div className="flex-grow min-w-[150px]"><InputField id="ownSeller" placeholder="ผู้ขายเป็นเจ้าของ" register={register} /></div>
+                        </div>
+                        <div className="flex flex-wrap items-baseline gap-x-4">
+                            <span>ข้อ 2. ผู้ขายตกลงจะขายและผู้ซื้อตกลงจะซื้อ ในข้อ 1. โดยปลอกจากภาวะผูกพันหรือภาระติดพันใดๆ</span>
+                            <div className="flex-grow min-w-[150px]"><InputField id="responsibility" placeholder="ผู้ขายตกลงจะขายและผู้ซื้อตกลงจะซื้อ" register={register} /></div>
+                        </div>
+
+                    </div>
                     
                     {/* Signature Section */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-8 mt-24 pt-8 border-t-2 border-dotted">

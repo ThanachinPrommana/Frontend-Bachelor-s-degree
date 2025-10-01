@@ -43,24 +43,24 @@ const styles = StyleSheet.create({
     minHeight: 12,
   },
   signatureBox: {
-      border: '1px solid #ccc',
-      height: 80,
-      width: 200,
-      marginTop: 10,
-      marginBottom: 5,
+    border: '1px solid #ccc',
+    height: 80,
+    width: 200,
+    marginTop: 10,
+    marginBottom: 5,
   },
   signatureImage: {
-      width: '100%',
-      height: '100%',
+    width: '100%',
+    height: '100%',
   },
   signatureContainer: {
-      marginTop: 80,
-      display: 'flex',
-      flexDirection: 'row',
-      justifyContent: 'space-around',
+    marginTop: 80,
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
   },
   signatureColumn: {
-      textAlign: 'center',
+    textAlign: 'center',
   },
   bold: {
     fontWeight: 'bold',
@@ -71,109 +71,127 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature }) => (
   <Document>
     <Page size="A4" style={styles.page}>
       <Text style={styles.header}>สัญญาจะซื้อจะขาย หรือ สัญญาวางเงินมัดจำ</Text>
-      
+
       {/* Date and Place */}
       <View style={{ ...styles.section, alignItems: 'flex-end' }}>
         <View style={{ width: '60%' }}>
-           <View style={styles.flexRow}>
-              <Text>สัญญานี้ทำที่:</Text>
-              <Text style={styles.input}>{data?.contractPlace || ' '}</Text>
-           </View>
-           <View style={styles.flexRow}>
-              <Text>ในวันที่:</Text>
-              <Text style={styles.input}>{`${data?.date || ''} ${data?.month || ''} ${data?.year || ''}`}</Text>
-           </View>
+          <View style={styles.flexRow}>
+            <Text>สัญญานี้ทำที่:</Text>
+            <Text style={styles.input}>{data?.contractPlace || ' '}</Text>
+          </View>
+          <View style={styles.flexRow}>
+            <Text>ในวันที่:</Text>
+            <Text style={styles.input}>{`${data?.date || ''} ${data?.month || ''} ${data?.year || ''}`}</Text>
+          </View>
         </View>
       </View>
 
       {/* Parties */}
       <View style={styles.section}>
-          <View style={styles.flexRow}>
-              <Text>ระหว่าง</Text>
-              <Text style={styles.input}>{data?.sellerName || ' '}</Text>
-              <Text>อายุ</Text>
-              <Text style={{...styles.input, width: 40, flexGrow: 0}}>{data?.sellerAge || ' '}</Text>
-              <Text>ปี</Text>
-          </View>
-          <View style={styles.flexRow}>
-              <Text>หมายเลขบัตรประจำตัวประชาชน</Text>
-              <Text style={styles.input}>{data?.sellerID || ' '}</Text>
-          </View>
-          <View style={styles.flexRow}>
-              <Text>อยู่บ้านเลขที่</Text>
-              <Text style={styles.input}>{data?.sellerAddress || ' '}</Text>
-              <Text>หมู่ที่</Text>
-              <Text style={{...styles.input, width: 40, flexGrow: 0}}>{data?.sellerVillageNo || ' '}</Text>
-              <Text>ซอย</Text>
-              <Text style={styles.input}>{data?.sellerSoi || ' '}</Text>
-          </View>
-          <View style={styles.flexRow}>
-              <Text>ถนน</Text>
-              <Text style={styles.input}>{data?.sellerRoad || ' '}</Text>
-              <Text>ตำบล/แขวง</Text>
-              <Text style={styles.input}>{data?.sellerSubDistrict || ' '}</Text>
-          </View>
-          <View style={styles.flexRow}>
-              <Text>อำเภอ/เขต</Text>
-              <Text style={styles.input}>{data?.sellerDistrict || ' '}</Text>
-              <Text>จังหวัด</Text>
-              <Text style={styles.input}>{data?.sellerProvince || ' '}</Text>
-          </View>
-          <Text>ซึ่งต่อไปในสัญญานี้จะเรียกว่า "<Text style={styles.bold}>ผู้จะขาย</Text>" ฝ่ายหนึ่ง</Text>
-      </View>
-
-       <View style={styles.section}>
-          <View style={styles.flexRow}>
-              <Text>กับ</Text>
-              <Text style={styles.input}>{data?.buyerName || ' '}</Text>
-              <Text>อายุ</Text>
-              <Text style={{...styles.input, width: 40, flexGrow: 0}}>{data?.buyerAge || ' '}</Text>
-              <Text>ปี</Text>
-          </View>
-          <View style={styles.flexRow}>
-              <Text>หมายเลขบัตรประจำตัวประชาชน</Text>
-              <Text style={styles.input}>{data?.buyerID || ' '}</Text>
-          </View>
-           <View style={styles.flexRow}>
-              <Text>อยู่บ้านเลขที่</Text>
-              <Text style={styles.input}>{data?.buyerAddress || ' '}</Text>
-              <Text>หมู่ที่</Text>
-              <Text style={{...styles.input, width: 40, flexGrow: 0}}>{data?.buyerVillageNo || ' '}</Text>
-          </View>
-          <Text>ซึ่งต่อไปในสัญญานี้จะเรียกว่า "<Text style={styles.bold}>ผู้จะซื้อ</Text>" อีกฝ่ายหนึ่ง</Text>
-       </View>
-      
-      {/* Clause 1 */}
-      <View style={styles.section}>
-        <Text style={styles.bold}>ข้อ 1. ทรัพย์สินที่ซื้อขาย</Text>
         <View style={styles.flexRow}>
-            <Text>ผู้จะขายตกลงขายและผู้จะซื้อตกลงรับซื้อ</Text>
-            <Text style={styles.input}>{data?.propertyType || ' '}</Text>
+          <Text>ระหว่าง</Text>
+          <Text style={styles.input}>{data?.sellerName || ' '}</Text>
+          <Text>อายุ</Text>
+          <Text style={{ ...styles.input, width: 40, flexGrow: 0 }}>{data?.sellerAge || ' '}</Text>
+          <Text>ปี</Text>
         </View>
         <View style={styles.flexRow}>
-            <Text>ตามโฉนดที่ดินเลขที่</Text>
-            <Text style={styles.input}>{data?.deedNumber || ' '}</Text>
-            <Text>เนื้อที่ประมาณ</Text>
-            <Text style={styles.input}>{data?.area || ' '}</Text>
+          <Text>หมายเลขบัตรประจำตัวประชาชน</Text>
+          <Text style={styles.input}>{data?.sellerID || ' '}</Text>
+        </View>
+        <View style={styles.flexRow}>
+          <Text>อยู่บ้านเลขที่</Text>
+          <Text style={styles.input}>{data?.sellerAddress || ' '}</Text>
+          <Text>หมู่ที่</Text>
+          <Text style={{ ...styles.input, width: 40, flexGrow: 0 }}>{data?.sellerVillageNo || ' '}</Text>
+        </View>
+        <View style={styles.flexRow}>
+          <Text>ซอย</Text>
+          <Text style={styles.input}>{data?.sellerSoi || ' '}</Text>
+          <Text>ถนน</Text>
+          <Text style={styles.input}>{data?.sellerRoad || ' '}</Text>
+        </View>
+        <View style={styles.flexRow}>
+          <Text>ตำบล/แขวง</Text>
+          <Text style={styles.input}>{data?.sellerSubDistrict || ' '}</Text>
+          <Text>อำเภอ/เขต</Text>
+          <Text style={styles.input}>{data?.sellerDistrict || ' '}</Text>
+        </View>
+        <View style={styles.flexRow}>
+          <Text>จังหวัด</Text>
+          <Text style={styles.input}>{data?.sellerProvince || ' '}</Text>
+        </View>
+        <Text>ซึ่งต่อไปในสัญญานี้จะเรียกว่า "<Text style={styles.bold}>ผู้จะขาย</Text>" ฝ่ายหนึ่ง</Text>
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.flexRow}>
+          <Text>กับ</Text>
+          <Text style={styles.input}>{data?.buyerName || ' '}</Text>
+          <Text>อายุ</Text>
+          <Text style={{ ...styles.input, width: 40, flexGrow: 0 }}>{data?.buyerAge || ' '}</Text>
+          <Text>ปี</Text>
+        </View>
+        <View style={styles.flexRow}>
+          <Text>หมายเลขบัตรประจำตัวประชาชน</Text>
+          <Text style={styles.input}>{data?.buyerID || ' '}</Text>
+        </View>
+        <View style={styles.flexRow}>
+            <Text>อยู่บ้านเลขที่</Text>
+            <Text style={styles.input}>{data?.buyerAddress || ' '}</Text>
+            <Text>หมู่ที่</Text>
+            <Text style={{ ...styles.input, width: 40, flexGrow: 0 }}>{data?.buyerVillageNo || ' '}</Text>
+        </View>
+        <View style={styles.flexRow}>
+            <Text>ซอย</Text>
+            <Text style={styles.input}>{data?.buyerSoi || ' '}</Text>
+            <Text>ถนน</Text>
+            <Text style={styles.input}>{data?.buyerRoad || ' '}</Text>
+        </View>
+        <View style={styles.flexRow}>
+            <Text>ตำบล/แขวง</Text>
+            <Text style={styles.input}>{data?.buyerSubDistrict || ' '}</Text>
+            <Text>อำเภอ/เขต</Text>
+            <Text style={styles.input}>{data?.buyerDistrict || ' '}</Text>
+        </View>
+        <View style={styles.flexRow}>
+            <Text>จังหวัด</Text>
+            <Text style={styles.input}>{data?.buyerProvince || ' '}</Text>
+        </View>
+        <Text>ซึ่งต่อไปในสัญญานี้จะเรียกว่า "<Text style={styles.bold}>ผู้จะซื้อ</Text>" ฝ่ายหนึ่ง</Text>
+      </View>
+
+      {/* Clause 1 */}
+      <View style={styles.section}>
+        <Text style={styles.bold}>ทั้งสองฝ่ายตกลงทำสัญญาฉบับนี้ขึ้นด้วยความสมัครใจมีข้อความดังต่อไปนี้</Text>
+        <View style={styles.flexRow}>
+          <Text>ข้อ 1. ผู้ขายเป็นเจ้าของ</Text>
+          <Text style={styles.input}>{data?.ownSeller || ' '}</Text>
+        </View>
+        <View style={styles.flexRow}>
+          <Text>ข้อ 2. ผู้ขายตกลงจะขายและผู้ซื้อตกลงจะซื้อ ในข้อ 1. โดยปลอกจากภาวะผูกพันหรือภาระติดพันใดๆ</Text>
+          <Text style={styles.input}>{data?.responsibility || ' '}</Text>
+          <Text>เนื้อที่ประมาณ</Text>
+          <Text style={styles.input}>{data?.area || ' '}</Text> 
         </View>
       </View>
 
       {/* Signature Section */}
       <View style={styles.signatureContainer}>
-          <View style={styles.signatureColumn}>
-              <View style={styles.signatureBox}>
-                  {sellerSignature && <Image src={sellerSignature} style={styles.signatureImage} />}
-              </View>
-              <Text>(..................................................)</Text>
-              <Text>(ผู้จะขาย)</Text>
+        <View style={styles.signatureColumn}>
+          <View style={styles.signatureBox}>
+            {sellerSignature && <Image src={sellerSignature} style={styles.signatureImage} />}
           </View>
-           <View style={styles.signatureColumn}>
-              <View style={styles.signatureBox}>
-                  {buyerSignature && <Image src={buyerSignature} style={styles.signatureImage} />}
-              </View>
-              <Text>(..................................................)</Text>
-              <Text>(ผู้จะซื้อ)</Text>
+          <Text>(..................................................)</Text>
+          <Text>(ผู้จะขาย)</Text>
+        </View>
+        <View style={styles.signatureColumn}>
+          <View style={styles.signatureBox}>
+            {buyerSignature && <Image src={buyerSignature} style={styles.signatureImage} />}
           </View>
+          <Text>(..................................................)</Text>
+          <Text>(ผู้จะซื้อ)</Text>
+        </View>
       </View>
 
     </Page>
