@@ -96,7 +96,6 @@ const AppRouter = () => {
             {/* Deposit & Payment */}
             <Route path="/deposit/:id" element={<Deposit />} />
             <Route path="/deposit_doc" element={<Deposit_doc />} />
-            <Route path="/contract" element={<ContractForm />} />
             <Route path="/payment" element={<Payment />} />
           </Route>
 
@@ -109,6 +108,7 @@ const AppRouter = () => {
               <Route path="payment" element={<Payment />} />
               <Route path="deposit/:id" element={<Deposit />} />
               <Route path="register/seller" element={<RegisterSeller />} />
+              <Route path="contract" element={<ContractForm />} />
             </Route>
           </Route>
 
@@ -118,7 +118,8 @@ const AppRouter = () => {
               <Route index element={<Home />} />
               <Route path="profile" element={<ProfileSeller />} />
               <Route path="support" element={<Support />} />
-
+              <Route path="contract" element={<ContractForm />} />
+              <Route path="payment" element={<Payment />} />
               {/* Post For Sale - Seller Access */}
               <Route
                 element={

@@ -2,7 +2,7 @@ import { Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-
+import { useNavigate } from "react-router-dom";
 
 const SellerDoc = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -16,7 +16,20 @@ const SellerDoc = () => {
   if (loading) {
     return <div className="p-6 text-center">กำลังโหลดข้อมูลเอกสาร...</div>;
   }
-
+  // ฟังก์ชันสำหรับแสดงป้ายสถานะ (เพื่อความสะอาดของโค้ด)
+  const StatusBadge = ({ status }) => {
+    let colorClasses = 'bg-yellow-100 text-yellow-800'; // Default to PENDING
+    if (status === 'APPROVED') {
+      colorClasses = 'bg-green-100 text-green-800';
+    } else if (status === 'REJECTED') {
+      colorClasses = 'bg-red-100 text-red-800';
+    }
+    return (
+      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${colorClasses}`}>
+        {status}
+      </span>
+    );
+  };
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -61,17 +74,15 @@ const SellerDoc = () => {
               key={doc.id}
               className="bg-white p-4 rounded-md shadow-sm border border-gray-200"
             >
-              <div className="flex justify-between items-start">
+              <div className="flex justify-between items-center">
+                {/* ส่วนข้อมูลเอกสาร (ซ้าย) */}
                 <div>
                   <h4 className="font-semibold text-lg">{doc.DocumentName}</h4>
-
                   <p className="text-sm text-gray-500 mt-1">
-                    {/* ✅ เปลี่ยนจาก doc.user เป็น doc.User (ตัวพิมพ์ใหญ่) */}
                     โดย: {doc.User?.First_name || ''} {doc.User?.Last_name || ''}
                     {' | '}
                     วันที่: {new Date(doc.createdAt).toLocaleDateString('th-TH')}
                   </p>
-                  {/* ✨ ส่วนที่เพิ่มเข้ามา */}
                   <a
                     href={doc.DocumentUrl}
                     target="_blank"
@@ -81,11 +92,21 @@ const SellerDoc = () => {
                     ดูเอกสาร
                   </a>
                 </div>
-                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${doc.Review_Status === 'Approved' ? 'bg-green-100 text-green-800' :
-                  doc.Review_Status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
-                  }`}>
-                  {doc.Review_Status}
-                </span>
+
+                {/* (แก้ไข) ส่วนสถานะและปุ่ม (ขวา) */}
+                <div className="flex flex-col items-end gap-2">
+                  <StatusBadge status={doc.Review_Status} />
+
+                  {/* (สำคัญ) เงื่อนไขการแสดงปุ่มชำระเงิน */}
+                  {doc.Review_Status === 'APPROVED' && (
+                    <Button
+                      onClick={() => navigate('/payment', { state: { documentData: doc } })}
+                      className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3 text-xs"
+                    >
+                      ดำเนินการชำระเงิน
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           ))

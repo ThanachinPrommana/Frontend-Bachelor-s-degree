@@ -33,6 +33,7 @@ const Deposit = () => {
       try {
         const response = await apiClient.get(`/propertypost/${id}`);
         setPost(response.data);
+        console.log("API Response Data:", response.data);
         if (response.data.Image && response.data.Image.length > 0) {
           setMainImage(response.data.Image[0].secure_url);
         }
@@ -261,9 +262,11 @@ const Deposit = () => {
                     conslog.log("User:", authUser);
                     // ถ้าไม่มี user (ยังไม่ล็อกอิน) ให้เด้งไปหน้า login
                     navigate("/login", { state: { from: location } });
-                  } else {
+                  }else if(authUser.userType == "Buyer"){
                     // ถ้าล็อกอินแล้ว ให้ไปหน้า Deposit_doc ตามปกติ
-                    navigate("/Deposit_doc", { state: { postData: post, selectedUnit: selectedUnit } });
+                    navigate("/buyer/contract", { state: { postData: post, selectedUnit: selectedUnit } });
+                  }else if(authUser.userType == "Seller"){
+                    navigate("/seller/contract", { state: { postData: post, selectedUnit: selectedUnit } });
                   }
                 }}
                 text={!authUser ? "กรุณาล็อกอินเพื่อดำเนินการต่อ" : "ดำเนินการต่อ"}
