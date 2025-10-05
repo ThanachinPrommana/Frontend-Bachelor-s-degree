@@ -1,20 +1,42 @@
 import { z } from "zod";
+const currentYear = new Date().getFullYear();
 
-const numberOrUndefined = z.preprocess(
-  (v) => (v === "" || v === undefined || v === null ? undefined : Number(v)),
-  z.number().min(0, "ต้องไม่น้อยกว่า 0").optional()
-);
+const numOpt = z
+  .preprocess(
+    (v) => (v === "" || v == null ? undefined : Number(v)),
+    z.number().min(0)
+  )
+  .optional();
+
+const intReq = z.coerce.number().int().min(0);
+const intOpt = z.coerce.number().int().min(0).optional();
+
+const NEARBY = ["BTS_MRT", "School", "Hospital", "Mall_Market", "Park"];
+const AMENITIES = [
+  "Swimming_Pool",
+  "Fitness_Center",
+  "Co_working_Space",
+  "Pet_Friendly",
+];
 
 export const postDetailSchema = z.object({
-  Propertytype: z.string().min(1, "กรุณาเลือกประเภท"),
-  Usable_Area: numberOrUndefined,
-  Land_Size: numberOrUndefined,
-  Total_Rooms: numberOrUndefined,
-  Year_Built: z.string().optional(),
-  Bedrooms: z.preprocess((v) => Number(v), z.number().min(0, "ห้องนอนต้อง ≥ 0")),
-  Bathroom: z.preprocess((v) => Number(v), z.number().min(0, "ห้องน้ำต้อง ≥ 0")),
-  Nearby_Landmarks: z.array(z.string()).optional(),
-  Additional_Amenities: z.array(z.string()).optional(),
-  Parking_Space: z.string().optional(),
-  floor: numberOrUndefined,
+  categoryId: z.string().min(1, "กรุณาเลือกประเภททรัพย์สิน"), // แม้ Prisma จะ optional แต่นโยบายฟอร์มให้เลือก
+  Usable_Area: numOpt,
+  Land_Size: numOpt,
+  Total_Rooms: intOpt,
+  Year_Built: z
+    .string()
+    .trim()
+    .regex(/^\d{4}$/, "กรุณากรอกปี 4 หลัก")
+    .refine((y) => {
+      const n = Number(y);
+      return n >= 1800 && n <= currentYear + 1;
+    }, "ปีที่สร้างไม่สมเหตุสมผล")
+    .optional(),
+  Bedrooms: intReq,
+  Bathroom: intReq,
+  floor: intOpt,
+  Parking_Space: intOpt,
+  Nearby_Landmarks: z.array(z.enum(NEARBY)).optional(),
+  Additional_Amenities: z.array(z.enum(AMENITIES)).optional(),
 });

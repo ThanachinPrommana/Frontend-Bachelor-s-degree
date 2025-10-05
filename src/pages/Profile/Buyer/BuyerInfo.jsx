@@ -45,7 +45,7 @@ const absolutize = (maybeUrl) => {
   return `${base.replace(/\/$/, "")}/${String(maybeUrl).replace(/^\//, "")}`;
 };
 
-// map enum → label
+// map enum → label (ตาม Prisma)
 const parkingLabel = (v) =>
   ({
     oneCar: "ที่จอด 1 คัน",
@@ -70,7 +70,7 @@ const lifestyleLabel = (v) =>
     Like_Gardening: "ชอบทำสวน",
   }[v] || "-");
 
-/* ========== helper: ห่อ diff ให้เป็น nested payload ========== */
+/* ====== allow-lists & coercers (ให้ตรง Prisma/Backend) ====== */
 const BUYER_KEYS = [
   "DateofBirth",
   "Occupation",
@@ -85,14 +85,102 @@ const BUYER_KEYS = [
   "Special_Requirements",
 ];
 
-function toNestedPayload(diff) {
+// ฟิลด์ระดับ User ที่อนุญาตให้อัปเดต (ไม่รวม Email)
+const USER_ALLOWED = ["First_name", "Last_name", "Phone", "image"];
+
+const PARKING_ENUM = new Set(["oneCar", "twoCars", "Not_required"]);
+const NEARBY_ENUM = new Set([
+  "BTS_MRT",
+  "School",
+  "Hospital",
+  "Mall_Market",
+  "Park_Nature",
+]);
+const LIFESTYLE_ENUM = new Set([
+  "Work_from_Home",
+  "Have_Pets",
+  "Need_a_Home_Office",
+  "Like_Gardening",
+]);
+
+const toFloatOrNull = (v) => {
+  if (v === "" || v === undefined || v === null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+const toIntOrNull = (v) => {
+  if (v === "" || v === undefined || v === null) return null;
+  const n = Number(v);
+  return Number.isInteger(n) ? n : Number.isFinite(n) ? Math.trunc(n) : null;
+};
+const toISODateOrNull = (v) => {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d) ? null : d.toISOString();
+};
+const emptyToNull = (v) => (v === "" ? null : v);
+
+/** sanitize diff ให้เหลือแต่คีย์ที่อนุญาต + แปลงชนิดให้ตรง Prisma */
+function sanitizeDiff(diff) {
+  const out = {};
+  for (const [k, raw] of Object.entries(diff || {})) {
+    // เฉพาะคีย์ที่อนุญาตเท่านั้น
+    if (!BUYER_KEYS.includes(k) && !USER_ALLOWED.includes(k)) continue;
+
+    // ฝั่ง Buyer → แปลงชนิด/ตรวจ enum
+    if (BUYER_KEYS.includes(k)) {
+      switch (k) {
+        case "Monthly_Income":
+          out[k] = toFloatOrNull(raw);
+          break;
+        case "Family_Size":
+          out[k] = toIntOrNull(raw);
+          break;
+        case "DateofBirth":
+          out[k] = toISODateOrNull(raw);
+          break;
+        case "Parking_Needs":
+          out[k] = PARKING_ENUM.has(raw) ? raw : null;
+          break;
+        case "Nearby_Facilities":
+          out[k] = NEARBY_ENUM.has(raw) ? raw : null;
+          break;
+        case "Lifestyle_Preferences":
+          out[k] = LIFESTYLE_ENUM.has(raw) ? raw : null;
+          break;
+        case "Occupation":
+        case "Preferred_Province":
+        case "Preferred_District":
+        case "Preferred_Subdistrict":
+        case "Special_Requirements":
+          out[k] = emptyToNull(raw);
+          break;
+        default:
+          out[k] = raw;
+      }
+      continue;
+    }
+
+    // ฝั่ง User (First_name, Last_name, Phone, image)
+    if (USER_ALLOWED.includes(k)) {
+      if (k === "image") {
+        out[k] = raw ? absolutize(raw) : null;
+      } else {
+        out[k] = emptyToNull(raw);
+      }
+    }
+  }
+  return out;
+}
+
+/** ห่อ diff ที่ sanitize แล้วให้เป็น nested payload (User + Buyer) */
+function toNestedPayload(sanitized) {
   const payload = {};
-  for (const [k, v] of Object.entries(diff)) {
+  for (const [k, v] of Object.entries(sanitized)) {
     if (BUYER_KEYS.includes(k)) {
       payload.Buyer = payload.Buyer || {};
       payload.Buyer[k] = v;
-    } else {
-      // user-level (First_name, Last_name, Phone, image)
+    } else if (USER_ALLOWED.includes(k)) {
       payload[k] = v;
     }
   }
@@ -167,9 +255,11 @@ const BuyerInfo = () => {
                     <button
                       type="button"
                       title="คัดลอกอีเมล"
-                      onClick={() =>
-                        navigator.clipboard?.writeText(String(user?.Email))
-                      }
+                      onClick={() => {
+                        try {
+                          navigator.clipboard?.writeText(String(user?.Email));
+                        } catch {}
+                      }}
                       className="p-1 rounded hover:bg-gray-200"
                     >
                       <Copy className="w-4 h-4 text-gray-500" />
@@ -286,10 +376,13 @@ const BuyerInfo = () => {
                 user={user}
                 onCancel={() => setShowModal(false)}
                 onSubmitDiff={async (diff) => {
-                  const payload = toNestedPayload(diff);
+                  // 1) กรอง/แปลงค่าให้ตรง Prisma/Backend
+                  const sanitized = sanitizeDiff(diff);
+                  // 2) ห่อเป็น payload ซ้อน (User + Buyer)
+                  const payload = toNestedPayload(sanitized);
 
-                  // ✅ แก้เงื่อนไข: เช็กแค่ว่ามี key อะไรจะอัปเดตไหม (รองรับแก้เฉพาะชื่อ/นามสกุล)
-                  if (!Object.keys(payload).length) {
+                  // ✅ เช็กว่าไม่มีอะไรจะอัปเดตก็ไม่ยิง
+                  if (!Object.keys(payload).length && !payload.Buyer) {
                     alert("ไม่มีการแก้ไขข้อมูล");
                     return;
                   }

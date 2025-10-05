@@ -1,17 +1,11 @@
 import { z } from "zod";
 
-const urlOrEmpty = z.string().url("กรุณากรอกลิงก์ให้ถูกต้อง").or(z.literal("")).optional();
-
-const phoneSchema = z
-  .string()
-  .min(9, "กรุณากรอกเบอร์โทรอย่างน้อย 9 หลัก")
-  .max(15, "เบอร์โทรไม่ควรเกิน 15 หลัก")
-  .regex(/^[0-9+\-\s()]+$/, "รูปแบบเบอร์โทรไม่ถูกต้อง");
-
 export const postInformSchema = z.object({
-  Name: z.string().min(2, "กรุณากรอกชื่ออย่างน้อย 2 ตัวอักษร"),
-  Phone: phoneSchema,
-  Link_line: urlOrEmpty,      
-  Link_facbook: urlOrEmpty,   
-  Contract_Seller: z.string().optional(), 
+  Name: z.string().trim().optional(), // Prisma: optional
+  Phone: z
+    .string()
+    .regex(/^0\d{9}$/, "กรุณากรอกเบอร์โทรศัพท์ไทย 10 หลัก (ขึ้นต้นด้วย 0)"),
+  Link_line: z.string().url("ลิงก์ไม่ถูกต้อง").optional().or(z.literal("")),
+  Link_facbook: z.string().url("ลิงก์ไม่ถูกต้อง").optional().or(z.literal("")),
+  Contract_Seller: z.string().trim().optional(),
 });

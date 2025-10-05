@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFormContext } from "react-hook-form";
 import { Input } from "@/components/ui/input";
@@ -15,9 +15,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { postTitleSchema } from "@/components/schemas/postSchemas/postTitleSchema";
 import { validateStep } from "@/lib/zodRHF";
 
+const TITLE_MAX = 120; // กัน payload/SEO/UX
+const DESC_MAX = 2000; // กัน payload ยาวเกิน
+
 const PostTitle = () => {
   const navigate = useNavigate();
   const form = useFormContext();
+
+  const { isSubmitting, isValidating } = form.formState;
+  const disableNext = isSubmitting || isValidating;
 
   const onSubmit = () => {
     const ok = validateStep(form, postTitleSchema, [
@@ -27,6 +33,16 @@ const PostTitle = () => {
     if (!ok) return;
     navigate("/seller/post-for-sale/location");
   };
+
+  // ตัวนับอักขระแบบเบา ๆ (watch เฉพาะสองฟิลด์)
+  const nameValue = form.watch("Property_Name") || "";
+  const descValue = form.watch("Description") || "";
+  const nameCount = nameValue.length;
+  const descCount = descValue.length;
+
+  // ปุ่ม helper แสดงคำเตือนใกล้เต็ม
+  const nameNearLimit = useMemo(() => nameCount > TITLE_MAX - 10, [nameCount]);
+  const descNearLimit = useMemo(() => descCount > DESC_MAX - 50, [descCount]);
 
   return (
     <PostLayout currentStep={0}>
@@ -55,18 +71,42 @@ const PostTitle = () => {
             </div>
 
             {/* Form */}
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-6"
+              noValidate
+            >
               <FormField
                 control={form.control}
                 name="Property_Name"
-                render={({ field }) => (
+                render={({ field, fieldState }) => (
                   <FormItem>
                     <FormLabel>หัวข้อประกาศ</FormLabel>
                     <Input
                       placeholder="เช่น บ้านเดี่ยว 2 ชั้น ใกล้รถไฟฟ้า"
                       {...field}
                       className="h-11"
+                      autoComplete="off"
+                      maxLength={TITLE_MAX}
+                      aria-invalid={!!fieldState.error}
+                      onBlur={(e) => {
+                        const trimmed = e.target.value.trim();
+                        form.setValue("Property_Name", trimmed, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                        });
+                        field.onBlur();
+                      }}
                     />
+                    <div
+                      className={`text-xs ${
+                        nameNearLimit
+                          ? "text-amber-600"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {nameCount}/{TITLE_MAX}
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -75,7 +115,7 @@ const PostTitle = () => {
               <FormField
                 control={form.control}
                 name="Description"
-                render={({ field }) => (
+                render={({ field, fieldState }) => (
                   <FormItem>
                     <FormLabel>รายละเอียด</FormLabel>
                     <textarea
@@ -83,15 +123,38 @@ const PostTitle = () => {
                       placeholder="กรอกรายละเอียดของทรัพย์สิน เช่น ทำเล ขนาด สภาพ หรือสิ่งอำนวยความสะดวก"
                       {...field}
                       className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      maxLength={DESC_MAX}
+                      aria-invalid={!!fieldState.error}
+                      onBlur={(e) => {
+                        const trimmed = e.target.value.trim();
+                        form.setValue("Description", trimmed, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                        });
+                        field.onBlur();
+                      }}
                     />
+                    <div
+                      className={`text-xs ${
+                        descNearLimit
+                          ? "text-amber-600"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {descCount}/{DESC_MAX}
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
               <div className="flex justify-end pt-2">
-                <Button type="submit" className="min-w-[120px]">
-                  ถัดไป
+                <Button
+                  type="submit"
+                  className="min-w-[120px]"
+                  disabled={disableNext}
+                >
+                  {disableNext ? "กำลังตรวจสอบ..." : "ถัดไป"}
                 </Button>
               </div>
             </form>

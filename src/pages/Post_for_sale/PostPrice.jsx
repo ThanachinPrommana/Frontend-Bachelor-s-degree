@@ -1,4 +1,5 @@
-import React from "react";
+// src/pages/Post_for_sale/PostPrice.jsx
+import React, { useEffect } from "react";
 import { useFormContext } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -10,49 +11,78 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
 import PostLayout from "@/layouts/PostLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Coins, Info } from "lucide-react";
 import { validateStep } from "@/lib/zodRHF";
 
+/* ---------- helper: แปลงค่าว่างเป็น undefined เพื่อบังคับ required ---------- */
+const toNumOrUndef = (v) =>
+  v === "" || v === undefined || v === null ? undefined : Number(v);
+
+/* ---------- Zod Schema (ขายอย่างเดียว / ไม่จำกัดเพดานราคา / ยอมให้ 0) ---------- */
 const priceSchema = z.object({
-  Sell_Rent: z.enum(["SALE", "RENT"], { required_error: "กรุณาเลือกประเภท" }),
-  Price: z.number().min(1, "กรุณากรอกราคา").optional().nullable(),
-  Deposit_Amount: z.number().min(0).optional().nullable(),
-  Interest: z.number().min(0).optional().nullable(),
-  Deposit_Rent: z.number().min(0).optional().nullable(),
-  Other_related_expenses: z.string().optional(),
+  // ต้องกรอก และยอมให้ 0 (>= 0). ว่างจะไม่ผ่าน
+  Price: z.preprocess(
+    toNumOrUndef,
+    z.number({ required_error: "กรุณากรอกราคา" }).min(0, "กรุณากรอกราคาให้ ≥ 0")
+  ),
+
+  // เงินดาวน์ ไม่จำกัดเพดาน, เว้นว่างได้ (จะไม่ส่ง)
+  Deposit_Amount: z
+    .preprocess(toNumOrUndef, z.number().min(0))
+    .optional()
+    .nullable(),
+
+  // ดอกเบี้ยโดยประมาณ (%/ปี) — จำกัดบนไว้เพื่อกันค่าเพี้ยน
+  Interest: z
+    .preprocess(toNumOrUndef, z.number().min(0).max(25))
+    .optional()
+    .nullable(),
+
+  // ข้อความอื่น ๆ
+  Other_related_expenses: z.string().trim().max(200).optional(),
 });
 
 function PostPrice() {
   const navigate = useNavigate();
   const form = useFormContext();
-  const sellRentType = form.watch("Sell_Rent");
 
-  const onSubmit = (data) => {
+  // บังคับค่า Sell_Rent เป็น "SALE" เสมอ (ให้ตรงกับหลังบ้าน/Prisma)
+  useEffect(() => {
+    if (form.getValues("Sell_Rent") !== "SALE") {
+      form.setValue("Sell_Rent", "SALE", {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [form]);
+
+  const onSubmit = () => {
+    // validate เฉพาะฟิลด์ของหน้า "ขาย"
     const ok = validateStep(form, priceSchema, [
-      "Sell_Rent",
       "Price",
       "Deposit_Amount",
       "Interest",
-      "Deposit_Rent",
       "Other_related_expenses",
     ]);
     if (!ok) return;
-    navigate("/seller/post-for-sale/inform");
-  };
 
-  const handleFloatChange = (e, field) => {
-    const value = e.target.value;
-    field.onChange(value === "" ? undefined : parseFloat(value));
+    const v = form.getValues();
+    const payload = {
+      Sell_Rent: "SALE",
+      Price: v.Price,
+      // ถ้าผู้ใช้เว้นว่าง จะไม่มีค่าใน form (undefined) → แปลงเป็น null ก่อนส่ง
+      Deposit_Amount: v.Deposit_Amount ?? null,
+      Interest: v.Interest ?? null,
+      Other_related_expenses: v.Other_related_expenses?.trim() || undefined,
+    };
+
+    // TODO: เรียก API อัปเดตราคา ถ้าต้องการ
+    // await updatePostPrice(postId, payload);
+
+    navigate("/seller/post-for-sale/inform");
   };
 
   return (
@@ -65,9 +95,9 @@ function PostPrice() {
               <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                 <Coins className="w-6 h-6 text-primary" />
               </div>
-              <h2 className="text-2xl font-semibold">ตั้งราคา</h2>
+              <h2 className="text-2xl font-semibold">ตั้งราคา (ขาย)</h2>
               <p className="text-muted-foreground text-sm">
-                กำหนดราคาขายหรือค่าเช่าและรายละเอียดทางการเงิน
+                กำหนดราคาขาย พร้อมรายละเอียดทางการเงิน
               </p>
             </div>
 
@@ -75,200 +105,106 @@ function PostPrice() {
             <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground flex items-start gap-3">
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
-                เลือก <span className="font-medium">ประเภทการลงประกาศ</span>{" "}
-                ก่อน ระบบจะแสดงฟิลด์ที่เกี่ยวข้องอัตโนมัติ
-                (ขายจะแสดงราคา/ดาวน์/ดอกเบี้ย, เช่าจะแสดงค่าเช่า/เงินมัดจำ)
+                ระบบนี้เปิดใช้งานเฉพาะการ{" "}
+                <span className="font-medium">ขาย (SALE)</span> เท่านั้น
               </p>
             </div>
 
             {/* Form */}
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              {/* Type */}
-              <div className="space-y-3">
-                <FormField
-                  control={form.control}
-                  name="Sell_Rent"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>ประเภทการลงประกาศ</FormLabel>
-                      <Select
-                        onValueChange={(val) => {
-                          field.onChange(val);
-                          if (val === "RENT") {
-                            form.setValue("Deposit_Amount", undefined);
-                            form.setValue("Interest", 0);
-                          } else if (val === "SALE") {
-                            form.setValue("Deposit_Rent", undefined);
-                            form.setValue("Interest", undefined);
-                          }
-                        }}
-                        value={field.value || ""}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="h-11">
-                            <SelectValue placeholder="เลือกประเภท" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="SALE">ขาย (SALE)</SelectItem>
-                          <SelectItem value="RENT">ให้เช่า (RENT)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-8"
+              noValidate
+            >
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Price */}
+                  <FormField
+                    control={form.control}
+                    name="Price"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ราคาขาย (บาท)</FormLabel>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                            ฿
+                          </span>
+                          <Input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="เช่น 2,500,000"
+                            {...field}
+                            onWheel={(e) => e.currentTarget.blur()}
+                            min={0} // 👈 อนุญาต 0 ที่ตัว input ด้วย
+                            step="0.01"
+                            className="pl-7 h-11"
+                          />
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Deposit_Amount */}
+                  <FormField
+                    control={form.control}
+                    name="Deposit_Amount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>เงินดาวน์ (บาท)</FormLabel>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                            ฿
+                          </span>
+                          <Input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="เช่น 250,000"
+                            {...field}
+                            onWheel={(e) => e.currentTarget.blur()}
+                            min={0}
+                            step="0.01"
+                            className="pl-7 h-11"
+                          />
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Interest */}
+                  <FormField
+                    control={form.control}
+                    name="Interest"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ดอกเบี้ยโดยประมาณ (%/ปี)</FormLabel>
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            inputMode="decimal"
+                            step="0.01"
+                            placeholder="เช่น 3.50"
+                            {...field}
+                            onWheel={(e) => e.currentTarget.blur()}
+                            min={0}
+                            max={25}
+                            className="pr-10 h-11"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                            %
+                          </span>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  * ตัวเลขเป็นค่าประมาณเพื่อช่วยประกาศขายเท่านั้น
+                </p>
               </div>
-
-              {/* SALE block */}
-              {sellRentType === "SALE" && (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Price */}
-                    <FormField
-                      control={form.control}
-                      name="Price"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>ราคาขาย (บาท)</FormLabel>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                              ฿
-                            </span>
-                            <Input
-                              type="number"
-                              inputMode="decimal"
-                              placeholder="เช่น 2,500,000"
-                              {...field}
-                              value={field.value ?? ""}
-                              onChange={(e) => handleFloatChange(e, field)}
-                              className="pl-7 h-11"
-                            />
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    {/* Deposit_Amount */}
-                    <FormField
-                      control={form.control}
-                      name="Deposit_Amount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>เงินดาวน์ (บาท)</FormLabel>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                              ฿
-                            </span>
-                            <Input
-                              type="number"
-                              inputMode="decimal"
-                              placeholder="เช่น 250,000"
-                              {...field}
-                              value={field.value ?? ""}
-                              onChange={(e) => handleFloatChange(e, field)}
-                              className="pl-7 h-11"
-                            />
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    {/* Interest */}
-                    <FormField
-                      control={form.control}
-                      name="Interest"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>ดอกเบี้ยโดยประมาณ (%/ปี)</FormLabel>
-                          <div className="relative">
-                            <Input
-                              type="number"
-                              inputMode="decimal"
-                              step="0.01"
-                              placeholder="เช่น 3.50"
-                              {...field}
-                              value={field.value ?? ""}
-                              onChange={(e) => handleFloatChange(e, field)}
-                              className="pr-10 h-11"
-                            />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                              %
-                            </span>
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <p className="text-xs text-muted-foreground">
-                    * ตัวเลขเป็นค่าประมาณเพื่อช่วยประกาศขายเท่านั้น
-                  </p>
-                </div>
-              )}
-
-              {/* RENT block */}
-              {sellRentType === "RENT" && (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Rent Price */}
-                    <FormField
-                      control={form.control}
-                      name="Price"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>ค่าเช่า (บาท/เดือน)</FormLabel>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                              ฿
-                            </span>
-                            <Input
-                              type="number"
-                              inputMode="decimal"
-                              placeholder="เช่น 15,000"
-                              {...field}
-                              value={field.value ?? ""}
-                              onChange={(e) => handleFloatChange(e, field)}
-                              className="pl-7 h-11"
-                            />
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    {/* Deposit_Rent */}
-                    <FormField
-                      control={form.control}
-                      name="Deposit_Amount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>ค่ามัดจำ (บาท)</FormLabel>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                              ฿
-                            </span>
-                            <Input
-                              type="number"
-                              inputMode="decimal"
-                              placeholder="เช่น 30,000"
-                              {...field}
-                              value={field.value ?? ""}
-                              onChange={(e) => handleFloatChange(e, field)}
-                              className="pl-7 h-11"
-                            />
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <p className="text-xs text-muted-foreground">
-                    * โดยทั่วไปมัดจำ 1–2 เดือน ขึ้นกับเงื่อนไขของผู้ให้เช่า
-                  </p>
-                </div>
-              )}
 
               {/* Others */}
               <div className="space-y-3">

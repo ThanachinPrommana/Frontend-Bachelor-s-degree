@@ -1,7 +1,5 @@
-// src/pages/Profile/BuyerNoti.jsx
-import NotificationsTab from "../NotificationsTab";
-
+// src/pages/Profile/Buyer/BuyerNoti.jsx
+import NotificationsTab from "@/pages/Profile/NotificationsTab";
 export default function BuyerNoti() {
-  // ถ้าจะเปิดแท็บนี้โดยตรงจากที่อื่น แนะนำลิงก์เป็น /buyer/profile?tab=notifications
   return <NotificationsTab />;
 }

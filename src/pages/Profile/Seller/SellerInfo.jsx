@@ -10,54 +10,78 @@ import {
   CheckCircle2,
   Clock3,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import Formuploadimage from "@/components/form/Formuploadimage";
-// ⛔ ตัด updateProfile ออก ไม่ต้องใช้แล้ว
 import { updateSeller } from "@/api/user";
 import { useAuth } from "@/context/AuthContext";
 import ModalShell from "@/components/profile/ModalShell";
 import SellerEditForm from "@/components/profile/seller/SellerEditForm";
 import DetailRow from "@/components/profile/DetailRow";
 
-/* ========== utils ========== */
+/* ========== utils (safe) ========== */
 const formatDateThai = (dateString) => {
   if (!dateString) return "-";
   const d = new Date(dateString);
-  if (isNaN(d)) return "-";
+  if (Number.isNaN(d.getTime())) return "-";
   return d.toLocaleDateString("th-TH", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
 };
+
 const formatBaht = (n) => {
   if (n === null || n === undefined || n === "") return "-";
   const num = Number(n);
-  if (Number.isNaN(num)) return "-";
+  if (!Number.isFinite(num)) return "-";
   return num.toLocaleString("th-TH", {
     style: "currency",
     currency: "THB",
     maximumFractionDigits: 0,
   });
 };
+
 const maskThaiID = (id) => {
   if (!id) return "-";
   const s = String(id).replace(/\D/g, "");
   if (s.length !== 13) return "-";
   return `${s[0]}-xxxx-xxxxx-xx-${s[12]}`;
 };
-// cache-busting + absolutize
+
+// protocol guard
+const isSafeHttpUrl = (u) => {
+  try {
+    const x = new URL(u, window.location.origin);
+    return x.protocol === "http:" || x.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+// cache-busting + absolutize (http/https only)
 const withBust = (url, bust) =>
   url ? `${url}${url.includes("?") ? "&" : "?"}cb=${bust}` : url;
+
 const absolutize = (maybeUrl) => {
   if (!maybeUrl) return null;
-  if (/^https?:\/\//i.test(maybeUrl)) return maybeUrl;
-  const base = import.meta.env.VITE_API_URL || window.location.origin;
-  return `${base.replace(/\/$/, "")}/${String(maybeUrl).replace(/^\//, "")}`;
+  const s = String(maybeUrl).trim();
+  if (!s) return null;
+
+  if (isSafeHttpUrl(s)) return s; // already absolute + safe
+  // treat as server-relative path
+  const base = (import.meta.env.VITE_API_URL || window.location.origin).replace(
+    /\/$/,
+    ""
+  );
+  const path = s.replace(/^\//, "");
+  const abs = `${base}/${path}`;
+  return isSafeHttpUrl(abs) ? abs : null;
 };
+
 // enum → label
 const parkingLabel = (v) =>
   ({ oneCar: "1 คัน", twoCars: "2 คัน", Not_required: "ไม่ต้องการ" }[v] || "-");
+
 const nearbyLabel = (v) =>
   ({
     BTS_MRT: "BTS/MRT",
@@ -66,6 +90,7 @@ const nearbyLabel = (v) =>
     Mall_Market: "ห้าง/ตลาด",
     Park_Nature: "สวนสาธารณะ",
   }[v] || "-");
+
 const lifestyleLabel = (v) =>
   ({
     Work_from_Home: "ทำงานที่บ้าน",
@@ -76,25 +101,72 @@ const lifestyleLabel = (v) =>
 
 /* ========== status chip ========== */
 const StatusBadge = ({ status }) => {
-  if (status === "APPROVED")
+  const s = (status || "").toUpperCase();
+  if (s === "APPROVED")
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-green-500 text-white px-3 py-1 text-xs font-semibold">
         <CheckCircle2 className="w-3.5 h-3.5" /> ยืนยันแล้ว
       </span>
     );
-  if (status === "REJECTED")
+  if (s === "REJECTED")
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-red-600 text-white px-3 py-1 text-xs font-semibold">
         <XCircle className="w-3.5 h-3.5" /> ถูกปฏิเสธ
       </span>
     );
-  // default: PENDING
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-yellow-500 text-white px-3 py-1 text-xs font-semibold">
       <Clock3 className="w-3.5 h-3.5" /> รอดำเนินการ
     </span>
   );
 };
+
+/* ========== security: whitelist fields before PATCH ========== */
+const deepPick = (obj, keys) =>
+  Object.fromEntries(
+    Object.entries(obj || {}).filter(([k]) => keys.includes(k))
+  );
+
+// ✅ รูปโปรไฟล์เก็บใน User เท่านั้น
+const USER_ALLOWED = [
+  "First_name",
+  "Last_name",
+  "Email",
+  "Phone",
+  "image",
+  "publicId",
+];
+const BUYER_ALLOWED = [
+  "DateofBirth",
+  "Occupation",
+  "Monthly_Income",
+  "Family_Size",
+  "Preferred_Province",
+  "Preferred_District",
+  "Preferred_Subdistrict",
+  "Parking_Needs",
+  "Nearby_Facilities",
+  "Lifestyle_Preferences",
+  "Special_Requirements",
+];
+const SELLER_ALLOWED = [
+  "National_ID",
+  "Company_Name",
+  "RealEstate_License",
+  "nationalIdImage",
+  // ไม่อนุญาตแก้ Seller.publicId
+];
+
+const sanitizeNestedDiff = (nested) => {
+  const safe = {};
+  if (nested?.user) safe.user = deepPick(nested.user, USER_ALLOWED);
+  if (nested?.buyer) safe.buyer = deepPick(nested.buyer, BUYER_ALLOWED);
+  if (nested?.seller) safe.seller = deepPick(nested.seller, SELLER_ALLOWED);
+  return safe;
+};
+
+// helper ว่างจริง ๆ
+const isEmptyObject = (o) => !o || Object.keys(o).length === 0;
 
 /* ========== main ========== */
 export default function SellerInfo() {
@@ -104,7 +176,6 @@ export default function SellerInfo() {
   const [avatarBust, setAvatarBust] = useState(0);
   const [localAvatar, setLocalAvatar] = useState(null);
 
-  // รวมทุก field + แทรก "สถานะบัญชี" ไว้ในชุดล่าง (หลังเส้นคั่น)
   const detailRows = useMemo(() => {
     const b = user?.Buyer || {};
     const s = user?.Seller || {};
@@ -113,7 +184,10 @@ export default function SellerInfo() {
       { label: "วันเกิด", value: formatDateThai(b?.DateofBirth) },
       { label: "อาชีพ", value: b?.Occupation || "-" },
       { label: "รายได้ต่อเดือน", value: formatBaht(b?.Monthly_Income) },
-      { label: "ขนาดครอบครัว", value: b?.Family_Size ?? "-" },
+      {
+        label: "ขนาดครอบครัว",
+        value: Number.isFinite(b?.Family_Size) ? b.Family_Size : "-",
+      },
       { label: "จังหวัดที่สนใจ", value: b?.Preferred_Province || "-" },
       { label: "ตำบล/แขวง", value: b?.Preferred_Subdistrict || "-" },
       { label: "เขต/อำเภอที่สนใจ", value: b?.Preferred_District || "-" },
@@ -125,10 +199,36 @@ export default function SellerInfo() {
       { label: "เลขบัตรประชาชน", value: maskThaiID(s?.National_ID) },
       { label: "บริษัท", value: s?.Company_Name || "-" },
       { label: "ใบอนุญาตนายหน้า", value: s?.RealEstate_License || "-" },
-      // 🔹 แทรกสถานะบัญชีเป็น ReactNode ให้กินคอลัมน์ที่ขาดพอดี
       { label: "สถานะบัญชี", value: <StatusBadge status={s?.Status} /> },
     ];
   }, [user]);
+
+  const copyEmail = useCallback(async () => {
+    const text = String(user?.Email || "");
+    if (!text) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "absolute";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+    } catch {
+      // เงียบ ๆ
+    }
+  }, [user?.Email]);
+
+  const avatarSrc = useMemo(() => {
+    const base = localAvatar || withBust(absolutize(user?.image), avatarBust);
+    return base || "https://via.placeholder.com/80";
+  }, [localAvatar, user?.image, avatarBust]);
 
   return (
     <div className="space-y-6">
@@ -142,11 +242,7 @@ export default function SellerInfo() {
               <div className="relative">
                 <img
                   key={localAvatar ? "local" : avatarBust}
-                  src={
-                    localAvatar ||
-                    withBust(absolutize(user?.image), avatarBust) ||
-                    "https://via.placeholder.com/80"
-                  }
+                  src={avatarSrc}
                   alt="Profile"
                   className="w-20 h-20 rounded-full object-cover border ring-2 ring-[#2c3e50]/20"
                   onError={(e) => {
@@ -154,6 +250,9 @@ export default function SellerInfo() {
                       "https://ui-avatars.com/api/?name=Seller";
                   }}
                   referrerPolicy="no-referrer"
+                  crossOrigin="anonymous"
+                  loading="eager"
+                  draggable={false}
                 />
                 <span className="absolute -bottom-1 -right-1 inline-flex h-5 items-center justify-center rounded-full bg-white px-2 text-[10px] font-semibold text-[#2c3e50] shadow">
                   Seller
@@ -169,11 +268,10 @@ export default function SellerInfo() {
                   {!!user?.Email && (
                     <button
                       type="button"
+                      aria-label="คัดลอกอีเมล"
                       title="คัดลอกอีเมล"
-                      onClick={() =>
-                        navigator.clipboard?.writeText(String(user?.Email))
-                      }
-                      className="p-1 rounded hover:bg-gray-200"
+                      onClick={copyEmail}
+                      className="p-1 rounded hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
                     >
                       <Copy className="w-4 h-4 text-gray-500" />
                     </button>
@@ -218,7 +316,6 @@ export default function SellerInfo() {
               <div className="h-px bg-gray-200" />
             </div>
 
-            {/* ชุดล่าง (รวมสถานะบัญชีเป็น 1 คอลัมน์พอดี) */}
             {detailRows.slice(12).map((row) => (
               <DetailRow key={row.label} label={row.label} value={row.value} />
             ))}
@@ -238,17 +335,18 @@ export default function SellerInfo() {
               <div className="flex items-center gap-4 mb-4">
                 <img
                   key={`modal-${localAvatar ? "local" : avatarBust}`}
-                  src={
-                    localAvatar ||
-                    withBust(absolutize(user?.image), avatarBust) ||
-                    "https://via.placeholder.com/80"
-                  }
+                  src={avatarSrc}
                   className="w-16 h-16 rounded-full object-cover border"
                   alt="current avatar"
                   onError={(e) => {
                     e.currentTarget.src =
                       "https://ui-avatars.com/api/?name=Seller";
                   }}
+                  referrerPolicy="no-referrer"
+                  crossOrigin="anonymous"
+                  draggable={false}
+                  loading="lazy"
+                  decoding="async"
                 />
                 <div className="text-xs text-gray-500">
                   <div>รูปปัจจุบัน / พรีวิวใหม่</div>
@@ -259,7 +357,6 @@ export default function SellerInfo() {
               <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 mb-4 bg-gray-50">
                 <Formuploadimage
                   onUploadSuccess={async (payloadOrUrl) => {
-                    // ✅ ไม่ต้อง PATCH /profile อีกแล้ว — เซสชันถูกอัปเดตใน /image แล้ว
                     try {
                       const payload =
                         typeof payloadOrUrl === "string"
@@ -267,8 +364,8 @@ export default function SellerInfo() {
                           : payloadOrUrl || {};
                       if (payload.preview) setLocalAvatar(payload.preview);
 
-                      await revalidateUser(); // ดึง user ล่าสุด
-                      setAvatarBust(Date.now()); // cache-bust <img>
+                      await revalidateUser();
+                      setAvatarBust(Date.now()); // bust cache
                       setLocalAvatar(null);
                       setShowImageModal(false);
                     } catch (err) {
@@ -285,7 +382,7 @@ export default function SellerInfo() {
             </ModalShell>
           )}
 
-          {/* โมดัลแก้ไข: 3 ส่วน (User → Buyer → Seller) */}
+          {/* โมดัลแก้ไขข้อมูล */}
           {showModal && (
             <ModalShell
               title="แก้ไขข้อมูลผู้ขาย"
@@ -297,12 +394,18 @@ export default function SellerInfo() {
                 user={user}
                 onCancel={() => setShowModal(false)}
                 onSubmitDiff={async (nestedDiff) => {
-                  if (!nestedDiff || !Object.keys(nestedDiff).length) {
+                  const safeDiff = sanitizeNestedDiff(nestedDiff);
+
+                  const noUser = isEmptyObject(safeDiff.user);
+                  const noBuyer = isEmptyObject(safeDiff.buyer);
+                  const noSeller = isEmptyObject(safeDiff.seller);
+                  if (noUser && noBuyer && noSeller) {
                     alert("ไม่มีการแก้ไขข้อมูล");
                     return;
                   }
+
                   try {
-                    await updateSeller(nestedDiff); // ยิง endpoint เดียว รวมทุกส่วน
+                    await updateSeller(safeDiff);
                     await revalidateUser();
                     setShowModal(false);
                   } catch (err) {

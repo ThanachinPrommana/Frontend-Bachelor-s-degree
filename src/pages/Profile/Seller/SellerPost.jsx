@@ -1,5 +1,5 @@
 // src/pages/Profile/SellerPost.jsx
-import React, { useMemo, useState, useDeferredValue } from "react";
+import React, { useMemo, useState, useDeferredValue, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { apiClient } from "@/api/authconfig";
 import {
@@ -33,9 +33,60 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 
+/* ---------- utils ---------- */
 const fmtBaht = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n.toLocaleString("th-TH") : "-";
+};
+
+const isSafeHttpUrl = (u) => {
+  if (!u) return false;
+  try {
+    const x = new URL(u, window.location.origin);
+    return x.protocol === "http:" || x.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+const safeImgUrl = (maybe) => (isSafeHttpUrl(maybe) ? maybe : "");
+
+/** ตรงตาม Prisma: CONFIRMED | REJECTED | SOLD | HIDDEN | PENDING (อื่น ๆ) */
+const StatusBadge = ({ status }) => {
+  const s = (status || "").toUpperCase();
+  if (s === "CONFIRMED") {
+    return (
+      <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+        อนุมัติแล้ว
+      </Badge>
+    );
+  }
+  if (s === "REJECTED") {
+    return (
+      <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100">
+        ถูกปฏิเสธ
+      </Badge>
+    );
+  }
+  if (s === "SOLD") {
+    return (
+      <Badge className="bg-slate-200 text-slate-800 hover:bg-slate-200">
+        ขายแล้ว
+      </Badge>
+    );
+  }
+  if (s === "HIDDEN") {
+    return (
+      <Badge className="bg-gray-200 text-gray-700 hover:bg-gray-200">
+        ซ่อนอยู่
+      </Badge>
+    );
+  }
+  return (
+    <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
+      รอดำเนินการ
+    </Badge>
+  );
 };
 
 const spec = (icon, text) => (
@@ -45,41 +96,12 @@ const spec = (icon, text) => (
   </div>
 );
 
-const StatusBadge = ({ status }) => {
-  const s = (status || "").toUpperCase();
-  if (s === "APPROVED")
-    return (
-      <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-        อนุมัติแล้ว
-      </Badge>
-    );
-  if (s === "REJECTED")
-    return (
-      <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100">
-        ถูกปฏิเสธ
-      </Badge>
-    );
-  return (
-    <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
-      รอดำเนินการ
-    </Badge>
-  );
-};
-
-const sorters = {
-  newest: (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0),
-  price_desc: (a, b) => (Number(b.Price) || 0) - (Number(a.Price) || 0),
-  price_asc: (a, b) => (Number(a.Price) || 0) - (Number(b.Price) || 0),
-  name: (a, b) =>
-    (a.Property_Name || "").localeCompare(b.Property_Name || "", "th"),
-};
-
 export default function SellerPost() {
   const { authUser, loading, revalidateUser } = useAuth();
 
   // ---- UI state
   const [q, setQ] = useState("");
-  const qDeferred = useDeferredValue(q); // เด้งเบา ๆ
+  const qDeferred = useDeferredValue(q);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [sortBy, setSortBy] = useState("newest");
 
@@ -93,11 +115,29 @@ export default function SellerPost() {
 
   const posts = authUser?.PropertyPost ?? [];
 
-  // ---- Derived: stats
+  // collator สำหรับ sort ชื่อภาษาไทยให้ไวกว่า localeCompare ตรง ๆ
+  const thCollator = useMemo(
+    () => new Intl.Collator("th", { sensitivity: "base" }),
+    []
+  );
+
+  const sorters = useMemo(
+    () => ({
+      newest: (a, b) =>
+        (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0),
+      price_desc: (a, b) => (Number(b.Price) || 0) - (Number(a.Price) || 0),
+      price_asc: (a, b) => (Number(a.Price) || 0) - (Number(b.Price) || 0),
+      name: (a, b) =>
+        thCollator.compare(a?.Property_Name || "", b?.Property_Name || ""),
+    }),
+    [thCollator]
+  );
+
+  // ---- Derived: stats (ใช้ CONFIRMED ตาม Prisma)
   const stats = useMemo(() => {
     const total = posts.length;
-    const approved = posts.filter(
-      (p) => (p.Status_post || "").toUpperCase() === "APPROVED"
+    const confirmed = posts.filter(
+      (p) => (p.Status_post || "").toUpperCase() === "CONFIRMED"
     ).length;
     const pending = posts.filter(
       (p) => (p.Status_post || "").toUpperCase() === "PENDING"
@@ -105,7 +145,7 @@ export default function SellerPost() {
     const rejected = posts.filter(
       (p) => (p.Status_post || "").toUpperCase() === "REJECTED"
     ).length;
-    return { total, approved, pending, rejected };
+    return { total, confirmed, pending, rejected };
   }, [posts]);
 
   // ---- Search + Filter + Sort
@@ -132,13 +172,13 @@ export default function SellerPost() {
     arr.sort(sorter);
 
     return arr;
-  }, [posts, qDeferred, statusFilter, sortBy]);
+  }, [posts, qDeferred, statusFilter, sortBy, sorters]);
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!deletingId) return;
     try {
       setBusyDelete(true);
-      await apiClient.delete(`/propertypost/${deletingId}`);
+      await apiClient.delete(`/propertypost/${deletingId}`); // base /api อยู่ใน apiClient
       await revalidateUser();
     } catch (e) {
       alert(e?.response?.data?.message || "ลบไม่สำเร็จ");
@@ -146,7 +186,7 @@ export default function SellerPost() {
       setBusyDelete(false);
       setDeletingId(null);
     }
-  };
+  }, [deletingId, revalidateUser]);
 
   if (loading) {
     return (
@@ -193,7 +233,7 @@ export default function SellerPost() {
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />{" "}
                 อนุมัติแล้ว
               </div>
-              <div className="text-xl font-semibold">{stats.approved}</div>
+              <div className="text-xl font-semibold">{stats.confirmed}</div>
             </CardContent>
           </Card>
           <Card className="border-amber-200">
@@ -234,9 +274,11 @@ export default function SellerPost() {
               className="border border-gray-300 rounded-md px-3 py-2"
             >
               <option value="ALL">สถานะ: ทั้งหมด</option>
-              <option value="APPROVED">อนุมัติแล้ว</option>
+              <option value="CONFIRMED">อนุมัติแล้ว</option>
               <option value="PENDING">รอดำเนินการ</option>
               <option value="REJECTED">ถูกปฏิเสธ</option>
+              <option value="SOLD">ขายแล้ว</option>
+              <option value="HIDDEN">ซ่อนอยู่</option>
             </select>
 
             <div className="relative">
@@ -275,14 +317,20 @@ export default function SellerPost() {
           <div className="h-[calc(100vh-160px)] overflow-y-auto pr-1">
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {filteredSorted.map((post) => {
-                const cover = post?.Image?.[0]?.url;
-                const usable = post?.Usable_Area
+                const firstImg = post?.Image?.[0];
+                const cover =
+                  safeImgUrl(firstImg?.secure_url) ||
+                  safeImgUrl(firstImg?.url) ||
+                  "";
+                const usable = Number.isFinite(Number(post?.Usable_Area))
                   ? `${post.Usable_Area} ตร.ม.`
                   : "-";
-                const land = post?.Land_Size ? `${post.Land_Size} ตร.ว.` : "-";
+                const land = Number.isFinite(Number(post?.Land_Size))
+                  ? `${post.Land_Size} ตร.ว.`
+                  : "-";
                 const beds = post?.Bedrooms ?? "-";
                 const baths = post?.Bathroom ?? "-";
-                const park = post?.Parking_Slots ?? post?.Parking ?? "-";
+                const park = post?.Parking_Space ?? "-"; // Prisma: Parking_Space
 
                 return (
                   <Card
@@ -295,6 +343,15 @@ export default function SellerPost() {
                         src={cover}
                         alt={post.Property_Name || "cover"}
                         className="w-full h-40 object-cover"
+                        loading="lazy"
+                        decoding="async"
+                        referrerPolicy="no-referrer"
+                        crossOrigin="anonymous"
+                        onError={(e) => {
+                          e.currentTarget.src = "";
+                          e.currentTarget.alt = "no-image";
+                          e.currentTarget.classList.add("bg-gray-100");
+                        }}
                       />
                     ) : (
                       <div className="w-full h-40 bg-gray-100 flex items-center justify-center">

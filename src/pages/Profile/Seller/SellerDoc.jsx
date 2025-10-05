@@ -1,49 +1,90 @@
-import { Trash2, Plus } from "lucide-react";
+// src/pages/Profile/SellerDoc.jsx
+import { useState, useMemo } from "react";
+import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { Card, CardContent } from "@/components/ui/card";
 
-
-const SellerDoc = () => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const { authUser, loading } = useAuth()
-  const documents = authUser?.DocumentUpload || []
-
-  const filteredDocs = documents.filter((doc) =>
-    doc.DocumentName.toLowerCase().includes(searchTerm.toLowerCase())
+/** แปลงสถานะเป็น badge สี ๆ ตาม Prisma: PENDING | APPROVED | REJECTED */
+function StatusPill({ value }) {
+  const v = (value || "").toUpperCase();
+  const cls =
+    v === "APPROVED"
+      ? "bg-emerald-100 text-emerald-700"
+      : v === "REJECTED"
+      ? "bg-rose-100 text-rose-700"
+      : "bg-amber-100 text-amber-700"; // PENDING (หรืออื่น ๆ)
+  return (
+    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${cls}`}>
+      {v || "-"}
+    </span>
   );
+}
+
+/** ลิงก์ปลอดภัย: อนุญาตเฉพาะ http/https */
+function isHttpUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export default function SellerDoc() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | PENDING | APPROVED | REJECTED
+  const { authUser, loading } = useAuth();
+
+  const documents = authUser?.DocumentUpload || [];
+
+  const filteredDocs = useMemo(() => {
+    const key = searchTerm.trim().toLowerCase();
+    return documents
+      .filter((doc) =>
+        key ? (doc?.DocumentName || "").toLowerCase().includes(key) : true
+      )
+      .filter((doc) =>
+        statusFilter === "ALL"
+          ? true
+          : (doc?.Review_Status || "").toUpperCase() === statusFilter
+      );
+  }, [documents, searchTerm, statusFilter]);
 
   if (loading) {
     return <div className="p-6 text-center">กำลังโหลดข้อมูลเอกสาร...</div>;
   }
 
-
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Top bar */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-3">
-        {/* Left - Add button */}
-        <div className="flex items-center gap-2 w-full md:w-full">
-
-          {/* Search input */}
+        {/* Search */}
+        <div className="relative w-full md:flex-1">
           <input
             type="text"
             placeholder="ค้นหาเอกสาร..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-grow border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#34495E]"
+            className="w-full border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#34495E]"
           />
         </div>
 
-        {/* Right - Filter + Delete */}
-        <div className="flex items-center space-x-3">
-          <button
-            type="button"
-            className="border border-[#34495E] text-[#34495E] px-4 py-2 rounded-md font-medium hover:bg-[#34495E] hover:text-white transition"
+        {/* Right - Filter + (optional) Delete */}
+        <div className="flex items-center gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="border border-gray-300 rounded-md px-3 py-2"
           >
-            Filter
-          </button>
-          <Button variant="outline" className="border-gray-400">
+            <option value="ALL">สถานะ: ทั้งหมด</option>
+            <option value="PENDING">รอตรวจ</option>
+            <option value="APPROVED">อนุมัติแล้ว</option>
+            <option value="REJECTED">ถูกปฏิเสธ</option>
+          </select>
+
+          {/* ปุ่มลบ (เผื่ออนาคตทำ bulk delete) — ปัจจุบันยังไม่ผูก API เลยปิดไว้ */}
+          <Button variant="outline" className="border-gray-400" disabled>
             <Trash2 className="w-5 h-5 text-gray-700" />
           </Button>
         </div>
@@ -53,46 +94,74 @@ const SellerDoc = () => {
       <div className="bg-gray-100 p-4 rounded-lg max-h-[400px] overflow-y-auto space-y-3">
         {filteredDocs.length === 0 ? (
           <p className="text-gray-500 text-center">
-            {documents.length === 0 ? "คุณยังไม่มีเอกสารใดๆ" : "ไม่พบเอกสารที่ตรงกับคำค้นหา"}
+            {documents.length === 0
+              ? "คุณยังไม่มีเอกสารใด ๆ"
+              : "ไม่พบเอกสารที่ตรงกับคำค้นหา/ตัวกรอง"}
           </p>
         ) : (
-          filteredDocs.map((doc) => (
-            <div
-              key={doc.id}
-              className="bg-white p-4 rounded-md shadow-sm border border-gray-200"
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  <h4 className="font-semibold text-lg">{doc.DocumentName}</h4>
+          filteredDocs.map((doc) => {
+            const name =
+              [doc?.User?.First_name, doc?.User?.Last_name]
+                .filter(Boolean)
+                .join(" ") || "-";
+            const created = doc?.createdAt
+              ? new Date(doc.createdAt).toLocaleDateString("th-TH", {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })
+              : "-";
+            const urlOK = isHttpUrl(doc?.DocumentUrl);
 
-                  <p className="text-sm text-gray-500 mt-1">
-                    {/* ✅ เปลี่ยนจาก doc.user เป็น doc.User (ตัวพิมพ์ใหญ่) */}
-                    โดย: {doc.User?.First_name || ''} {doc.User?.Last_name || ''}
-                    {' | '}
-                    วันที่: {new Date(doc.createdAt).toLocaleDateString('th-TH')}
-                  </p>
-                  {/* ✨ ส่วนที่เพิ่มเข้ามา */}
-                  <a
-                    href={doc.DocumentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-blue-600 hover:underline mt-1 inline-block"
-                  >
-                    ดูเอกสาร
-                  </a>
-                </div>
-                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${doc.Review_Status === 'Approved' ? 'bg-green-100 text-green-800' :
-                  doc.Review_Status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
-                  }`}>
-                  {doc.Review_Status}
-                </span>
-              </div>
-            </div>
-          ))
+            return (
+              <Card
+                key={doc.id}
+                className="bg-white rounded-md shadow-sm border border-gray-200"
+              >
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="min-w-0">
+                      <h4 className="font-semibold text-lg truncate">
+                        {doc?.DocumentName || "-"}
+                      </h4>
+                      <p className="text-sm text-gray-500 mt-1">
+                        โดย: {name} {" | "} วันที่: {created}
+                      </p>
+
+                      {/* ลิงก์เอกสาร */}
+                      {urlOK ? (
+                        <a
+                          href={doc.DocumentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:underline mt-1 inline-block"
+                        >
+                          ดูเอกสาร
+                        </a>
+                      ) : (
+                        <span className="text-sm text-gray-400 mt-1 inline-block">
+                          ไม่มีลิงก์เอกสารที่เปิดได้
+                        </span>
+                      )}
+
+                      {/* เหตุผลถูกปฏิเสธ (ถ้ามี) */}
+                      {(doc?.Review_Status || "").toUpperCase() ===
+                        "REJECTED" &&
+                        doc?.Rejection_Note && (
+                          <div className="mt-2 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">
+                            เหตุผลที่ถูกปฏิเสธ: {doc.Rejection_Note}
+                          </div>
+                        )}
+                    </div>
+
+                    <StatusPill value={doc?.Review_Status} />
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
         )}
       </div>
     </div>
   );
-};
-
-export default SellerDoc;
+}

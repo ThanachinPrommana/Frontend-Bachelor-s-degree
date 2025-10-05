@@ -12,6 +12,8 @@ const PROVINCE_URL =
   "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/province.json";
 const DISTRICT_URL =
   "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/district.json";
+const SUBDISTRICT_URL =
+  "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/sub_district.json";
 
 function assertOk(res, errMsg) {
   if (!res.ok) throw new Error(`${errMsg} (HTTP ${res.status})`);
@@ -23,12 +25,16 @@ const VerifyEmail = () => {
   const token = searchParams.get("token");
   const navigate = useNavigate();
 
-  // ทำงานกับจังหวัด/อำเภอ
+  // ข้อมูลตำแหน่งที่ตั้ง
   const [provinces, setProvinces] = useState([]);
-  const [districtsAll, setDistrictsAll] = useState([]); // v2 ใช้ชื่อ district
-  const [selectedProvinceId, setSelectedProvinceId] = useState(null);
+  const [districtsAll, setDistrictsAll] = useState([]);
+  const [subDistrictsAll, setSubDistrictsAll] = useState([]);
 
-  const [loadingProvinces, setLoadingProvinces] = useState(true);
+  // state สำหรับการเลือกปัจจุบัน
+  const [selectedProvinceId, setSelectedProvinceId] = useState(null);
+  const [selectedDistrictId, setSelectedDistrictId] = useState(null);
+
+  const [loadingLoc, setLoadingLoc] = useState(true);
   const [serverError, setServerError] = useState("");
 
   const {
@@ -40,29 +46,35 @@ const VerifyEmail = () => {
     resolver: zodResolver(verifyEmailSchema),
   });
 
-  // โหลดจังหวัด + อำเภอ (ครั้งเดียว)
+  // โหลดจังหวัด/อำเภอ/ตำบลครั้งเดียว
   useEffect(() => {
     let aborted = false;
     (async () => {
       try {
         setServerError("");
-        setLoadingProvinces(true);
-        const [provRes, distRes] = await Promise.all([
+        setLoadingLoc(true);
+        const [provRes, distRes, subRes] = await Promise.all([
           fetch(PROVINCE_URL, { cache: "no-store" })
             .then((r) => assertOk(r, "โหลดข้อมูลจังหวัดล้มเหลว"))
             .then((r) => r.json()),
           fetch(DISTRICT_URL, { cache: "no-store" })
             .then((r) => assertOk(r, "โหลดข้อมูลอำเภอล้มเหลว"))
             .then((r) => r.json()),
+          fetch(SUBDISTRICT_URL, { cache: "no-store" })
+            .then((r) => assertOk(r, "โหลดข้อมูลตำบลล้มเหลว"))
+            .then((r) => r.json()),
         ]);
         if (aborted) return;
         setProvinces(provRes);
         setDistrictsAll(distRes);
+        setSubDistrictsAll(subRes);
       } catch (e) {
         if (!aborted)
-          setServerError("โหลดข้อมูลจังหวัดไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+          setServerError(
+            "โหลดข้อมูลจังหวัด/อำเภอ/ตำบลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"
+          );
       } finally {
-        if (!aborted) setLoadingProvinces(false);
+        if (!aborted) setLoadingLoc(false);
       }
     })();
     return () => {
@@ -70,27 +82,48 @@ const VerifyEmail = () => {
     };
   }, []);
 
-  // เมื่อเลือกจังหวัด → เก็บ id และชื่อจังหวัดลงฟอร์ม, reset อำเภอ
+  // เมื่อเลือกจังหวัด → reset อำเภอและตำบล, เก็บชื่อจังหวัดลงฟอร์ม
   const handleProvinceChange = (e) => {
     const id = Number(e.target.value || 0);
     setSelectedProvinceId(id || null);
-    setValue("Preferred_District", ""); // reset ค่าอำเภอในฟอร์ม
+    setSelectedDistrictId(null);
+    setValue("Preferred_District", "");
+    setValue("Preferred_Subdistrict", "");
 
     const province = provinces.find((p) => p.id === id);
     setValue("Preferred_Province", province?.name_th || "");
   };
 
-  // อำเภอที่ต้องแสดง (derive จาก selectedProvinceId)
+  // เมื่อเลือกอำเภอ → reset ตำบล, เก็บชื่ออำเภอลงฟอร์ม และเก็บ id ไว้หา sub-district
+  const handleDistrictChange = (e) => {
+    const id = Number(e.target.value || 0);
+    setSelectedDistrictId(id || null);
+    setValue("Preferred_Subdistrict", "");
+
+    const district = districtsAll.find((d) => d.id === id);
+    // เก็บ "ชื่ออำเภอ" (ไม่ใช่ id) ลงใน Preferred_District (ตาม schema ฝั่ง backend)
+    setValue("Preferred_District", district?.name_th || "");
+  };
+
+  // อำเภอตามจังหวัดที่เลือก
   const districts = useMemo(() => {
     if (!selectedProvinceId) return [];
-    // district.json: มี field province_id เหมือนเดิม
     return districtsAll.filter((d) => d.province_id === selectedProvinceId);
   }, [districtsAll, selectedProvinceId]);
+
+  // ตำบลตามอำเภอที่เลือก (รองรับทั้ง district_id และ amphure_id)
+  const subDistricts = useMemo(() => {
+    if (!selectedDistrictId) return [];
+    return subDistrictsAll.filter((s) => {
+      const key = "district_id" in s ? "district_id" : "amphure_id";
+      return s[key] === selectedDistrictId;
+    });
+  }, [subDistrictsAll, selectedDistrictId]);
 
   const onSubmit = async (formData) => {
     setServerError("");
     try {
-      const payload = { token, ...formData }; // flow นี้สมัครเป็น Buyer ตามสคีมาเดิม
+      const payload = { token, ...formData };
       const res = await verifyandregister(payload);
       alert(res.message || "ยืนยันอีเมลสำเร็จ");
       navigate("/login");
@@ -101,8 +134,7 @@ const VerifyEmail = () => {
     }
   };
 
-  // ปุ่ม disable ถ้ายังโหลดจังหวัดอยู่หรือกำลัง submit
-  const submitDisabled = isSubmitting || loadingProvinces;
+  const submitDisabled = isSubmitting || loadingLoc;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-100 to-gray-200 flex items-center justify-center py-10 px-4">
@@ -201,18 +233,18 @@ const VerifyEmail = () => {
               )}
             </div>
 
-            {/* จังหวัด (ใช้ id เป็น value) */}
+            {/* จังหวัด */}
             <div>
               <label className="block mb-1 text-sm font-medium text-gray-700">
                 จังหวัดที่ต้องการ <span className="text-red-500">*</span>
               </label>
               <select
                 onChange={handleProvinceChange}
-                disabled={loadingProvinces}
+                disabled={loadingLoc}
                 className="w-full border border-gray-300 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 rounded-md p-2 disabled:bg-gray-100"
               >
                 <option value="">
-                  {loadingProvinces ? "กำลังโหลดจังหวัด..." : "เลือกจังหวัด"}
+                  {loadingLoc ? "กำลังโหลดจังหวัด..." : "เลือกจังหวัด"}
                 </option>
                 {provinces.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -221,7 +253,7 @@ const VerifyEmail = () => {
                 ))}
               </select>
 
-              {/* เก็บชื่อจังหวัดในฟอร์ม */}
+              {/* เก็บ “ชื่อจังหวัด” ในฟอร์ม (ไม่ใช่ id) */}
               <input type="hidden" {...register("Preferred_Province")} />
 
               {errors.Preferred_Province && (
@@ -231,28 +263,58 @@ const VerifyEmail = () => {
               )}
             </div>
 
-            {/* อำเภอ */}
+            {/* อำเภอ/เขต */}
             <div>
               <label className="block mb-1 text-sm font-medium text-gray-700">
                 อำเภอ/เขตที่ต้องการ <span className="text-red-500">*</span>
               </label>
               <select
-                {...register("Preferred_District")}
-                disabled={!selectedProvinceId || loadingProvinces}
+                onChange={handleDistrictChange}
+                disabled={!selectedProvinceId || loadingLoc}
                 className="w-full border border-gray-300 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 rounded-md p-2 disabled:bg-gray-100"
               >
                 <option value="">
                   {selectedProvinceId ? "เลือกอำเภอ/เขต" : "เลือกจังหวัดก่อน"}
                 </option>
                 {districts.map((d) => (
-                  <option key={d.id} value={d.name_th}>
+                  <option key={d.id} value={d.id}>
                     {d.name_th}
                   </option>
                 ))}
               </select>
+
+              {/* เก็บ “ชื่ออำเภอ” ลงฟอร์ม */}
+              <input type="hidden" {...register("Preferred_District")} />
+
               {errors.Preferred_District && (
                 <p className="text-red-500 text-sm mt-1">
                   {errors.Preferred_District.message}
+                </p>
+              )}
+            </div>
+
+            {/* ตำบล/แขวง */}
+            <div className="md:col-span-2">
+              <label className="block mb-1 text-sm font-medium text-gray-700">
+                ตำบล/แขวงที่ต้องการ <span className="text-red-500">*</span>
+              </label>
+              <select
+                {...register("Preferred_Subdistrict")}
+                disabled={!selectedDistrictId || loadingLoc}
+                className="w-full border border-gray-300 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 rounded-md p-2 disabled:bg-gray-100"
+              >
+                <option value="">
+                  {selectedDistrictId ? "เลือกตำบล/แขวง" : "เลือกอำเภอก่อน"}
+                </option>
+                {subDistricts.map((s) => (
+                  <option key={s.id} value={s.name_th}>
+                    {s.name_th}
+                  </option>
+                ))}
+              </select>
+              {errors.Preferred_Subdistrict && (
+                <p className="text-red-500 text-sm mt-1">
+                  {errors.Preferred_Subdistrict.message}
                 </p>
               )}
             </div>
@@ -349,10 +411,10 @@ const VerifyEmail = () => {
                   <Loader2 className="w-5 h-5 animate-spin" />
                   กำลังบันทึกข้อมูล...
                 </span>
-              ) : loadingProvinces ? (
+              ) : loadingLoc ? (
                 <span className="inline-flex items-center gap-2">
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  กำลังโหลดจังหวัด...
+                  กำลังโหลดข้อมูลจังหวัด/อำเภอ/ตำบล...
                 </span>
               ) : (
                 "ยืนยันข้อมูล"

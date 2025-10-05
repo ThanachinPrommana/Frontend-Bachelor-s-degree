@@ -3,7 +3,13 @@ import PostLayout from "@/layouts/PostLayout";
 import { Button } from "@/components/ui/button";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, Edit, ImageIcon, Loader2, Info } from "lucide-react";
+import {
+  CheckCircle,
+  Edit,
+  Image as ImageIcon,
+  Loader2,
+  Info,
+} from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import {
   AlertDialog,
@@ -15,11 +21,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import axios from "axios";
 
-const API_URL = "http://localhost:8200";
+/** ใช้ env ก่อน แล้วค่อย fallback localhost */
+const API_URL = import.meta.env?.VITE_API_URL || "http://localhost:8200";
 
 const nfBaht = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 });
 const nfArea = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 2 });
 
+/* ================= helpers ================= */
 function fmtBaht(v) {
   if (v === null || v === undefined || v === "") return "-";
   const n = Number(v);
@@ -42,10 +50,24 @@ function safeJoin(arr, sep = ", ") {
   return Array.isArray(arr) && arr.length ? arr.join(sep) : "-";
 }
 
-// ===== helper สำหรับชื่อ "ประเภททรัพย์" =====
+/** sanitize url: เติม https:// และบังคับให้เป็น http/https เท่านั้น */
+function normalizeUrl(val) {
+  if (!val) return "";
+  const raw = String(val).trim();
+  if (!raw) return "";
+  const withProto = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const u = new URL(withProto);
+    if (!/^https?:$/i.test(u.protocol)) return "";
+    return u.toString();
+  } catch {
+    return "";
+  }
+}
+
+/** อ่านชื่อ category จาก payload ได้หลายรูปแบบ */
 function getCategoryNameFromObject(obj) {
   if (!obj) return null;
-  // รองรับหลาย key ที่อาจใช้ใน schema เดิม
   return obj.Property_type || obj.name || obj.title || null;
 }
 function getCategoryName(postData) {
@@ -58,7 +80,7 @@ function getCategoryName(postData) {
   );
 }
 
-// ===== แปลง Sell/Rent ให้แสดงสวย =====
+/** SELL/RENT label */
 function getSellRent(postData) {
   const raw = postData?.Sell_Rent;
   if (!raw) return "-";
@@ -68,7 +90,14 @@ function getSellRent(postData) {
   return raw;
 }
 
-// ===== UI Partials =====
+/** ดึง URL ของรูปจากหลายรูปแบบ object */
+function getImageUrl(img) {
+  if (!img) return null;
+  if (typeof img === "string") return normalizeUrl(img) || img;
+  return img.secure_url || img.url || img.path || img.Location || null;
+}
+
+/* ================= UI Partials ================= */
 const Row = ({ label, value, right = false }) => (
   <div className="flex justify-between border-b py-2 text-sm">
     <span className="text-muted-foreground">{label}</span>
@@ -100,28 +129,39 @@ const PostConfirm = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const postId = location.state?.postId;
+  // รองรับกรณี refresh หน้า: ดึง id จาก query ได้ด้วย
+  const urlId = new URLSearchParams(location.search).get("id");
+  const postId = location.state?.postId || urlId;
 
+  // fetch post data
   useEffect(() => {
     if (!postId) {
       setError("ไม่พบ ID โพสต์ กรุณาลองใหม่");
       setIsLoading(false);
       return;
     }
+
+    const controller = new AbortController();
     (async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/propertypost/${postId}`);
+        const res = await axios.get(`${API_URL}/api/propertypost/${postId}`, {
+          signal: controller.signal,
+          withCredentials: true,
+        });
         setPostData(res.data);
       } catch (err) {
+        if (axios.isCancel?.(err)) return;
         console.error("Failed to fetch post data:", err);
         setError("ไม่สามารถดึงข้อมูลโพสต์ได้");
       } finally {
         setIsLoading(false);
       }
     })();
+
+    return () => controller.abort();
   }, [postId]);
 
-  // resolve ประเภททรัพย์ (อ่านจาก payload ก่อน → ถ้าไม่ได้ค่อย fallback ด้วย /api/category/:id)
+  // resolve ชื่อประเภททรัพย์ (ถ้า payload ไม่มี)
   useEffect(() => {
     if (!postData) return;
 
@@ -133,11 +173,14 @@ const PostConfirm = () => {
 
     const cid =
       postData?.categoryId || postData?.Category?.id || postData?.category?.id;
-
     if (!cid) return;
 
+    const controller = new AbortController();
     axios
-      .get(`${API_URL}/api/category/${cid}`)
+      .get(`${API_URL}/api/category/${cid}`, {
+        signal: controller.signal,
+        withCredentials: true,
+      })
       .then((r) => {
         const n =
           getCategoryNameFromObject(r.data) ||
@@ -147,14 +190,23 @@ const PostConfirm = () => {
         setResolvedCategoryName(n || "-");
       })
       .catch(() => setResolvedCategoryName("-"));
+
+    return () => controller.abort();
   }, [postData]);
 
   const sellRentView = useMemo(() => getSellRent(postData), [postData]);
 
-  const handleSubmit = () => {
-    // TODO: call action หลังบ้านถ้ามี (เช่นเปลี่ยน Status_post → PENDING/REVIEW)
-    setShowConfirm(false);
-    navigate("/seller");
+  const handleSubmit = async () => {
+    try {
+      // ถ้าหลังบ้านมีสถานะ ก็อัปเดตที่นี่ เช่น:
+      // await axios.patch(`${API_URL}/api/propertypost/${postId}`, { Status_post: "PENDING_REVIEW" }, { withCredentials: true });
+    } catch (e) {
+      // ไม่บล็อกการนำทาง แต่ log ไว้
+      console.warn("Failed to set status:", e);
+    } finally {
+      setShowConfirm(false);
+      navigate("/seller");
+    }
   };
 
   if (isLoading) {
@@ -182,8 +234,13 @@ const PostConfirm = () => {
 
   if (!postData) return null;
 
-  const images = postData?.Image || postData?.Images || [];
-  const hasImages = Array.isArray(images) && images.length > 0;
+  // รองรับได้ทั้ง Image/Images/images และทั้ง string/object
+  const rawImages =
+    postData?.images || postData?.Images || postData?.Image || [];
+  const images = Array.isArray(rawImages)
+    ? rawImages.map((it) => getImageUrl(it)).filter(Boolean)
+    : [];
+  const hasImages = images.length > 0;
 
   return (
     <PostLayout currentStep={6}>
@@ -237,9 +294,9 @@ const PostConfirm = () => {
                 <Row
                   label="ลิงก์แผนที่"
                   value={
-                    postData?.LinkMap ? (
+                    postData?.LinkMap && normalizeUrl(postData.LinkMap) ? (
                       <a
-                        href={postData.LinkMap}
+                        href={normalizeUrl(postData.LinkMap)}
                         target="_blank"
                         rel="noreferrer"
                         className="text-primary underline underline-offset-2"
@@ -309,7 +366,9 @@ const PostConfirm = () => {
             >
               <div className="space-y-1">
                 <Row label="ประเภทประกาศ" value={sellRentView} />
-                {String(postData?.Sell_Rent).toUpperCase() === "RENT" ? (
+                {String(postData?.Sell_Rent || "")
+                  .toUpperCase()
+                  .includes("RENT") ? (
                   <>
                     <Row
                       label="ค่าเช่า"
@@ -363,9 +422,9 @@ const PostConfirm = () => {
                 <Row
                   label="LINE"
                   value={
-                    postData?.Link_line ? (
+                    postData?.Link_line && normalizeUrl(postData.Link_line) ? (
                       <a
-                        href={postData.Link_line}
+                        href={normalizeUrl(postData.Link_line)}
                         target="_blank"
                         rel="noreferrer"
                         className="text-primary underline underline-offset-2"
@@ -380,9 +439,10 @@ const PostConfirm = () => {
                 <Row
                   label="Facebook"
                   value={
-                    postData?.Link_facbook ? (
+                    postData?.Link_facbook &&
+                    normalizeUrl(postData.Link_facbook) ? (
                       <a
-                        href={postData.Link_facbook}
+                        href={normalizeUrl(postData.Link_facbook)}
                         target="_blank"
                         rel="noreferrer"
                         className="text-primary underline underline-offset-2"
@@ -404,33 +464,28 @@ const PostConfirm = () => {
             >
               {hasImages ? (
                 <div className="grid grid-cols-3 gap-3">
-                  {images.map((img, idx) => {
-                    const url =
-                      img?.secure_url ||
-                      img?.url ||
-                      (typeof img === "string" ? img : "");
-                    return (
-                      <div
-                        key={idx}
-                        className="relative w-full aspect-square rounded-lg overflow-hidden ring-1 ring-black/5"
-                      >
-                        {url ? (
-                          <img
-                            src={url}
-                            alt={`property-${idx}`}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full text-muted-foreground bg-muted">
-                            <ImageIcon className="w-5 h-5" />
-                          </div>
-                        )}
-                        <div className="absolute left-2 top-2 text-xs px-2 py-0.5 rounded-full bg-black/60 text-white">
-                          {idx + 1}
+                  {images.map((url, idx) => (
+                    <div
+                      key={url || idx}
+                      className="relative w-full aspect-square rounded-lg overflow-hidden ring-1 ring-black/5"
+                    >
+                      {url ? (
+                        <img
+                          src={url}
+                          alt={`property-${idx}`}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-muted-foreground bg-muted">
+                          <ImageIcon className="w-5 h-5" />
                         </div>
+                      )}
+                      <div className="absolute left-2 top-2 text-xs px-2 py-0.5 rounded-full bg-black/60 text-white">
+                        {idx + 1}
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="text-sm text-muted-foreground flex items-center gap-2">

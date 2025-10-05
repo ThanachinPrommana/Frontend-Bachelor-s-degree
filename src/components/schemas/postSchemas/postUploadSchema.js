@@ -1,18 +1,6 @@
 import { z } from "zod";
 
-const hasAtLeastOneFile = (val) => {
-  if (!val) return false;
-  if (typeof FileList !== "undefined" && val instanceof FileList) {
-    return val.length > 0;
-  }
-  if (Array.isArray(val)) {
-    return val.length > 0;
-  }
-  return false;
-};
-
 export const postUploadSchema = z.object({
-  images: z
-    .any()
-    .refine(hasAtLeastOneFile, "กรุณาอัปโหลดรูปภาพอย่างน้อย 1 รูป"),
+  images: z.array(z.any()).min(1, "กรุณาอัปโหลดรูปอย่างน้อย 1 รูป"),
+  videos: z.array(z.any()).max(2, "อัปโหลดวิดีโอได้สูงสุด 2 ไฟล์").optional(),
 });
