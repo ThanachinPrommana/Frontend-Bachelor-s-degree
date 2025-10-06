@@ -157,16 +157,36 @@ const SELLER_ALLOWED = [
   // ไม่อนุญาตแก้ Seller.publicId
 ];
 
+// helper ว่างจริง ๆ (ย้ายขึ้นมาก่อนใช้งาน)
+const isEmptyObject = (o) => !o || Object.keys(o).length === 0;
+
+/* ===== version A: sanitize รองรับ {user,buyer,seller} และ {First_name,..., Buyer, Seller} ===== */
 const sanitizeNestedDiff = (nested) => {
   const safe = {};
-  if (nested?.user) safe.user = deepPick(nested.user, USER_ALLOWED);
-  if (nested?.buyer) safe.buyer = deepPick(nested.buyer, BUYER_ALLOWED);
-  if (nested?.seller) safe.seller = deepPick(nested.seller, SELLER_ALLOWED);
+  const top = nested || {};
+
+  // --- user: รวมได้ทั้ง top.user และ top-level user fields (First_name, Phone, image ฯลฯ)
+  const userTop = deepPick(top, USER_ALLOWED);
+  const userObj = top.user ? deepPick(top.user, USER_ALLOWED) : {};
+  const userMerged = { ...userObj, ...userTop };
+  if (!isEmptyObject(userMerged)) safe.user = userMerged;
+
+  // --- buyer: รองรับ top.buyer และ top.Buyer
+  const buyerSrc = top.buyer ?? top.Buyer ?? null;
+  if (buyerSrc) {
+    const picked = deepPick(buyerSrc, BUYER_ALLOWED);
+    if (!isEmptyObject(picked)) safe.buyer = picked;
+  }
+
+  // --- seller: รองรับ top.seller และ top.Seller
+  const sellerSrc = top.seller ?? top.Seller ?? null;
+  if (sellerSrc) {
+    const picked = deepPick(sellerSrc, SELLER_ALLOWED);
+    if (!isEmptyObject(picked)) safe.seller = picked;
+  }
+
   return safe;
 };
-
-// helper ว่างจริง ๆ
-const isEmptyObject = (o) => !o || Object.keys(o).length === 0;
 
 /* ========== main ========== */
 export default function SellerInfo() {
