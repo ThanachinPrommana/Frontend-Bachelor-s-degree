@@ -1,13 +1,16 @@
+// src/pages/Post_for_sale/PostFormProvider.jsx
 import React from "react";
 import { useForm, FormProvider } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+/* ========== Helper ========== */
 const numberOrUndefined = z.preprocess(
   (v) => (v === "" || v === undefined || v === null ? undefined : Number(v)),
   z.number().optional()
 );
 
+/* ========== Schema ========== */
 const softSchema = z.object({
   // General
   Property_Name: z.string().min(5, "หัวข้ออย่างน้อย 5 ตัว").optional(),
@@ -34,18 +37,20 @@ const softSchema = z.object({
   Parking_Space: numberOrUndefined,
   floor: numberOrUndefined,
 
-  // Arrays
+  // Arrays (enum list ใน Prisma)
   Nearby_Landmarks: z.array(z.string()).optional(),
   Additional_Amenities: z.array(z.string()).optional(),
 
   // Price / Payment-ish
   Price: numberOrUndefined,
-  Deposit_Amount: numberOrUndefined,
-  Other_related_expenses: z.string().optional(),
+  Deposit_Amount: numberOrUndefined, // SALE
+  Deposit_Rent: numberOrUndefined, // RENT
+  Interest: numberOrUndefined, // SALE
+  Other_related_expenses: z.string().trim().max(200).optional(),
 
   // Inform (ผู้ขาย/ติดต่อ)
   Name: z.string().optional(),
-  Phone: z.string().optional(),
+  Phone: z.string().optional(), // จะบังคับในสเต็ป PostInform
   Link_line: z.string().optional(),
   Link_facbook: z.string().optional(),
   Contract_Seller: z.string().optional(),
@@ -55,6 +60,7 @@ const softSchema = z.object({
   videos: z.any().optional(),
 });
 
+/* ========== Provider ========== */
 export const PostFormProvider = ({ children }) => {
   const methods = useForm({
     defaultValues: {
@@ -89,7 +95,9 @@ export const PostFormProvider = ({ children }) => {
 
       // Price
       Price: undefined,
-      Deposit_Amount: undefined,
+      Deposit_Amount: undefined, // SALE
+      Deposit_Rent: undefined, // RENT
+      Interest: undefined, // SALE
       Other_related_expenses: "",
 
       // Inform (contact)
@@ -106,6 +114,7 @@ export const PostFormProvider = ({ children }) => {
     resolver: zodResolver(softSchema),
     mode: "onSubmit",
     reValidateMode: "onSubmit",
+    shouldUnregister: false, // เก็บค่าทุกช่องแม้ถูกซ่อน (คงค่าข้ามสเต็ป)
   });
 
   return <FormProvider {...methods}>{children}</FormProvider>;

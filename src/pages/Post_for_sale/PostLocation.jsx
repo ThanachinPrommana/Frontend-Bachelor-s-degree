@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFormContext } from "react-hook-form";
 import { Button } from "@/components/ui/button";
@@ -22,13 +22,18 @@ import { postLocationSchema } from "@/components/schemas/postSchemas/postLocatio
 import { validateStep } from "@/lib/zodRHF";
 import { Input } from "@/components/ui/input";
 
-/** ===== New latest endpoints ===== */
+/** Latest endpoints */
 const PROVINCE_URL =
   "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/province.json";
 const DISTRICT_URL =
   "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/district.json";
 const SUBDISTRICT_URL =
   "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/sub_district.json";
+
+function assertOk(res, msg) {
+  if (!res.ok) throw new Error(`${msg} (HTTP ${res.status})`);
+  return res;
+}
 
 const PostLocation = () => {
   const navigate = useNavigate();
@@ -39,6 +44,27 @@ const PostLocation = () => {
   const [allDistricts, setAllDistricts] = useState([]);
   const [allSubDistricts, setAllSubDistricts] = useState([]);
 
+  /** index maps for O(1) lookup */
+  const districtsByProv = useMemo(() => {
+    const m = new Map();
+    for (const d of allDistricts) {
+      const k = String(d.province_id);
+      if (!m.has(k)) m.set(k, []);
+      m.get(k).push(d);
+    }
+    return m;
+  }, [allDistricts]);
+
+  const subDistrictsByDist = useMemo(() => {
+    const m = new Map();
+    for (const sd of allSubDistricts) {
+      const k = String(sd.district_id);
+      if (!m.has(k)) m.set(k, []);
+      m.get(k).push(sd);
+    }
+    return m;
+  }, [allSubDistricts]);
+
   /** filtered lists for current selection */
   const [districts, setDistricts] = useState([]);
   const [subDistricts, setSubDistricts] = useState([]);
@@ -46,36 +72,44 @@ const PostLocation = () => {
   /** loading flags */
   const [loading, setLoading] = useState(true);
 
-  // โหลด master ทั้งหมดครั้งเดียว
+  const abortRef = useRef(null);
+
+  // โหลด master ทั้งหมดครั้งเดียว + abort เมื่อ unmount
   useEffect(() => {
-    let mounted = true;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     (async () => {
       try {
         setLoading(true);
         const [provRes, distRes, subRes] = await Promise.all([
-          fetch(PROVINCE_URL),
-          fetch(DISTRICT_URL),
-          fetch(SUBDISTRICT_URL),
+          fetch(PROVINCE_URL, { signal: controller.signal, cache: "default" })
+            .then((r) => assertOk(r, "โหลดจังหวัดล้มเหลว"))
+            .then((r) => r.json()),
+          fetch(DISTRICT_URL, { signal: controller.signal, cache: "default" })
+            .then((r) => assertOk(r, "โหลดอำเภอล้มเหลว"))
+            .then((r) => r.json()),
+          fetch(SUBDISTRICT_URL, {
+            signal: controller.signal,
+            cache: "default",
+          })
+            .then((r) => assertOk(r, "โหลดตำบลล้มเหลว"))
+            .then((r) => r.json()),
         ]);
-        const [prov, dist, sub] = await Promise.all([
-          provRes.json(),
-          distRes.json(),
-          subRes.json(),
-        ]);
-        if (!mounted) return;
 
-        setProvinces(prov || []);
-        setAllDistricts(dist || []);
-        setAllSubDistricts(sub || []);
+        setProvinces(provRes || []);
+        setAllDistricts(distRes || []);
+        setAllSubDistricts(subRes || []);
       } catch (err) {
-        console.error("โหลดจังหวัด/อำเภอ/ตำบล (latest) ไม่สำเร็จ:", err);
+        if (err.name !== "AbortError")
+          console.error("โหลดจังหวัด/อำเภอ/ตำบลไม่สำเร็จ:", err);
       } finally {
-        if (mounted) setLoading(false);
+        setLoading(false);
       }
     })();
-    return () => {
-      mounted = false;
-    };
+
+    return () => controller.abort();
   }, []);
 
   // เมื่อ master พร้อมแล้ว → เติมค่าอำเภอ/ตำบลตามค่าที่เคยเลือกไว้ (ถ้ามี)
@@ -87,18 +121,12 @@ const PostLocation = () => {
 
     if (currentProvince) {
       const p = provinces.find((x) => x.name_th === currentProvince);
-      const ds = p
-        ? allDistricts.filter((d) => String(d.province_id) === String(p.id))
-        : [];
+      const ds = p ? districtsByProv.get(String(p.id)) || [] : [];
       setDistricts(ds);
 
       if (currentDistrict) {
         const d = ds.find((x) => x.name_th === currentDistrict);
-        const subs = d
-          ? allSubDistricts.filter(
-              (sd) => String(sd.district_id) === String(d.id)
-            )
-          : [];
+        const subs = d ? subDistrictsByDist.get(String(d.id)) || [] : [];
         setSubDistricts(subs);
 
         if (!d) {
@@ -118,20 +146,16 @@ const PostLocation = () => {
       form.resetField("Subdistrict");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, provinces, allDistricts, allSubDistricts]);
+  }, [loading, provinces, districtsByProv, subDistrictsByDist]);
 
   /** province changed */
   const handleProvinceChange = (provinceName) => {
     form.setValue("Province", provinceName, { shouldDirty: true });
-
-    // reset หลังเลือกจังหวัด
     form.resetField("District");
     form.resetField("Subdistrict");
 
     const p = provinces.find((x) => x.name_th === provinceName);
-    const ds = p
-      ? allDistricts.filter((d) => String(d.province_id) === String(p.id))
-      : [];
+    const ds = p ? districtsByProv.get(String(p.id)) || [] : [];
     setDistricts(ds);
     setSubDistricts([]);
   };
@@ -142,9 +166,7 @@ const PostLocation = () => {
     form.resetField("Subdistrict");
 
     const d = allDistricts.find((x) => x.name_th === districtName);
-    const subs = d
-      ? allSubDistricts.filter((sd) => String(sd.district_id) === String(d.id))
-      : [];
+    const subs = d ? subDistrictsByDist.get(String(d.id)) || [] : [];
     setSubDistricts(subs);
   };
 
@@ -159,6 +181,8 @@ const PostLocation = () => {
     if (!ok) return;
     navigate("/seller/post-for-sale/detail");
   };
+
+  const disableNext = loading;
 
   return (
     <PostLayout currentStep={1}>
@@ -190,7 +214,11 @@ const PostLocation = () => {
             </div>
 
             {/* Form */}
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-6"
+              noValidate
+            >
               {/* จังหวัด */}
               <FormField
                 control={form.control}
@@ -309,13 +337,22 @@ const PostLocation = () => {
               <FormField
                 control={form.control}
                 name="Address"
-                render={({ field }) => (
+                render={({ field, fieldState }) => (
                   <FormItem>
                     <FormLabel>ที่อยู่</FormLabel>
                     <Input
-                      placeholder="เลขที่/หมู่ที่/ตรอก/ซอย/ถนน/รหัสไปรษณีย์"
                       {...field}
+                      placeholder="เลขที่/หมู่ที่/ตรอก/ซอย/ถนน/รหัสไปรษณีย์"
                       className="w-full rounded border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                      aria-invalid={!!fieldState.error}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        form.setValue("Address", v, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                        });
+                        field.onBlur();
+                      }}
                     />
                     <FormMessage />
                   </FormItem>
@@ -326,14 +363,23 @@ const PostLocation = () => {
               <FormField
                 control={form.control}
                 name="LinkMap"
-                render={({ field }) => (
+                render={({ field, fieldState }) => (
                   <FormItem>
                     <FormLabel>ลิงก์ Google Map (ถ้ามี)</FormLabel>
                     <input
                       type="url"
-                      placeholder="https://maps.google.com/..."
                       {...field}
+                      placeholder="https://maps.google.com/..."
                       className="w-full rounded border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                      aria-invalid={!!fieldState.error}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        form.setValue("LinkMap", v, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                        });
+                        field.onBlur();
+                      }}
                     />
                     <FormMessage />
                   </FormItem>
@@ -349,8 +395,12 @@ const PostLocation = () => {
                 >
                   ย้อนกลับ
                 </Button>
-                <Button type="submit" className="min-w-[120px]">
-                  ถัดไป
+                <Button
+                  type="submit"
+                  className="min-w-[120px]"
+                  disabled={disableNext}
+                >
+                  {disableNext ? "กำลังโหลด..." : "ถัดไป"}
                 </Button>
               </div>
             </form>

@@ -1,17 +1,42 @@
 // src/pages/Profile/ProfileSeller.jsx
-import { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { FaUser, FaHome, FaBell, FaFileAlt } from "react-icons/fa";
 import { useAuth } from "@/context/AuthContext";
-import SellerInfo from "./SellerInfo";
-import SellerPost from "./SellerPost";
-import SellerNoti from "./SellerNoti";
-import SellerDoc from "./SellerDoc";
+
+// 👉 ปรับเป็น Lazy imports (ปรับ path ให้ตรงโครงสร้างโปรเจกต์ของคุณ)
+const SellerInfo = lazy(() => import("./SellerInfo"));
+const SellerPost = lazy(() => import("./SellerPost"));
+const SellerNoti = lazy(() => import("./SellerNoti"));
+const SellerDoc = lazy(() => import("./SellerDoc"));
+
+// สเกเลตันง่าย ๆ ระหว่างโหลดแท็บ
+const LoadingPane = () => (
+  <div className="p-6 text-gray-600">กำลังโหลดข้อมูล...</div>
+);
+
+// ป้องกัน URL แปลก ๆ
+const isSafeHttpUrl = (u) => {
+  if (!u) return false;
+  try {
+    const x = new URL(u, window.location.origin);
+    return x.protocol === "http:" || x.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
 
 const ProfileSeller = () => {
   const { authUser, loading } = useAuth();
-  const [selectedTab, setSelectedTab] = useState("info");
 
-  // ✅ ไม่มี Dashboard แล้ว
+  // Persist tab: โหลดค่าจาก localStorage และบันทึกกลับเมื่อเปลี่ยน
+  const [selectedTab, setSelectedTab] = useState(() => {
+    return localStorage.getItem("sellerTab") || "info";
+  });
+  useEffect(() => {
+    localStorage.setItem("sellerTab", selectedTab);
+  }, [selectedTab]);
+
+  // แท็บ (icon เป็น instance คงที่ ไม่ก่อ re-render)
   const tabs = useMemo(
     () => [
       { label: "ข้อมูลผู้ขาย", key: "info", icon: <FaUser className="mr-2" /> },
@@ -21,8 +46,7 @@ const ProfileSeller = () => {
     ],
     []
   );
-
-  const currentTab = tabs.find((t) => t.key === selectedTab);
+  const currentTab = tabs.find((t) => t.key === selectedTab) || tabs[0];
 
   if (loading) {
     return (
@@ -40,11 +64,25 @@ const ProfileSeller = () => {
     );
   }
 
-  const displayName =
-    (authUser?.First_name || authUser?.firstName || "ผู้ขาย") +
-    (authUser?.Last_name || authUser?.lastName
-      ? ` ${authUser?.Last_name || authUser?.lastName}`
-      : "");
+  const displayName = useMemo(() => {
+    const fn = authUser?.First_name || authUser?.firstName || "ผู้ขาย";
+    const ln = authUser?.Last_name || authUser?.lastName || "";
+    return ln ? `${fn} ${ln}` : fn;
+  }, [
+    authUser?.First_name,
+    authUser?.Last_name,
+    authUser?.firstName,
+    authUser?.lastName,
+  ]);
+
+  // avatar: ถ้า image เป็น http/https ใช้เลย ไม่งั้น fallback เป็น UI Avatars
+  const avatarUrl = useMemo(() => {
+    const candidate = authUser?.image;
+    if (isSafeHttpUrl(candidate)) return candidate;
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      displayName
+    )}`;
+  }, [authUser?.image, displayName]);
 
   return (
     <div className="min-h-screen bg-[#ecf0f1] px-4 md:px-8 py-8 md:py-10">
@@ -58,15 +96,16 @@ const ProfileSeller = () => {
           {/* User Info */}
           <div className="mb-8 md:mb-10 flex items-center space-x-4">
             <img
-              src={
-                authUser?.image ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                  displayName
-                )}`
-              }
+              src={avatarUrl}
               alt="รูปโปรไฟล์ผู้ขาย"
               className="w-12 h-12 rounded-full object-cover"
               referrerPolicy="no-referrer"
+              decoding="async"
+              onError={(e) => {
+                e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                  displayName
+                )}`;
+              }}
             />
             <div>
               <p className="text-xs md:text-sm text-gray-300">สวัสดี</p>
@@ -85,6 +124,8 @@ const ProfileSeller = () => {
                   <button
                     role="tab"
                     aria-selected={isActive}
+                    aria-controls={`panel-${tab.key}`}
+                    id={`tab-${tab.key}`}
                     onClick={() => setSelectedTab(tab.key)}
                     className={`w-full flex items-center px-4 py-3 rounded-md transition duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                       isActive ? "bg-[#34495e]" : "hover:bg-[#3e5870]"
@@ -120,11 +161,19 @@ const ProfileSeller = () => {
             <span>{currentTab?.label}</span>
           </h1>
 
-          {/* Views */}
-          {selectedTab === "info" && <SellerInfo user={authUser} />}
-          {selectedTab === "post" && <SellerPost />}
-          {selectedTab === "noti" && <SellerNoti />}
-          {selectedTab === "doc" && <SellerDoc />}
+          {/* Views (โหลดแบบ lazy + Suspense) */}
+          <section
+            id={`panel-${currentTab?.key}`}
+            role="tabpanel"
+            aria-labelledby={`tab-${currentTab?.key}`}
+          >
+            <Suspense fallback={<LoadingPane />}>
+              {selectedTab === "info" && <SellerInfo />}
+              {selectedTab === "post" && <SellerPost />}
+              {selectedTab === "noti" && <SellerNoti />}
+              {selectedTab === "doc" && <SellerDoc />}
+            </Suspense>
+          </section>
         </main>
       </div>
     </div>

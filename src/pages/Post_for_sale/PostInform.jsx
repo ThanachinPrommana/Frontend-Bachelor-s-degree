@@ -18,18 +18,58 @@ import { User, Phone, MessageCircle, Facebook, Info } from "lucide-react";
 import { postInformSchema } from "@/components/schemas/postSchemas/postInformSchema";
 import { validateStep } from "@/lib/zodRHF";
 
+/* ========= helpers ========= */
+/** ปรับ URL ให้ปลอดภัย: เติม https:// ถ้าไม่มี และให้เฉพาะ http/https เท่านั้น */
+const normalizeUrl = (val) => {
+  if (!val) return "";
+  const raw = String(val).trim();
+  if (!raw) return "";
+  const withProto = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const u = new URL(withProto);
+    if (!/^https?:$/i.test(u.protocol)) return "";
+    return u.toString();
+  } catch {
+    return "";
+  }
+};
+
+/** ล้างค่าสำหรับบันทึกในฟอร์ม */
+const sanitize = (v) => ({
+  ...v,
+  Name: v?.Name?.trim() || "",
+  // เก็บเฉพาะตัวเลข และ trim; ตัวอย่างไทยต้อง 10 หลักขึ้นต้น 0 (เช็คอีกชั้นใน zod)
+  Phone: (v?.Phone || "").replace(/\D+/g, "").trim(),
+  Link_line: normalizeUrl(v?.Link_line),
+  Link_facbook: normalizeUrl(v?.Link_facbook),
+  // Contract_Seller: v?.Contract_Seller?.trim() || "",
+});
+
 const PostInform = () => {
   const navigate = useNavigate();
   const form = useFormContext();
 
   const onSubmit = () => {
+    // validate เฉพาะช่องของ step นี้
     const ok = validateStep(form, postInformSchema, [
       "Name",
       "Phone",
       "Link_line",
       "Link_facbook",
+      // "Contract_Seller",
     ]);
     if (!ok) return;
+
+    // sanitize ก่อนขยับ step
+    const current = form.getValues();
+    const nextValues = sanitize(current);
+
+    // อัปเดตกลับเข้า form (shouldUnregister: false ทำให้ค่าคงอยู่ทุกหน้า)
+    form.reset(
+      { ...current, ...nextValues },
+      { keepDirty: true, keepTouched: true }
+    );
+
     navigate("/seller/post-for-sale/upload");
   };
 
@@ -76,6 +116,10 @@ const PostInform = () => {
                           {...field}
                           placeholder="นายสมชาย บ้านดี"
                           className="pl-9 h-11"
+                          autoComplete="name"
+                          autoCapitalize="words"
+                          onBlur={(e) => field.onChange(e.target.value.trim())}
+                          aria-invalid={!!form.formState.errors?.Name}
                         />
                       </div>
                       <FormMessage />
@@ -83,7 +127,7 @@ const PostInform = () => {
                   )}
                 />
 
-                {/* เบอร์โทรศัพท์ */}
+                {/* เบอร์โทรศัพท์ (ไทย 10 หลัก เริ่มด้วย 0) */}
                 <FormField
                   control={form.control}
                   name="Phone"
@@ -95,8 +139,26 @@ const PostInform = () => {
                         <Input
                           {...field}
                           inputMode="tel"
+                          autoComplete="tel-national"
                           placeholder="0812345678"
                           className="pl-9 h-11"
+                          maxLength={10}
+                          pattern="^0\d{9}$"
+                          title="กรุณากรอกเบอร์โทรศัพท์ไทย 10 หลัก (เริ่มด้วย 0)"
+                          onBlur={(e) =>
+                            field.onChange(
+                              e.target.value.replace(/\D+/g, "").trim()
+                            )
+                          }
+                          onPaste={(e) => {
+                            const text = (
+                              e.clipboardData || window.clipboardData
+                            ).getData("text");
+                            const digits = text.replace(/\D+/g, "");
+                            e.preventDefault();
+                            field.onChange(digits.slice(0, 10));
+                          }}
+                          aria-invalid={!!form.formState.errors?.Phone}
                         />
                       </div>
                       <FormMessage />
@@ -127,6 +189,11 @@ const PostInform = () => {
                           type="url"
                           placeholder="https://line.me/ti/p/..."
                           className="pl-9 h-11"
+                          autoComplete="url"
+                          onBlur={(e) =>
+                            field.onChange(normalizeUrl(e.target.value))
+                          }
+                          aria-invalid={!!form.formState.errors?.Link_line}
                         />
                       </div>
                       <FormMessage />
@@ -148,6 +215,11 @@ const PostInform = () => {
                           type="url"
                           placeholder="https://facebook.com/username"
                           className="pl-9 h-11"
+                          autoComplete="url"
+                          onBlur={(e) =>
+                            field.onChange(normalizeUrl(e.target.value))
+                          }
+                          aria-invalid={!!form.formState.errors?.Link_facbook}
                         />
                       </div>
                       <FormMessage />
@@ -156,8 +228,7 @@ const PostInform = () => {
                 />
               </div>
 
-              {/* (ถ้ามี) เงื่อนไข/ข้อตกลงผู้ขาย */}
-              {/* 
+              {/* (ถ้ามี) เงื่อนไข/ข้อตกลงผู้ขาย 
               <FormField
                 control={form.control}
                 name="Contract_Seller"
@@ -168,6 +239,7 @@ const PostInform = () => {
                       {...field}
                       placeholder="เช่น นัดดูห้องวันทำการ, เงื่อนไขค่าธรรมเนียม"
                       className="h-11"
+                      onBlur={(e) => field.onChange(e.target.value.trim())}
                     />
                     <FormMessage />
                   </FormItem>

@@ -1,3 +1,4 @@
+// src/pages/Post_for_sale/PostDetail.jsx
 import React from "react";
 import { useFormContext } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
@@ -17,42 +18,63 @@ import { validateStep } from "@/lib/zodRHF";
 
 const currentYear = new Date().getFullYear();
 
-const numOpt = z.preprocess(
-  (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
-  z.number().min(0).optional()
-);
+/* ------------ helpers: แปลงเลขให้ถูกชนิด ------------ */
+const toFloatOrUndef = (v) => {
+  if (v === "" || v === null || v === undefined) return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+};
+const toIntOrUndef = (v) => {
+  if (v === "" || v === null || v === undefined) return undefined;
+  const n = parseInt(String(v), 10);
+  return Number.isFinite(n) ? n : undefined;
+};
 
-const numReq = z.preprocess(
-  (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
-  z.number().min(0)
-);
+/* ------------ Prisma enums (จำกัดค่าที่รับ) ------------ */
+const LandmarkEnum = z.enum([
+  "BTS_MRT",
+  "School",
+  "Hospital",
+  "Mall_Market",
+  "Park",
+]);
+const AmenityEnum = z.enum([
+  "Swimming_Pool",
+  "Fitness_Center",
+  "Co_working_Space",
+  "Pet_Friendly",
+]);
 
-const yearOpt = z.preprocess(
-  (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
-  z
-    .number()
-    .int()
-    .min(1800, "ปีที่สร้างไม่สมเหตุสมผล")
-    .max(currentYear + 1, "ปีที่สร้างเกินจริง")
-    .optional()
-);
+/* ------------ Year_Built: Prisma = String? (ปี 4 หลัก) ------------ */
+const yearStringOpt = z
+  .string()
+  .trim()
+  .regex(/^\d{4}$/, "กรุณากรอกปี 4 หลัก")
+  .transform((s) => Number(s))
+  .refine((y) => y >= 1800 && y <= currentYear + 1, "ปีที่สร้างไม่สมเหตุสมผล")
+  .transform((y) => String(y))
+  .optional();
 
+/* ------------ Schema ใช้ตรวจหน้า Detail เท่านั้น ------------ */
 const detailSchema = z.object({
   categoryId: z.string().min(1, "กรุณาเลือกประเภททรัพย์สิน"),
-  Usable_Area: numOpt,
-  Land_Size: numOpt,
-  Total_Rooms: numOpt,
-  Year_Built: yearOpt,
-  Bedrooms: numReq,
-  Bathroom: numReq,
-  floor: numOpt, // จำนวนชั้น (ไม่บังคับ)
-  Nearby_Landmarks: z.array(z.string()).optional(),
-  Additional_Amenities: z.array(z.string()).optional(),
-  Parking_Space: numOpt,
-  notes: z.string().optional(),
+  // ทศนิยมได้
+  Usable_Area: z.preprocess(toFloatOrUndef, z.number().min(0).optional()),
+  Land_Size: z.preprocess(toFloatOrUndef, z.number().min(0).optional()),
+  // จำนวนเต็ม
+  Total_Rooms: z.preprocess(toIntOrUndef, z.number().int().min(0).optional()),
+  Bedrooms: z.preprocess(toIntOrUndef, z.number().int().min(0)),
+  Bathroom: z.preprocess(toIntOrUndef, z.number().int().min(0)),
+  floor: z.preprocess(toIntOrUndef, z.number().int().min(0).optional()),
+  Parking_Space: z.preprocess(toIntOrUndef, z.number().int().min(0).optional()),
+  // Year_Built เป็น string? ใน Prisma
+  Year_Built: yearStringOpt,
+  // arrays ต้องเป็นค่าที่อยู่ใน enum เท่านั้น
+  Nearby_Landmarks: z.array(LandmarkEnum).optional(),
+  Additional_Amenities: z.array(AmenityEnum).optional(),
 });
 
-// แสดงผลไทย แต่ส่งค่า id/enum เดิม
+// แสดงผลไทย แต่ส่งค่า id เดิม (ปรับตามฐานข้อมูลของคุณ)
 const categories = [
   { id: "cmegzfdya0006w2bwq5d8alc7", label: "คอนโดมิเนียม" },
   { id: "cmegzfhx70007w2bwp63cbc1w", label: "บ้านเดี่ยว" },
@@ -110,7 +132,6 @@ const PostDetail = () => {
       "Nearby_Landmarks",
       "Additional_Amenities",
       "Parking_Space",
-      "notes",
     ]);
     if (!ok) return;
     navigate("/seller/post-for-sale/price");
@@ -119,7 +140,6 @@ const PostDetail = () => {
   return (
     <PostLayout currentStep={2}>
       <div className="flex justify-center">
-        {/* ⬇️ พื้นหลัง/การ์ดกลับสไตล์เดิมให้เข้ากับหน้าอื่น */}
         <Card className="w-full max-w-3xl shadow-xl border-0 ring-1 ring-black/5">
           <CardContent className="py-8 px-6 md:px-8 space-y-8">
             {/* Header */}
@@ -143,7 +163,11 @@ const PostDetail = () => {
             </div>
 
             {/* Form */}
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-8"
+              noValidate
+            >
               {/* ประเภททรัพย์สิน */}
               <FormField
                 control={form.control}
@@ -178,7 +202,7 @@ const PostDetail = () => {
                 )}
               />
 
-              {/* พื้นที่/ที่ดิน/ปีที่สร้าง (จัดให้เสมอกัน) */}
+              {/* พื้นที่/ที่ดิน/ปีที่สร้าง */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField
                   name="Usable_Area"
@@ -192,10 +216,21 @@ const PostDetail = () => {
                         placeholder="เช่น 120"
                         {...field}
                         value={field.value ?? ""}
-                        onChange={(e) => field.onChange(e.target.value)}
+                        onChange={(e) =>
+                          form.setValue(
+                            "Usable_Area",
+                            toFloatOrUndef(e.target.value),
+                            {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            }
+                          )
+                        }
+                        min={0}
+                        step="0.01"
+                        onWheel={(e) => e.currentTarget.blur()}
                         className="h-11"
                       />
-                      {/* helper ว่างเพื่อดันความสูงให้เท่าคอลัมน์ขวา */}
                       <p className="text-xs mt-1 h-5 invisible">placeholder</p>
                       <FormMessage />
                     </FormItem>
@@ -213,10 +248,21 @@ const PostDetail = () => {
                         placeholder="เช่น 50"
                         {...field}
                         value={field.value ?? ""}
-                        onChange={(e) => field.onChange(e.target.value)}
+                        onChange={(e) =>
+                          form.setValue(
+                            "Land_Size",
+                            toFloatOrUndef(e.target.value),
+                            {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            }
+                          )
+                        }
+                        min={0}
+                        step="0.01"
+                        onWheel={(e) => e.currentTarget.blur()}
                         className="h-11"
                       />
-                      {/* helper ว่างให้สูงเท่ากัน */}
                       <p className="text-xs mt-1 h-5 invisible">placeholder</p>
                       <FormMessage />
                     </FormItem>
@@ -234,10 +280,22 @@ const PostDetail = () => {
                         placeholder={`เช่น ${currentYear}`}
                         {...field}
                         value={field.value ?? ""}
-                        onChange={(e) => field.onChange(e.target.value)}
+                        onChange={(e) => {
+                          const raw = e.target.value.trim(); // เก็บเป็น string ให้ตรง Prisma
+                          form.setValue(
+                            "Year_Built",
+                            raw === "" ? undefined : raw,
+                            {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            }
+                          );
+                        }}
+                        min={1800}
+                        max={currentYear + 1}
+                        onWheel={(e) => e.currentTarget.blur()}
                         className="h-11"
                       />
-                      {/* helper จริง */}
                       <p className="text-xs text-muted-foreground mt-1 h-5">
                         รองรับช่วงปี 1800 – {currentYear + 1}
                       </p>
@@ -260,7 +318,19 @@ const PostDetail = () => {
                         inputMode="numeric"
                         {...field}
                         value={field.value ?? ""}
-                        onChange={(e) => field.onChange(e.target.value)}
+                        onChange={(e) =>
+                          form.setValue(
+                            "Bedrooms",
+                            toIntOrUndef(e.target.value),
+                            {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            }
+                          )
+                        }
+                        min={0}
+                        step="1"
+                        onWheel={(e) => e.currentTarget.blur()}
                         className="h-11"
                       />
                       <FormMessage />
@@ -278,7 +348,19 @@ const PostDetail = () => {
                         inputMode="numeric"
                         {...field}
                         value={field.value ?? ""}
-                        onChange={(e) => field.onChange(e.target.value)}
+                        onChange={(e) =>
+                          form.setValue(
+                            "Bathroom",
+                            toIntOrUndef(e.target.value),
+                            {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            }
+                          )
+                        }
+                        min={0}
+                        step="1"
+                        onWheel={(e) => e.currentTarget.blur()}
                         className="h-11"
                       />
                       <FormMessage />
@@ -296,7 +378,19 @@ const PostDetail = () => {
                         inputMode="numeric"
                         {...field}
                         value={field.value ?? ""}
-                        onChange={(e) => field.onChange(e.target.value)}
+                        onChange={(e) =>
+                          form.setValue(
+                            "Total_Rooms",
+                            toIntOrUndef(e.target.value),
+                            {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            }
+                          )
+                        }
+                        min={0}
+                        step="1"
+                        onWheel={(e) => e.currentTarget.blur()}
                         className="h-11"
                       />
                       <FormMessage />
@@ -315,7 +409,15 @@ const PostDetail = () => {
                         placeholder="เช่น 2"
                         {...field}
                         value={field.value ?? ""}
-                        onChange={(e) => field.onChange(e.target.value)}
+                        onChange={(e) =>
+                          form.setValue("floor", toIntOrUndef(e.target.value), {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          })
+                        }
+                        min={0}
+                        step="1"
+                        onWheel={(e) => e.currentTarget.blur()}
                         className="h-11"
                       />
                       <FormMessage />
@@ -403,7 +505,17 @@ const PostDetail = () => {
                     <select
                       className="w-full h-11 px-3 border rounded bg-background"
                       value={field.value ?? ""}
-                      onChange={(e) => field.onChange(e.target.value)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        form.setValue(
+                          "Parking_Space",
+                          v === "" ? undefined : parseInt(v, 10),
+                          {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          }
+                        );
+                      }}
                     >
                       <option value="">เลือกจำนวนที่จอด</option>
                       <option value="0">ไม่มีที่จอด</option>

@@ -1,10 +1,12 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer'; // <-- ให้เหลือ - ตัวเดียว
+
+
 Font.register({
   family: 'Sarabun',
   fonts: [
-    { src: '/fonts/Sarabun-Regular.ttf' }, // path to font file
-    { src: '/fonts/Sarabun-Bold.ttf', fontWeight: 'bold' },
+    { src: '/public/fonts/Sarabun-Regular.ttf' }, // path to font file
+    { src: '/public/fonts/Sarabun-Bold.ttf', fontWeight: 'bold' },
   ],
 });
 // สร้าง Stylesheet (เหมือนเดิม)
@@ -14,7 +16,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Sarabun',
     padding: 50,
     fontSize: 11,
-    lineHeight: 1.2,
+    lineHeight: 1.3,
     color: '#333'
   },
   header: {
@@ -76,6 +78,19 @@ const styles = StyleSheet.create({
   },
 });
 
+const wordBreak = (word) => {
+  // 1. สร้างเครื่องมือตัดคำสำหรับภาษาไทย ('th')
+  const segmenter = new Intl.Segmenter('th', { granularity: 'word' });
+
+  // 2. ทำการตัดคำจากประโยคที่ได้รับ
+  const segments = segmenter.segment(word);
+
+  // 3. แปลงผลลัพธ์ให้อยู่ในรูปแบบ Array ของคำจริงๆ (ไม่เอาเว้นวรรคหรือเครื่องหมาย)
+  // แล้วส่งค่ากลับไปให้ @react-pdf/renderer ใช้งาน
+  return Array.from(segments)
+    .filter((segment) => segment.isWordLike)
+    .map((segment) => segment.segment);
+};
 
 // ***** 1. เพิ่มฟังก์ชัน Helper นี้เข้าไป *****
 const addSoftHyphens = (text) => {
@@ -88,24 +103,24 @@ const addSoftHyphens = (text) => {
 };
 
 
-const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signature, 
-  witness2Signature,sellerSignature2,buyerSignature2,
-  witness1Signature2,witness2Signature3 }) => (
+const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signature,
+  witness2Signature, sellerSignature2, buyerSignature2,
+  witness1Signature2, witness2Signature3 }) => (
 
   <Document>
-    <Page size="A4" style={styles.page}>
+    <Page size="A4" style={styles.page} hyphenationCallback={wordBreak}>
       {/* ***** 2. นำฟังก์ชัน addSoftHyphens ไปใช้กับข้อความต่างๆ ***** */}
-      <Text style={styles.header}>{addSoftHyphens('สัญญาจะซื้อจะขาย หรือ สัญญาวางเงินมัดจำา')}</Text>
+      <Text style={styles.header}>สัญญาจะซื้อจะขาย หรือ สัญญาวางเงินมัดจำา</Text>
 
       {/* Date and Place */}
       <View style={{ ...styles.section, alignItems: 'flex-end' }}>
         <View style={{ width: '60%' }}>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens('สัญญานี้ทำที่:')}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.contractPlace)}</Text>
+            <Text>สัญญานี้ทำที่:</Text>
+            <Text style={styles.input}>{data?.contractPlace || ""}</Text>
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens('ในวันที่:')}</Text>
+            <Text>ในวันที่:</Text>
             <Text style={styles.input}>{`${data?.date || ''} ${data?.month || ''} ${data?.year || ''}`}</Text>
           </View>
         </View>
@@ -115,17 +130,17 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
       <View style={styles.section}>
 
         <View style={styles.flexRow}>
-          <Text style={styles.label}>{addSoftHyphens('ระหว่าง')}</Text>
-          <Text style={{ ...styles.input }}>{addSoftHyphens(data?.sellerName)}</Text>
-          <Text>{addSoftHyphens('อายุ')}</Text>
+          <Text style={styles.label}>ระหว่าง</Text>
+          <Text style={{ ...styles.input }}>{data?.sellerName || ""}</Text>
+          <Text>อายุ</Text>
           <Text style={{ ...styles.input, width: 40, flexGrow: 0 }}>{data?.sellerAge || ' '}</Text>
-          <Text>{addSoftHyphens('ปี')}</Text>
+          <Text>ปี</Text>
         </View>
 
         <View style={styles.flexRow}>
           {/* จุดที่มีปัญหาบ่อย */}
-          <Text>{addSoftHyphens('หมายเลขบัตรประจำตัวประชาชน')}</Text>
-          <Text style={styles.input}>{addSoftHyphens(data?.sellerID)}</Text>
+          <Text>หมายเลขบัตรประจำตัวประชาชนน</Text>
+          <Text style={styles.input}>{data?.sellerID || ""}</Text>
         </View>
 
         <View style={styles.flexRow}>
@@ -140,31 +155,31 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
         </View>
 
         <View style={styles.flexRow}>
-          <Text>{addSoftHyphens("ตำบล/แขวง")}</Text>
+          <Text>ตำบล/แขวงง</Text>
           <Text style={styles.input}>{data?.sellerSubDistrict || ' '}</Text>
-          <Text>{addSoftHyphens("อำเภอ/เขต")}</Text>
+          <Text>อำเภอ/เขตต</Text>
           <Text style={styles.input}>{data?.sellerDistrict || ' '}</Text>
           <Text style={styles.label}>จังหวัด</Text>
           <Text style={styles.input}>{data?.sellerProvince || ' '}</Text>
         </View>
 
 
-        <Text>{addSoftHyphens('ซึ่งต่อไปในสัญญานี้จะเรียกว่า "')}<Text style={styles.bold}>{addSoftHyphens('ผู้จะขาย')}</Text>{addSoftHyphens('" ฝ่ายหนึ่ง')}</Text>
+        <Text>ซึ่งต่อไปในสัญญานี้จะเรียกว่า<Text style={styles.bold}>ผู้จะขาย</Text>ฝ่ายหนึ่ง</Text>
       </View>
 
       {/* Buyer Section */}
       <View style={styles.section}>
         <View style={styles.flexRow}>
-          <Text>{addSoftHyphens('กับ')}</Text>
-          <Text style={styles.input}>{addSoftHyphens(data?.buyerName)}</Text>
-          <Text>{addSoftHyphens('อายุ')}</Text>
+          <Text>กับ</Text>
+          <Text style={styles.input}>{data?.buyerName || ""}</Text>
+          <Text>อายุ</Text>
           <Text style={{ ...styles.input, width: 40, flexGrow: 0 }}>{data?.buyerAge || ' '}</Text>
-          <Text>{addSoftHyphens('ปี')}</Text>
+          <Text>ปี</Text>
         </View>
 
         <View style={styles.flexRow}>
-          <Text>{addSoftHyphens('หมายเลขบัตรประจำตัวประชาชน')}</Text>
-          <Text style={styles.input}>{addSoftHyphens(data?.buyerID)}</Text>
+          <Text>หมายเลขบัตรประจำตัวประชาชนน</Text>
+          <Text style={styles.input}>{data?.buyerID || ""}</Text>
         </View>
 
         <View style={styles.flexRow}>
@@ -180,122 +195,122 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
 
 
         <View style={styles.flexRow}>
-          <Text>{addSoftHyphens("ตำบล/แขวง")}</Text>
+          <Text>ตำบล/แขวงง</Text>
           <Text style={styles.input}>{data?.buyerSubDistrict || ' '}</Text>
-          <Text>{addSoftHyphens("อำเภอ/เขต")}</Text>
+          <Text>อำเภอ/เขตต</Text>
           <Text style={styles.input}>{data?.buyerDistrict || ' '}</Text>
           <Text style={styles.label}>จังหวัด</Text>
           <Text style={styles.input}>{data?.buyerProvince || ' '}</Text>
         </View>
 
-        <Text>{addSoftHyphens('ซึ่งต่อไปในสัญญานี้จะเรียกว่า "')}<Text style={styles.bold}>{addSoftHyphens('ผู้จะซื้อ')}</Text>{addSoftHyphens('" ฝ่ายหนึ่ง')}</Text>
+        <Text>ซึ่งต่อไปในสัญญานี้จะเรียกว่า<Text style={styles.bold}>ผู้จะซื้อ</Text>ฝ่ายหนึ่ง</Text>
       </View>
 
       {/* Clauses */}
       <View style={styles.section}>
-        <Text style={styles.bold}>{addSoftHyphens('ทั้งสองฝ่ายตกลงทำสัญญาฉบับนี้ขึ้นด้วยความสมัครใจมีข้อความดังต่อไปนี้')}</Text>
+        <Text style={styles.bold}>ทั้งสองฝ่ายตกลงทำสัญญาฉบับนี้ขึ้นด้วยความสมัครใจมีข้อความดังต่อไปนี้</Text>
 
         <View style={{ marginTop: 8 }}>
           {/* ประโยคยาวๆ ที่เป็นต้นเหตุของปัญหา */}
-          <Text>{addSoftHyphens('ข้อ 1. ผู้ขายเป็นเจ้าของ')}</Text>
+          <Text>ข้อ 1. ผู้ขายเป็นเจ้าของ</Text>
           <View style={styles.flexRow}>
-            <Text style={styles.input}>{addSoftHyphens(data?.ownSeller)}</Text>
+            <Text style={styles.input}>{data?.ownSeller || ""}</Text>
           </View>
 
-          <Text>{addSoftHyphens('ข้อ 2. ผู้จะขายตกลงจะขายและผู้จะซื้อตกลงจะซื้อ ดังกล่าวในข้อ 1. โดยปลอดจากภาวะผูกพันหรือภาระติดพันใดๆ')}</Text>
+          <Text>ข้อ 2. ผู้จะขายตกลงจะขายและผู้จะซื้อตกลงจะซื้อ ดังกล่าวในข้อ 1. โดยปลอดจากภาวะผูกพันหรือภาระติดพันใดๆ</Text>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens('ในราคา')}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.price)}</Text>
-            <Text>{addSoftHyphens("บาท")}</Text>
-            <Text>{addSoftHyphens("(")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.pricefont)}</Text>
-            <Text>{addSoftHyphens(")")}</Text>
+            <Text>ในราคา</Text>
+            <Text style={styles.input}>{data?.price || ""}</Text>
+            <Text>บาท</Text>
+            <Text>(</Text>
+            <Text style={styles.input}>{data?.pricefont || ""}</Text>
+            <Text>)</Text>
           </View>
 
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens('ข้อ 3. ในวันทำสัญญาฉบับนี้ ผู้จะซื้อตกลงวางเงินมัดจำบางส่วนให้แก่ผู้จะขายเป็นจำนวนเงิน')}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.somecontract)}</Text>
-            <Text>{addSoftHyphens("บาท")}</Text>
+            <Text>ข้อ 3. ในวันทำสัญญาฉบับนี้ ผู้จะซื้อตกลงวางเงินมัดจำบางส่วนให้แก่ผู้จะขายเป็นจำนวนเงินงิน</Text>
+            <Text style={styles.input}>{data?.somecontract || ""}</Text>
+            <Text>บาท</Text>
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens("(")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.pricefont3)}</Text>
-            <Text>{addSoftHyphens(")")}</Text>
-            <Text>{addSoftHyphens("โดยชำระเป็นเงินสด/เช็คธนาคาร")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.bankcheck)}</Text>
+            <Text>(</Text>
+            <Text style={styles.input}>{data?.pricefont3 || ""}</Text>
+            <Text>)</Text>
+            <Text>โดยชำระเป็นเงินสด/เช็คธนาคารร</Text>
+            <Text style={styles.input}>{data?.bankcheck || ""}</Text>
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens("สาขา")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.remainingAmount)}</Text>
-            <Text>{addSoftHyphens("เลขที่เช็ค")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.checkNo)}</Text>
-            <Text>{addSoftHyphens("สั่งจ่ายเงินวันที่")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.datepay)}</Text>
+            <Text>สาขา</Text>
+            <Text style={styles.input}>{data?.remainingAmount || ""}</Text>
+            <Text>เลขที่เช็ค</Text>
+            <Text style={styles.input}>{data?.checkNo || ""}</Text>
+            <Text>สั่งจ่ายเงินวันที่</Text>
+            <Text style={styles.input}>{data?.datepay || ""}</Text>
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens("โอนเงินเข้าบัญชี")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.toaccount)}</Text>
-            <Text>{addSoftHyphens("ชื่อบัญชี")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.nameaccount1)}</Text>
-            <Text>{addSoftHyphens("เลขที่บัญชี")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.accountNo)}</Text>
+            <Text>โอนเงินเข้าบัญชี</Text>
+            <Text style={styles.input}>{data?.toaccount || ""}</Text>
+            <Text>ชื่อบัญชี</Text>
+            <Text style={styles.input}>{data?.nameaccount1 || ""}</Text>
+            <Text>เลขที่บัญชี</Text>
+            <Text style={styles.input}>{data?.accountNo || ""}</Text>
           </View>
-          <Text>{addSoftHyphens('ซึ่งผู้ขายได้รับไว้เรียบร้อยถูกต้องครบถ้วนแล้ว และคู่สัญญา ได้ถือว่าเงินมัดจำดังกล่าวนี้เป็นเงินชำระราคาส่วนหนึ่ง')}</Text>
+          <Text>ซึ่งผู้ขายได้รับไว้เรียบร้อยถูกต้องครบถ้วนแล้ว และคู่สัญญา ได้ถือว่าเงินมัดจำดังกล่าวนี้เป็นเงินชำระราคาส่วนหนึ่งงง</Text>
 
         </View>
 
         <View style={{ marginTop: 8 }}>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens('ข้อ 4: ผู้ซื้อตกลงชำระราคา ส่วนที่เหลืออีก')}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.moneyleft)}</Text>
-            <Text>{addSoftHyphens("บาท")}</Text>
+            <Text>ข้อ 4: ผู้ซื้อตกลงชำระราคา ส่วนที่เหลืออีกก</Text>
+            <Text style={styles.input}>{data?.moneyleft || ""}</Text>
+            <Text>บาท</Text>
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens("(")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.pricefont4)}</Text>
-            <Text>{addSoftHyphens(")")}</Text>
-            <Text>{addSoftHyphens("ภายในวันที่")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.dateofpay5)}</Text>
+            <Text>(</Text>
+            <Text style={styles.input}>{data?.pricefont4 || ""}</Text>
+            <Text>)</Text>
+            <Text>ภายในวันที่</Text>
+            <Text style={styles.input}>{data?.dateofpay5 || ""}</Text>
           </View>
         </View>
 
         <View style={{ marginTop: 8 }}>
-          <Text>{addSoftHyphens('ข้อ 5: ค่าใช้จ่ายในการโอนกรรมสิทธิ์')}</Text>
+          <Text>ข้อ 5: ค่าใช้จ่ายในการโอนกรรมสิทธิ์</Text>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens('5.1 ค่าธรรมเนียมการโอน (ผู้ออก)')}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.transferfee)}</Text>
-            <Text>{addSoftHyphens("เป็นผู้ออก")}</Text>
+            <Text>5.1 ค่าธรรมเนียมการโอน (ผู้ออก)</Text>
+            <Text style={styles.input}>{data?.transferfee || ""}</Text>
+            <Text>เป็นผู้ออก</Text>
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens('5.2 ค่าธุรกิจเฉพาะ/อากร (ผู้ออก)')}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.specificbusinessfee)}</Text>
-            <Text>{addSoftHyphens("เป็นผู้ออก")}</Text>
+            <Text>5.2 ค่าธุรกิจเฉพาะ/อากร (ผู้ออก)</Text>
+            <Text style={styles.input}>{data?.specificbusinessfee || ""}</Text>
+            <Text>เป็นผู้ออก</Text>
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens('5.3 ค่าภาษีเงินได้บุคคลธรรมดา/ภาษีเงินได้นิติบุคคล/ภาษีเงินได้มรดก(รับให้)')}</Text>
+            <Text>5.3 ค่าภาษีเงินได้บุคคลธรรมดา/ภาษีเงินได้นิติบุคคล/ภาษีเงินได้มรดก(รับให้)</Text>
           </View>
 
           <View style={styles.flexRow}>
-            <Text style={styles.input}>{addSoftHyphens(data?.incomeTax)}</Text>
+            <Text style={styles.input}>{data?.incomeTax || ""}</Text>
             {/* (ข้อสังเกต) แก้ไขจาก <span> เป็น <Text> เพราะ PDF Renderer ไม่รู้จัก HTML tag */}
-            <Text>{addSoftHyphens('เป็นผู้ออก')}</Text>
+            <Text>เป็นผู้ออก</Text>
           </View>
-          <Text>{addSoftHyphens('5.4 ค่าจดจำนอง(ถ้ามี)ผู้ซื้อจะเป็นผู้ออก')}</Text>
+          <Text>5.4 ค่าจดจำนอง(ถ้ามี)ผู้ซื้อจะเป็นผู้ออกก</Text>
           <View style={styles.flexRow}>
             {/* นี่คือประโยคที่ยาวที่สุดและมักจะมีปัญหา */}
-            <Text>{addSoftHyphens('ข้อ 6. หากผู้จะซื้อผิดสัญญา ผู้จะซื้อยอมให้ผู้จะขายริบเงินที่ได้ชำระไว้แล้วทั้งสิ้น หากผู้จะขายผิดสัญญา ')}</Text>
+            <Text>ข้อ 6. หากผู้จะซื้อผิดสัญญา ผู้จะซื้อยอมให้ผู้จะขายริบเงินที่ได้ชำระไว้แล้วทั้งสิ้น หากผู้จะขายผิดสัญญาา</Text>
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens("ผู้จะขายต้องคืนเงินที่ ได้ชำระไว้จากผู้จะซื้อทั้งหมด และยอมชดใช้ค่าเสียหายให้ผู้จะซื้อจำนวนเงิน")}</Text>
+            <Text>ผู้จะขายต้องคืนเงินที่ ได้ชำระไว้จากผู้จะซื้อทั้งหมด และยอมชดใช้ค่าเสียหายให้ผู้จะซื้อจำนวนเงินนน</Text>
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens('เท่ากับเงินที่ผู้จะซื้อได้วางมัดจำ สัญญานี้ทำขึ้นเป็นสามฉบับ แต่ละฉบับมีข้อความถูกต้องตรงกันทุกประการ')}</Text>
+            <Text>เท่ากับเงินที่ผู้จะซื้อได้วางมัดจำ สัญญานี้ทำขึ้นเป็นสามฉบับ แต่ละฉบับมีข้อความถูกต้องตรงกันทุกประการาร</Text>
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens("ทั้งสองฝ่ายต่างได้อ่านและเข้าใจดี เห็นว่าตรงตาม ความประสงค์ของตนแล้ว ")}</Text>
+            <Text>ทั้งสองฝ่ายต่างได้อ่านและเข้าใจดี เห็นว่าตรงตาม ความประสงค์ของตนแล้ว</Text>
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens("จึงได้ลงลายมือชื่อไว้เป็นสำคัญต่อหน้าพยาน")}</Text>
+            <Text>จึงได้ลงลายมือชื่อไว้เป็นสำคัญต่อหน้าพยานน</Text>
           </View>
         </View>
       </View>
@@ -310,9 +325,9 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
           </View>
 
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens("(")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.namesigseller)}</Text>
-            <Text>{addSoftHyphens(")")}</Text>
+            <Text>(</Text>
+            <Text style={styles.input}>{data?.namesigseller || ""}</Text>
+            <Text>)</Text>
           </View>
 
           <Text>(ผู้จะขาย)</Text>
@@ -324,9 +339,9 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
             {buyerSignature && <Image src={buyerSignature} style={styles.signatureImage} />}
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens("(")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.namesigbuyer)}</Text>
-            <Text>{addSoftHyphens(")")}</Text>
+            <Text>(</Text>
+            <Text style={styles.input}>{data?.namesigbuyer || ""}</Text>
+            <Text>)</Text>
           </View>
           <Text>(ผู้จะซื้อ)</Text>
         </View>
@@ -337,9 +352,9 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
             {witness1Signature && <Image src={witness1Signature} style={styles.signatureImage} />}
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens("(")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.witness1)}</Text>
-            <Text>{addSoftHyphens(")")}</Text>
+            <Text>(</Text>
+            <Text style={styles.input}>{data?.witness1 || ""}</Text>
+            <Text>)</Text>
           </View>
           <Text>(พยาน)</Text>
         </View>
@@ -350,9 +365,9 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
             {witness2Signature && <Image src={witness2Signature} style={styles.signatureImage} />}
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens("(")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.witness2)}</Text>
-            <Text>{addSoftHyphens(")")}</Text>
+            <Text>(</Text>
+            <Text style={styles.input}>{data?.witness2 || ""}</Text>
+            <Text>)</Text>
           </View>
           <Text>(พยาน)</Text>
         </View>
@@ -362,32 +377,32 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
 
     <Page size="A4" style={styles.page}>
 
-      <Text style={styles.header}>{addSoftHyphens('บันทึกข้อตกลงสัญญาจะซื้อจะขาย')}</Text>
+      <Text style={styles.header}>บันทึกข้อตกลงสัญญาจะซื้อจะขาย</Text>
       <View style={styles.flexRow}>
-        <Text>{addSoftHyphens("ผู้จะซื้อและผู้จะขายได้ตกลงกันว่าจะแจ้งซื้อขายกันที่กรมที่ดินในราคา")}</Text>
-        <Text style={styles.input}>{addSoftHyphens(data?.notification_sale)}</Text>
-        <Text>{addSoftHyphens("บาท")}</Text>
+        <Text>ผู้จะซื้อและผู้จะขายได้ตกลงกันว่าจะแจ้งซื้อขายกันที่กรมที่ดินในราคา</Text>
+        <Text style={styles.input}>{data?.notification_sale || ""}</Text>
+        <Text>บาท</Text>
       </View>
 
       <View style={styles.flexRow}>
-        <Text>{addSoftHyphens("(")}</Text>
-        <Text style={styles.input}>{addSoftHyphens(data?.pricefont5)}</Text>
-        <Text>{addSoftHyphens(")")}</Text>
-        <Text>{addSoftHyphens("ในกรณีที่แจ้งซื้อขายกันเกินกว่าราคาที่ตกลงกันดังกล่าว")}</Text>
+        <Text>(</Text>
+        <Text style={styles.input}>{data?.pricefont5 || ""}</Text>
+        <Text>)</Text>
+        <Text>ในกรณีที่แจ้งซื้อขายกันเกินกว่าราคาที่ตกลงกันดังกล่าว</Text>
       </View>
       <View style={styles.flexRow}>
-        <Text>{addSoftHyphens("ข้างต้น")}</Text>
-        <Text style={styles.input}>{addSoftHyphens(data?.realprice)}</Text>
-        <Text>{addSoftHyphens("จะต้องเป็นผู้รับผิดชอบในส่วนที่เกินทั้งหมด")}</Text>
+        <Text>ข้างต้น</Text>
+        <Text style={styles.input}>{data?.realprice || ""}</Text>
+        <Text>จะต้องเป็นผู้รับผิดชอบในส่วนที่เกินทั้งหมด</Text>
       </View>
       <View style={styles.flexRow}>
-        <Text>{addSoftHyphens("หมายเหตุ")}</Text>
-        <Text style={styles.input}>{addSoftHyphens(data?.annotation)}</Text>
+        <Text>หมายเหตุ</Text>
+        <Text style={styles.input}>{data?.annotation || ""}</Text>
       </View>
-      
-      
 
-         {/* Signature 2 */}
+
+
+      {/* Signature 2 */}
       <View style={styles.signatureContainer}>
         <View style={styles.signatureColumn}>
           <View style={styles.signatureBox}>
@@ -396,9 +411,9 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
           </View>
 
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens("(")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.namesigseller2)}</Text>
-            <Text>{addSoftHyphens(")")}</Text>
+            <Text>(</Text>
+            <Text style={styles.input}>{data?.namesigseller2 || ""}</Text>
+            <Text>)</Text>
           </View>
 
           <Text>(ผู้จะขาย)</Text>
@@ -410,9 +425,9 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
             {buyerSignature2 && <Image src={buyerSignature2} style={styles.signatureImage} />}
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens("(")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.namesigbuyer2)}</Text>
-            <Text>{addSoftHyphens(")")}</Text>
+            <Text>(</Text>
+            <Text style={styles.input}>{data?.namesigbuyer2 || ""}</Text>
+            <Text>)</Text>
           </View>
           <Text>(ผู้จะซื้อ)</Text>
         </View>
@@ -423,9 +438,9 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
             {witness1Signature2 && <Image src={witness1Signature2} style={styles.signatureImage} />}
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens("(")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.witness1sig2)}</Text>
-            <Text>{addSoftHyphens(")")}</Text>
+            <Text>(</Text>
+            <Text style={styles.input}>{data?.witness1sig2 || ""}</Text>
+            <Text>)</Text>
           </View>
           <Text>(พยาน)</Text>
         </View>
@@ -436,9 +451,9 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
             {witness2Signature3 && <Image src={witness2Signature3} style={styles.signatureImage} />}
           </View>
           <View style={styles.flexRow}>
-            <Text>{addSoftHyphens("(")}</Text>
-            <Text style={styles.input}>{addSoftHyphens(data?.witness2sig2)}</Text>
-            <Text>{addSoftHyphens(")")}</Text>
+            <Text>(</Text>
+            <Text style={styles.input}>{data?.witness2sig2 || ""}</Text>
+            <Text>)</Text>
           </View>
           <Text>(พยาน)</Text>
         </View>

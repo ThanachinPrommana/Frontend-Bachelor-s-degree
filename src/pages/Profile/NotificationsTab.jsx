@@ -1,5 +1,11 @@
 // src/pages/Profile/NotificationsTab.jsx
-import { useMemo, useState, useEffect } from "react";
+import {
+  useMemo,
+  useState,
+  useEffect,
+  useDeferredValue,
+  useCallback,
+} from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import NotificationFilters from "@/components/Notification/NotificationFilters";
@@ -67,6 +73,9 @@ export default function NotificationsTab() {
   const [status, setStatus] = useState("all"); // "all" | "UNREAD" | "READ"
   const [type, setType] = useState("all"); // "all" | <string>
 
+  // ทำให้ input search ไม่บล็อค UI ตอนพิมพ์
+  const dKeyword = useDeferredValue(keyword);
+
   // รองรับเปิดมาที่แท็บนี้ผ่าน query เช่น ?tab=notifications
   const [searchParams] = useSearchParams();
   useEffect(() => {
@@ -77,23 +86,62 @@ export default function NotificationsTab() {
     }
   }, [searchParams]);
 
-  // ติดสี/ไอคอนตามประเภท + กรองตาม keyword/status/type
+  // 1) normalize: ทำครั้งเดียวเมื่อ items เปลี่ยน (ผูก meta + เตรียมสตริงค้นหา)
+  const normalized = useMemo(() => {
+    const arr = items ?? [];
+    if (!arr.length) return [];
+    return arr.map((n) => {
+      const rawType = n.type ?? "general";
+      const tKey = String(rawType).toLowerCase();
+      const meta = TYPE_META[tKey] || TYPE_META.general;
+
+      // เตรียมสตริงค้นหา lower-case ไว้เลย เพื่อลดงานเวลาพิมพ์ทุกตัวอักษร
+      const searchBlob = `${n.title ?? ""} ${n.message ?? ""}`.toLowerCase();
+
+      // เก็บสำเนาฟิลด์ที่ใช้กรองให้แน่นอน (เลี่ยง undefined)
+      const _status = n.status ?? "UNREAD";
+      const _type = rawType;
+
+      return {
+        ...n,
+        _meta: meta,
+        _typeKey: tKey,
+        _search: searchBlob,
+        _status,
+        _type,
+      };
+    });
+  }, [items]);
+
+  // 2) filter: ใช้คีย์ที่ normalize แล้ว + keyword ที่ defer แล้ว
   const decorated = useMemo(() => {
-    const kw = keyword.trim().toLowerCase();
-    return (items ?? [])
-      .map((n) => {
-        const t = (n.type || "general").toLowerCase();
-        return { ...n, _typeKey: t, _meta: TYPE_META[t] || TYPE_META.general };
-      })
-      .filter((i) => {
-        const okKw =
-          kw === "" ||
-          `${i.title ?? ""} ${i.message ?? ""}`.toLowerCase().includes(kw);
-        const okStatus = status === "all" || i.status === status;
-        const okType = type === "all" || (i.type ?? "general") === type;
-        return okKw && okStatus && okType;
-      });
-  }, [items, keyword, status, type]);
+    const kw = dKeyword.trim().toLowerCase();
+    const needKw = kw !== "";
+    const needStat = status !== "all";
+    const needType = type !== "all";
+
+    if (!normalized.length) return normalized;
+
+    // กรองแบบ single-pass
+    const out = [];
+    for (let i = 0; i < normalized.length; i++) {
+      const it = normalized[i];
+      if (needKw && !it._search.includes(kw)) continue;
+      if (needStat && it._status !== status) continue;
+      if (needType && it._type !== type) continue;
+      out.push(it);
+    }
+    return out;
+  }, [normalized, dKeyword, status, type]);
+
+  // 3) แฮนด์เลอร์คงที่ ลด re-render ของลูก
+  const handleClearAll = useCallback(async () => {
+    if (!confirm("ต้องการลบการแจ้งเตือนทั้งหมดหรือไม่?")) return;
+    await clearAll();
+  }, [clearAll]);
+
+  const handleRemove = useCallback((id) => removeOne(id), [removeOne]);
+  const handleMarkRead = useCallback((id) => markOneRead(id), [markOneRead]);
 
   return (
     <div id="notifications-root" className="space-y-4">
@@ -107,7 +155,6 @@ export default function NotificationsTab() {
         </div>
       </div>
 
-      {/* แถบแจ้ง error (ถ้ามี) */}
       {error && (
         <Card className="border-amber-300 bg-amber-50">
           <CardContent className="p-3 text-amber-800 text-sm flex items-start gap-2">
@@ -117,7 +164,6 @@ export default function NotificationsTab() {
         </Card>
       )}
 
-      {/* ฟิลเตอร์ */}
       <NotificationFilters
         items={items}
         keyword={keyword}
@@ -133,23 +179,14 @@ export default function NotificationsTab() {
         }}
       />
 
-      {/* โซนรายการ: ให้เลื่อนเฉพาะข้างใน */}
       <Card className="rounded-xl border">
-        {/* หัวตารางเล็ก ๆ (เลือกใส่ก็ได้) */}
-        {/* <div className="px-4 py-2 border-b text-sm text-slate-600 bg-slate-50 rounded-t-xl">รายการทั้งหมด</div> */}
-
-        {/* ทำให้เป็น internal scroll */}
         <div className="max-h-[68vh] overflow-y-auto overscroll-contain pr-1">
           <NotificationList
             items={decorated}
             loading={loading}
-            onClearAll={async () => {
-              if (!confirm("ต้องการลบการแจ้งเตือนทั้งหมดหรือไม่?")) return;
-              await clearAll();
-            }}
-            onRemove={removeOne}
-            onMarkRead={markOneRead}
-            /* ถ้า NotificationList รองรับ option ต่อไปนี้ก็จะโชว์ left bar + badge (ผมเคยให้เวอร์ชันรองรับไว้แล้ว) */
+            onClearAll={handleClearAll}
+            onRemove={handleRemove}
+            onMarkRead={handleMarkRead}
             showTypeBadge
             showLeftColorBar
           />

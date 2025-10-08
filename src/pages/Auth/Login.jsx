@@ -27,6 +27,7 @@ const Login = () => {
     if (authUser) {
       if (authUser.userType === "Seller") navigate("/seller");
       else if (authUser.userType === "Buyer") navigate("/buyer");
+      else if (authUser.userType === "Admin") window.location.href = "http://localhost:8200/admin";
     }
   }, [authUser, navigate]);
 
@@ -87,9 +88,8 @@ const Login = () => {
                   อีเมล
                 </label>
                 <div
-                  className={`relative rounded-md border ${
-                    errors.Email ? "border-red-500" : "border-gray-300"
-                  } focus-within:ring-2 focus-within:ring-gray-200 focus-within:border-gray-400`}
+                  className={`relative rounded-md border ${errors.Email ? "border-red-500" : "border-gray-300"
+                    } focus-within:ring-2 focus-within:ring-gray-200 focus-within:border-gray-400`}
                 >
                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center">
                     <Mail className="w-4 h-4 text-gray-400" />
@@ -123,9 +123,8 @@ const Login = () => {
                   รหัสผ่าน
                 </label>
                 <div
-                  className={`relative rounded-md border ${
-                    errors.Password ? "border-red-500" : "border-gray-300"
-                  } focus-within:ring-2 focus-within:ring-gray-200 focus-within:border-gray-400`}
+                  className={`relative rounded-md border ${errors.Password ? "border-red-500" : "border-gray-300"
+                    } focus-within:ring-2 focus-within:ring-gray-200 focus-within:border-gray-400`}
                 >
                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center">
                     <Lock className="w-4 h-4 text-gray-400" />
