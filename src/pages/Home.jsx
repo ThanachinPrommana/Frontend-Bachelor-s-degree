@@ -11,7 +11,7 @@ import Buttons from "@/components/Buttons";
 import Cards from "@/components/Cards";
 import Credit from "@/components/Credit";
 import LoanCalculator from "@/components/form/LoanCalculator";
-import { HeartCrack } from 'lucide-react';
+import { HeartCrack, Loader2 } from 'lucide-react';
 
 // --- Data and Constants ---
 
@@ -143,7 +143,7 @@ const Home = () => {
       if (selectedDistrict) {
         const subDistrictsInDistrict = allSubDistricts.filter(
           (sd) => String(sd.district_id) === String(selectedDistrict.id)
-          
+
         );
         console.log(subDistrictsInDistrict)
         setFilteredSubDistricts(subDistrictsInDistrict);
@@ -363,7 +363,7 @@ const Home = () => {
 
         {isLoading ? (
           <div className="flex justify-center items-center py-20">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#2c3e50]"></div>
+            <Loader2 className="w-20 h-20 animate-spin" />
           </div>
         ) : displayedPosts.length > 0 ? (
           <Cards data={displayedPosts} />

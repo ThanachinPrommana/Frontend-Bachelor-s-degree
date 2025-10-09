@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   BedSingle, Bath, Grid2x2, Calendar, Car, Home,
-  Building, Phone, MapPin, Tag, CheckCircle, Info, Video
+  Building, Phone, MapPin, Tag, CheckCircle, Info, Video,
+  Loader2
 } from "lucide-react";
 
 import { apiClient } from "@/api/authconfig";
@@ -50,7 +51,7 @@ const Deposit = () => {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
+        <Loader2 className="w-20 h-20 animate-spin" />
       </div>
     );
   }
@@ -129,7 +130,7 @@ const Deposit = () => {
           {/* Left Column - Details */}
           <div className="w-full lg:w-[65%] space-y-4">
             {/* --- Video --- */}
-            
+
 
             {/* --- Property Details --- */}
             <div className="bg-white p-6 rounded-2xl shadow-md border">
@@ -262,10 +263,10 @@ const Deposit = () => {
                     conslog.log("User:", authUser);
                     // ถ้าไม่มี user (ยังไม่ล็อกอิน) ให้เด้งไปหน้า login
                     navigate("/login", { state: { from: location } });
-                  }else if(authUser.userType == "Buyer"){
+                  } else if (authUser.userType == "Buyer") {
                     // ถ้าล็อกอินแล้ว ให้ไปหน้า Deposit_doc ตามปกติ
                     navigate("/buyer/contract", { state: { postData: post, selectedUnit: selectedUnit } });
-                  }else if(authUser.userType == "Seller"){
+                  } else if (authUser.userType == "Seller") {
                     navigate("/seller/contract", { state: { postData: post, selectedUnit: selectedUnit } });
                   }
                 }}
