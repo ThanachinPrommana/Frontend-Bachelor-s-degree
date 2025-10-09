@@ -1,35 +1,74 @@
 // src/pages/Profile/Buyer/ProfileBuyer.jsx
-import { useEffect, useState, useMemo } from "react";
-import { FaUser, FaHeart, FaBell, FaFileAlt } from "react-icons/fa";
-import BuyerInfo from "./BuyerInfo";
-import BuyerFavorite from "./BuyerFavorite";
-import BuyerNoti from "./BuyerNoti";
-import BuyerDoc from "./BuyerDoc";
-// ❌ ไม่ได้ใช้แล้ว: import { getbuyer } from "@/api/user";
+import React, { useState, useMemo, useEffect, lazy, Suspense } from "react";
+import {
+  FaUser,
+  FaBell,
+  FaFileAlt,
+  FaClipboardList,
+  FaCalendarAlt,
+} from "react-icons/fa";
 import { useAuth } from "@/context/AuthContext";
 
+// ✅ Lazy imports ให้โหลดเบาและเร็วขึ้น
+const BuyerInfo = lazy(() => import("./BuyerInfo"));
+const BuyerNoti = lazy(() => import("./BuyerNoti"));
+const BuyerDoc = lazy(() => import("./BuyerDoc"));
+const BuyerBooking = lazy(() => import("./BuyerBooking"));
+const BuyerSchedule = lazy(() => import("./BuyerSchedule"));
+
+// สเกเลตันระหว่างโหลดแท็บ
+const LoadingPane = () => (
+  <div className="p-6 text-gray-600">กำลังโหลดข้อมูล...</div>
+);
+
+// ป้องกัน URL แปลก ๆ (เหมือนฝั่ง Seller)
+const isSafeHttpUrl = (u) => {
+  if (!u) return false;
+  try {
+    const x = new URL(u, window.location.origin);
+    return x.protocol === "http:" || x.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
 const ProfileBuyer = () => {
-  const [selectedTab, setSelectedTab] = useState("info");
   const { authUser, loading } = useAuth();
 
-  // แปลเป็นภาษาไทย + ชื่อแท็บสั้นจำง่าย
+  // ✅ จำแท็บล่าสุดใน localStorage
+  const [selectedTab, setSelectedTab] = useState(() => {
+    return localStorage.getItem("buyerTab") || "info";
+  });
+  useEffect(() => {
+    localStorage.setItem("buyerTab", selectedTab);
+  }, [selectedTab]);
+
+  // ✅ ชื่อแท็บให้สอดคล้องกับฝั่ง Seller
   const tabs = useMemo(
     () => [
-      { label: "ข้อมูลของฉัน", key: "info", icon: <FaUser className="mr-2" /> },
       {
-        label: "รายการถูกใจ",
-        key: "favorite",
-        icon: <FaHeart className="mr-2" />,
+        label: "ข้อมูลส่วนตัว",
+        key: "info",
+        icon: <FaUser className="mr-2" />,
+      },
+      {
+        label: "การจอง",
+        key: "booking",
+        icon: <FaClipboardList className="mr-2" />,
+      },
+      {
+        label: "ตารางเวลา",
+        key: "schedule",
+        icon: <FaCalendarAlt className="mr-2" />,
       },
       { label: "การแจ้งเตือน", key: "noti", icon: <FaBell className="mr-2" /> },
       { label: "เอกสาร", key: "doc", icon: <FaFileAlt className="mr-2" /> },
     ],
     []
   );
+  const currentTab = tabs.find((t) => t.key === selectedTab) || tabs[0];
 
-  const currentTab = tabs.find((t) => t.key === selectedTab);
-
-  // ถ้ายังโหลดสถานะผู้ใช้อยู่ แสดงสถานะโหลดสั้น ๆ
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#ecf0f1]">
@@ -38,11 +77,35 @@ const ProfileBuyer = () => {
     );
   }
 
-  const displayName =
-    (authUser?.First_name || authUser?.firstName || "ผู้ใช้") +
-    (authUser?.Last_name || authUser?.lastName
-      ? ` ${authUser?.Last_name || authUser?.lastName}`
-      : "");
+  // Guard: ไม่มีผู้ใช้
+  if (!authUser) {
+    return (
+      <div className="text-center mt-10">
+        ไม่พบข้อมูลผู้ใช้ หรือกรุณาเข้าสู่ระบบ
+      </div>
+    );
+  }
+
+  // ชื่อแสดง
+  const displayName = useMemo(() => {
+    const fn = authUser?.First_name || authUser?.firstName || "ผู้ใช้";
+    const ln = authUser?.Last_name || authUser?.lastName || "";
+    return ln ? `${fn} ${ln}` : fn;
+  }, [
+    authUser?.First_name,
+    authUser?.Last_name,
+    authUser?.firstName,
+    authUser?.lastName,
+  ]);
+
+  // Avatar ปลอดภัย + fallback
+  const avatarUrl = useMemo(() => {
+    const candidate = authUser?.image;
+    if (isSafeHttpUrl(candidate)) return candidate;
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      displayName
+    )}`;
+  }, [authUser?.image, displayName]);
 
   return (
     <div className="min-h-screen bg-[#ecf0f1] px-4 md:px-8 py-8 md:py-10">
@@ -56,10 +119,16 @@ const ProfileBuyer = () => {
           {/* User Info */}
           <div className="mb-8 md:mb-10 flex items-center space-x-4">
             <img
-              src={authUser?.image || "https://ui-avatars.com/api/?name=Buyer"}
+              src={avatarUrl}
               alt="รูปโปรไฟล์ผู้ใช้"
               className="w-12 h-12 rounded-full object-cover"
               referrerPolicy="no-referrer"
+              decoding="async"
+              onError={(e) => {
+                e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                  displayName
+                )}`;
+              }}
             />
             <div>
               <p className="text-xs md:text-sm text-gray-300">สวัสดี</p>
@@ -69,7 +138,7 @@ const ProfileBuyer = () => {
             </div>
           </div>
 
-          {/* Tab Menu */}
+          {/* Tabs */}
           <ul className="space-y-2 text-base md:text-lg">
             {tabs.map((tab) => {
               const isActive = selectedTab === tab.key;
@@ -78,6 +147,8 @@ const ProfileBuyer = () => {
                   <button
                     role="tab"
                     aria-selected={isActive}
+                    aria-controls={`panel-${tab.key}`} // a11y ให้สัมพันธ์กับ tabpanel
+                    id={`tab-${tab.key}`}
                     onClick={() => setSelectedTab(tab.key)}
                     className={`w-full flex items-center px-4 py-3 rounded-md transition duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 ${
                       isActive ? "bg-[#34495e]" : "hover:bg-[#3e5870]"
@@ -100,7 +171,7 @@ const ProfileBuyer = () => {
 
         {/* Content Area */}
         <main className="w-full md:w-3/4 p-6 md:p-10 overflow-y-auto">
-          {/* Breadcrumb */}
+          {/* Breadcrumb ใช้คำกลางเหมือน Seller */}
           <nav className="text-sm text-gray-500 mb-4" aria-label="breadcrumb">
             <span className="hover:text-gray-700">หน้าหลัก</span> /{" "}
             <span className="hover:text-gray-700">โปรไฟล์</span> /{" "}
@@ -113,11 +184,20 @@ const ProfileBuyer = () => {
             <span>{currentTab?.label}</span>
           </h1>
 
-          {/* Content */}
-          {selectedTab === "info" && <BuyerInfo user={authUser} />}
-          {selectedTab === "favorite" && <BuyerFavorite />}
-          {selectedTab === "noti" && <BuyerNoti />}
-          {selectedTab === "doc" && <BuyerDoc />}
+          {/* Views */}
+          <section
+            id={`panel-${currentTab?.key}`}
+            role="tabpanel"
+            aria-labelledby={`tab-${currentTab?.key}`}
+          >
+            <Suspense fallback={<LoadingPane />}>
+              {selectedTab === "info" && <BuyerInfo user={authUser} />}
+              {selectedTab === "booking" && <BuyerBooking />}
+              {selectedTab === "schedule" && <BuyerSchedule />}
+              {selectedTab === "noti" && <BuyerNoti />}
+              {selectedTab === "doc" && <BuyerDoc />}
+            </Suspense>
+          </section>
         </main>
       </div>
     </div>

@@ -3,8 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
-import ThaiLocationSelect from "@/components/profile/ThaiLocationSelect"; // ✅ ใช้คอมโพเนนต์ที่เรียก API
+import ThaiLocationSelect from "@/components/profile/ThaiLocationSelect";
 
+/* ====== ฟิลด์ ====== */
 const BUYER_KEYS = [
   "DateofBirth",
   "Occupation",
@@ -19,11 +20,11 @@ const BUYER_KEYS = [
   "Special_Requirements",
 ];
 
-// yyyy-mm-dd สำหรับ input[type=date]
+/* yyyy-mm-dd สำหรับ input[type=date] */
 const toISODate = (v) => {
   if (!v) return "";
   const d = new Date(v);
-  if (isNaN(d)) return "";
+  if (Number.isNaN(d)) return "";
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${mm}-${dd}`;
@@ -53,30 +54,36 @@ function buildDefaults(user) {
   };
 }
 
+/* ====== diff ====== */
 function makeDiff(values, user) {
   const diff = {};
+
   // user-level
-  if ((values.First_name ?? "") !== (user?.First_name ?? ""))
-    diff.First_name = values.First_name;
-  if ((values.Last_name ?? "") !== (user?.Last_name ?? ""))
-    diff.Last_name = values.Last_name;
-  if ((values.Phone ?? "") !== (user?.Phone ?? "")) diff.Phone = values.Phone;
+  const putUser = (k, cur, old) => {
+    if ((cur ?? "") === (old ?? "")) return;
+    if (cur === "") return; // หลีกเลี่ยงล้างคอลัมน์บังคับโดยไม่ตั้งใจ
+    diff[k] = cur;
+  };
+  putUser("First_name", values.First_name, user?.First_name);
+  putUser("Last_name", values.Last_name, user?.Last_name);
+  putUser("Phone", values.Phone, user?.Phone);
 
   // buyer-level
   const bOld = user?.Buyer || {};
   const bCur = values.Buyer || {};
+
   const putBuyer = (k, v) => {
     if (!diff.Buyer) diff.Buyer = {};
-    // string ว่าง -> null, แปลงตัวเลข
-    if (v === "") v = null;
+    let val = v;
+    if (val === "") val = null;
     if (k === "Monthly_Income" || k === "Family_Size") {
-      if (v !== null) {
-        const n = Number(v);
-        v = Number.isNaN(n) ? null : n;
+      if (val !== null) {
+        const n = Number(val);
+        val = Number.isNaN(n) ? null : n;
       }
     }
-    if (k === "DateofBirth" && v) v = new Date(v);
-    diff.Buyer[k] = v;
+    if (k === "DateofBirth" && val) val = new Date(val);
+    diff.Buyer[k] = val;
   };
 
   BUYER_KEYS.forEach((k) => {
@@ -102,14 +109,14 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
   const {
     register,
     handleSubmit,
-    formState: { isDirty },
+    formState: { isDirty, isSubmitting },
     reset,
     setValue,
     watch,
   } = useForm({
     defaultValues: defaults,
     mode: "onChange",
-    shouldUnregister: false, // ✅ เก็บค่าแม้ซ่อนหน้า
+    shouldUnregister: false, // เก็บค่าแม้ซ่อนหน้า
   });
 
   useEffect(() => {
@@ -117,9 +124,6 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
   }, [user, reset]);
 
   const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false); // ✅ state โหลดสั้นๆ
-
-  // ผูก watch เพื่อส่งค่าให้ ThaiLocationSelect
   const buyerVals = watch("Buyer");
 
   const f = {
@@ -131,7 +135,6 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
       Occupation: register("Buyer.Occupation"),
       Monthly_Income: register("Buyer.Monthly_Income"),
       Family_Size: register("Buyer.Family_Size"),
-      // 3 ฟิลด์ location จะ setValue ผ่าน ThaiLocationSelect
       Parking_Needs: register("Buyer.Parking_Needs"),
       Nearby_Facilities: register("Buyer.Nearby_Facilities"),
       Lifestyle_Preferences: register("Buyer.Lifestyle_Preferences"),
@@ -139,19 +142,33 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
     },
   };
 
-  const onSubmit = (vals) => {
-    setLoading(true);
+  const onSubmit = handleSubmit(async (vals) => {
     const diff = makeDiff(vals, user);
-    // ดีเลย์สั้นๆ ให้มีฟีลลิ่งกำลังบันทึก
-    setTimeout(() => {
-      onSubmitDiff?.(diff);
-      setLoading(false);
-    }, 300);
-  };
+
+    // ถ้าไม่มีอะไรเปลี่ยนจริง ๆ
+    const noBuyer = !diff.Buyer || Object.keys(diff.Buyer).length === 0;
+    const noUser = !diff.First_name && !diff.Last_name && !diff.Phone;
+    if (noBuyer && noUser) {
+      alert("ไม่มีการแก้ไขข้อมูล");
+      return;
+    }
+
+    // ส่งให้ parent (Info) แล้วรอจริง ๆ — ปุ่มจะ disable ตาม isSubmitting
+    await onSubmitDiff?.(diff);
+
+    // หลังบันทึกสำเร็จ: reset ตาม user ล่าสุดที่ parent revalidate มาแล้ว
+    // (เมื่อ parent ปิด modal แล้ว การ reset นี้ไม่ flash)
+    reset(buildDefaults(user));
+  });
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
-      {/* Header tabs (display only) */}
+    <form
+      onSubmit={onSubmit}
+      className="space-y-6"
+      noValidate
+      aria-busy={isSubmitting}
+    >
+      {/* Tabs */}
       <div className="flex items-center gap-3">
         <span
           className={`px-3 py-1 rounded-full text-sm ${
@@ -191,6 +208,7 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
               {...f.First_name}
               className="w-full rounded border px-3 py-2"
               placeholder="เช่น Somchai"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -202,6 +220,7 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
               {...f.Last_name}
               className="w-full rounded border px-3 py-2"
               placeholder="เช่น Jaidee"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -211,18 +230,24 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
               {...f.Phone}
               className="w-full rounded border px-3 py-2"
               placeholder="เช่น 0812345678"
+              disabled={isSubmitting}
             />
           </div>
 
           <div className="sm:col-span-2 flex justify-between mt-2">
-            {/* ยกเลิก: สีแดง (อยู่ซ้าย) */}
-            <Button variant="destructive" type="button" onClick={onCancel}>
+            <Button
+              variant="destructive"
+              type="button"
+              onClick={onCancel}
+              disabled={isSubmitting}
+            >
               ยกเลิก
             </Button>
             <Button
               type="button"
               className="bg-[#2C3E50] hover:bg-[#1a252f] text-white"
               onClick={() => setStep(2)}
+              disabled={isSubmitting}
             >
               ถัดไป
             </Button>
@@ -239,6 +264,7 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
               type="date"
               {...f.Buyer.DateofBirth}
               className="w-full rounded border px-3 py-2"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -247,6 +273,7 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
             <input
               {...f.Buyer.Occupation}
               className="w-full rounded border px-3 py-2"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -259,6 +286,7 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
               inputMode="numeric"
               {...f.Buyer.Monthly_Income}
               className="w-full rounded border px-3 py-2"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -271,15 +299,16 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
               inputMode="numeric"
               {...f.Buyer.Family_Size}
               className="w-full rounded border px-3 py-2"
+              disabled={isSubmitting}
             />
           </div>
 
-          {/* ✅ ใช้ ThaiLocationSelect ที่ดึงข้อมูลจาก API (จังหวัด/อำเภอ/ตำบล) */}
           <ThaiLocationSelect
             provinceValue={buyerVals?.Preferred_Province || ""}
             districtValue={buyerVals?.Preferred_District || ""}
             subDistrictValue={buyerVals?.Preferred_Subdistrict || ""}
             showSubDistrict
+            disabled={isSubmitting}
             onProvinceChange={(v) => {
               setValue("Buyer.Preferred_Province", v, { shouldDirty: true });
               setValue("Buyer.Preferred_District", "", { shouldDirty: true });
@@ -305,6 +334,7 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
             <select
               {...f.Buyer.Parking_Needs}
               className="w-full rounded border px-3 py-2"
+              disabled={isSubmitting}
             >
               <option value="">-</option>
               <option value="oneCar">1 คัน</option>
@@ -320,6 +350,7 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
             <select
               {...f.Buyer.Nearby_Facilities}
               className="w-full rounded border px-3 py-2"
+              disabled={isSubmitting}
             >
               <option value="">-</option>
               <option value="BTS_MRT">BTS/MRT</option>
@@ -337,6 +368,7 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
             <select
               {...f.Buyer.Lifestyle_Preferences}
               className="w-full rounded border px-3 py-2"
+              disabled={isSubmitting}
             >
               <option value="">-</option>
               <option value="Work_from_Home">ทำงานที่บ้าน</option>
@@ -355,34 +387,38 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
               className="w-full rounded border px-3 py-2"
               rows={3}
               placeholder="เช่น ต้องการที่เงียบ ใกล้รถไฟฟ้า"
+              disabled={isSubmitting}
             />
           </div>
 
-          {/* ✅ สลับตำแหน่งปุ่ม + สี */}
+          {/* Action buttons */}
           <div className="sm:col-span-2 flex justify-between mt-2">
-            {/* ยกเลิก (แดง) อยู่ซ้ายสุด */}
-            <Button type="button" variant="destructive" onClick={onCancel}>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={onCancel}
+              disabled={isSubmitting}
+            >
               ยกเลิก
             </Button>
 
             <div className="flex gap-2">
-              {/* ย้อนกลับ (เทา) */}
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setStep(1)}
+                disabled={isSubmitting}
               >
                 ย้อนกลับ
               </Button>
 
-              {/* บันทึกเป็นปุ่มหลัก + แสดงโหลดสั้นๆ */}
               <Button
                 type="submit"
                 className="bg-[#2C3E50] hover:bg-[#1a252f] text-white flex items-center gap-2"
-                disabled={!isDirty || loading}
+                disabled={!isDirty || isSubmitting}
               >
-                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                {loading ? "กำลังบันทึก..." : "บันทึกทั้งหมด"}
+                {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isSubmitting ? "กำลังบันทึก..." : "บันทึกทั้งหมด"}
               </Button>
             </div>
           </div>
