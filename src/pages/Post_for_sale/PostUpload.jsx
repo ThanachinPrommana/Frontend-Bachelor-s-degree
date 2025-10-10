@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { Trash2, Image as ImageIcon, Video as VideoIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { createpost } from "@/api/post";
+import { apiClient } from "@/api/authconfig";
 
 /* ================== Config ================== */
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -250,7 +251,7 @@ export default function PostUpload() {
       urlBinRef.current.forEach((u) => {
         try {
           URL.revokeObjectURL(u);
-        } catch {}
+        } catch { }
       });
       urlBinRef.current.clear();
     };
@@ -285,33 +286,56 @@ export default function PostUpload() {
       formData.append("videos", vid.file)
     );
 
-    // ฟิลด์อื่น ๆ ของ PropertyPost (ตรง Prisma): ส่งเป็น string
     for (const key in allData) {
-      if (key === "images" || key === "videos") continue;
+      if (!allData.hasOwnProperty(key)) continue;
       const value = allData[key];
-      if (value === null || value === undefined || value === "") {
-        formData.append(key, "");
-      } else if (Array.isArray(value)) {
-        // ส่งเป็น key ซ้ำ (backend ควร parse) — ถ้า backend ต้องการ JSON ให้เปลี่ยนเป็น JSON.stringify(value)
-        value.forEach((item) => formData.append(key, String(item)));
-      } else {
+
+      if (value === null || value === undefined) continue;
+
+      // --- เงื่อนไขการแปลงข้อมูล ---
+
+      // 1. (สำคัญ) แปลง propertyUnits ให้เป็น JSON String
+      if (key === "propertyUnits") {
+        formData.append(key, JSON.stringify(value));
+      }
+      // 2. จัดการไฟล์รูปภาพและวิดีโอ
+      else if (key === "images" || key === "videos") {
+        (value || []).forEach((fileWrapper) => {
+          // ส่งเฉพาะ object File จริงๆ
+          formData.append(key, fileWrapper.file);
+        });
+      }
+      // 3. จัดการ Array อื่นๆ (เช่น สถานที่ใกล้เคียง)
+      else if (Array.isArray(value)) {
+        value.forEach((item) => {
+          formData.append(key, String(item));
+        });
+      }
+      // 4. ข้อมูลอื่นๆ ที่เหลือ
+      else {
         formData.append(key, String(value));
       }
     }
 
     try {
-      const response = await createpost(formData);
-      form.reset();
-      navigate("/seller/post-for-sale/confirm", {
-        state: { postId: response?.id },
+      // (แก้ไข) เรียกใช้ API ผ่าน apiClient ที่ import มา ไม่ใช่ createpost โดยตรง
+      const response = await apiClient.post("/propertypost", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
+
+      form.reset();
+      // (แก้ไข) ส่งต่อไปยังหน้า Confirm พร้อม postId ที่ได้รับจาก response
+      navigate("/seller/post-for-sale/confirm", {
+        state: { postId: response.data.id },
+      });
+
     } catch (apiError) {
       const message =
         apiError?.response?.data?.message ||
         apiError?.message ||
         "เกิดข้อผิดพลาดในการสร้างโพสต์";
       setError(message);
-      console.error("API Error:", apiError);
+      console.error("การส่งข้อมูลผิดพลาด:", apiError);
     } finally {
       setIsSubmitting(false);
     }
@@ -350,15 +374,13 @@ export default function PostUpload() {
                 onDrop={handleDropImages}
                 onDragOver={handleDragOverImages}
                 onDragLeave={handleDragLeaveImages}
-                className={`rounded-xl border-2 border-dashed transition-colors p-6 md:p-8 text-center ${
-                  canAddMoreImages
-                    ? "cursor-pointer hover:bg-primary/10"
-                    : "opacity-60 cursor-not-allowed"
-                } ${
-                  isDraggingImg
+                className={`rounded-xl border-2 border-dashed transition-colors p-6 md:p-8 text-center ${canAddMoreImages
+                  ? "cursor-pointer hover:bg-primary/10"
+                  : "opacity-60 cursor-not-allowed"
+                  } ${isDraggingImg
                     ? "border-primary bg-primary/10"
                     : "border-primary/40"
-                }`}
+                  }`}
               >
                 <p className="font-medium">
                   {canAddMoreImages
@@ -437,15 +459,13 @@ export default function PostUpload() {
                 onDrop={handleDropVideos}
                 onDragOver={handleDragOverVideos}
                 onDragLeave={handleDragLeaveVideos}
-                className={`rounded-xl border-2 border-dashed transition-colors p-6 md:p-8 text-center ${
-                  canAddMoreVideos
-                    ? "cursor-pointer hover:bg-primary/10"
-                    : "opacity-60 cursor-not-allowed"
-                } ${
-                  isDraggingVid
+                className={`rounded-xl border-2 border-dashed transition-colors p-6 md:p-8 text-center ${canAddMoreVideos
+                  ? "cursor-pointer hover:bg-primary/10"
+                  : "opacity-60 cursor-not-allowed"
+                  } ${isDraggingVid
                     ? "border-primary bg-primary/10"
                     : "border-primary/40"
-                }`}
+                  }`}
               >
                 <p className="font-medium">
                   {canAddMoreVideos

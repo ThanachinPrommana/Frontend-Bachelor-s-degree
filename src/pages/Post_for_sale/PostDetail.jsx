@@ -1,6 +1,6 @@
 // src/pages/Post_for_sale/PostDetail.jsx
-import React from "react";
-import { useFormContext } from "react-hook-form";
+import React, { useEffect, useState } from "react";
+import { useFieldArray, useFormContext } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { Input } from "@/components/ui/input";
@@ -72,6 +72,20 @@ const detailSchema = z.object({
   // arrays ต้องเป็นค่าที่อยู่ใน enum เท่านั้น
   Nearby_Landmarks: z.array(LandmarkEnum).optional(),
   Additional_Amenities: z.array(AmenityEnum).optional(),
+
+  NumberOfUnits: z.preprocess(
+    toIntOrUndef,
+    z.number({
+      invalid_type_error: "กรุณากรอกเป็นตัวเลข", // ข้อความเมื่อกรอกตัวอักษร
+      required_error: "กรุณาระบุจำนวนยูนิต",      // ข้อความเมื่อค่าเป็น undefined
+    }).int().min(1, "ต้องมีอย่างน้อย 1 ยูนิต")
+  ),
+  // (แก้ไข) ตรวจสอบ array of objects
+  propertyUnits: z.array(
+    z.object({
+      Unit_Number: z.string().min(1, "กรุณากรอกเลขที่ยูนิต"),
+    })
+  ).min(1, "ต้องมีอย่างน้อย 1 ยูนิต"),
 });
 
 // แสดงผลไทย แต่ส่งค่า id เดิม (ปรับตามฐานข้อมูลของคุณ)
@@ -111,6 +125,17 @@ const PostDetail = () => {
   const navigate = useNavigate();
   const form = useFormContext();
 
+  const { control, watch } = form;
+
+
+
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "propertyUnits",
+  });
+
+  const numberOfUnits = watch("NumberOfUnits");
+
   const toggleArrayValue = (fieldName, value) => {
     const currentValues = form.getValues(fieldName) || [];
     const next = currentValues.includes(value)
@@ -119,7 +144,26 @@ const PostDetail = () => {
     form.setValue(fieldName, next, { shouldDirty: true, shouldValidate: true });
   };
 
+  // (สำคัญ) useEffect สำหรับจัดการเพิ่ม/ลดช่องกรอกอัตโนมัติ
+  useEffect(() => {
+    const currentCount = fields.length;
+    const targetCount = parseInt(numberOfUnits, 10) || 0;
+
+    if (currentCount < targetCount) {
+      // ถ้าช่องมีน้อยกว่าที่ระบุ ให้เพิ่มช่องว่างเข้าไป
+      for (let i = currentCount; i < targetCount; i++) {
+        append({ Unit_Number: "" });
+      }
+    } else if (currentCount > targetCount) {
+      // ถ้าช่องมีเยอะกว่าที่ระบุ ให้ลบช่องท้ายๆ ออก
+      for (let i = currentCount; i > targetCount; i--) {
+        remove(i - 1);
+      }
+    }
+  }, [numberOfUnits, fields.length, append, remove]);
+
   const onSubmit = () => {
+    console.log("Form data before validation:", form.getValues());
     const ok = validateStep(form, detailSchema, [
       "categoryId",
       "Usable_Area",
@@ -132,8 +176,14 @@ const PostDetail = () => {
       "Nearby_Landmarks",
       "Additional_Amenities",
       "Parking_Space",
+      "NumberOfUnits", // (เพิ่ม) ตรวจสอบ field นี้ด้วย
+      "propertyUnits",
     ]);
-    if (!ok) return;
+    if (!ok) {
+      // (สำคัญ) ดู Error ที่เกิดขึ้น
+      console.log("Zod Validation Errors:", form.formState.errors);
+      return;
+    }
     navigate("/seller/post-for-sale/price");
   };
 
@@ -425,6 +475,53 @@ const PostDetail = () => {
                   )}
                 />
               </div>
+
+              {/* (แก้ไข) ส่วนของ Unit ทั้งหมด */}
+              <div className="space-y-4 rounded-lg border p-4">
+                <h3 className="font-semibold">ข้อมูลยูนิตและเลขที่บ้าน/ห้อง</h3>
+                {/* 1. ช่องกรอกจำนวนยูนิต */}
+                <FormField
+                  name="NumberOfUnits"
+                  control={control}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>จำนวนยูนิตทั้งหมด</FormLabel>
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="เช่น 3"
+                        {...field}
+                        value={field.value ?? ""}
+                        onChange={(e) => form.setValue("NumberOfUnits", toIntOrUndef(e.target.value))}
+                        min={1}
+                        step="1"
+                        className="h-11 w-full md:w-1/2"
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* 2. ช่องกรอกเลขที่ยูนิต (สร้างอัตโนมัติ) */}
+                {fields.map((field, index) => (
+                  <FormField
+                    key={field.id}
+                    name={`propertyUnits.${index}.Unit_Number`}
+                    control={control}
+                    render={({ field: inputField }) => (
+                      <FormItem>
+                        <FormLabel>เลขที่ยูนิตที่ {index + 1}</FormLabel>
+                        <Input
+                          placeholder={`เช่น 27/222 หรือ A-101`}
+                          {...inputField}
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+              </div>
+
 
               {/* สถานที่ใกล้เคียง */}
               <FormField

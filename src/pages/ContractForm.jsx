@@ -110,6 +110,7 @@ const ContractForm = () => {
         }
     };
 
+
     const handleUploadSubmit = async () => {
         console.log("Checking data before upload:");
         console.log("postData:", postData);
@@ -148,6 +149,8 @@ const ContractForm = () => {
             setIsUploading(false);
         }
     };
+
+
 
 
     return (
@@ -638,9 +641,9 @@ const ContractForm = () => {
                                 exit={{ scale: 0.9, y: -20 }}
                                 className="bg-white rounded-xl shadow-2xl w-full max-w-lg"
                             >
-                                <div className="p-6 border-b flex justify-between items-center">
-                                    <h3 className="text-xl font-bold">อัปโหลดสัญญาที่ลงนามแล้ว</h3>
-                                    <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                                <div className="p-6 border-b flex justify-between items-center ">
+                                    <h3 className="text-xl font-bold ">อัปโหลดสัญญาที่ลงนามแล้ว</h3>
+                                    <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
                                         <X size={24} />
                                     </button>
                                 </div>
@@ -658,15 +661,23 @@ const ContractForm = () => {
 
                                     {uploadError && <p className="text-red-500 text-sm text-center">{uploadError}</p>}
                                 </div>
-                                <div className="p-6 bg-gray-50 rounded-b-xl flex justify-end gap-4">
+                                <div className="p-6 bg-gray-50 rounded-b-xl flex justify-end gap-4 ">
                                     <Button variant="ghost" onClick={() => setIsModalOpen(false)}>ยกเลิก</Button>
                                     <Button
                                         onClick={handleUploadSubmit}
                                         disabled={isUploading || !fileToUpload}
-                                        className="bg-blue-600 hover:bg-blue-700"
+                                        className="bg-blue-600 hover:bg-blue-700 rounded-xl  h-[30px] w-[90px] cursor-pointer text-white"
                                     >
-                                        {isUploading && <Loader2 size={16} className="mr-2 animate-spin" />}
-                                        {isUploading ? "กำลังส่ง..." : "ยืนยันการส่ง"}
+
+                                        {isUploading ? (
+                                            <div className="flex justify-center items-center">
+                                                <Loader2 size={16} className="animate-spin" />
+                                            </div>
+
+                                        ) : (
+                                            "ยืนยันการส่ง"
+                                        )
+                                        }
                                     </Button>
                                 </div>
                             </motion.div>

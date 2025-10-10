@@ -1,9 +1,11 @@
 // src/pages/Profile/SellerDoc.jsx
 import { useState, useMemo } from "react";
-import { Trash2 } from "lucide-react";
+import { Check, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
+import { apiClient } from "@/api/authconfig";
+import { useNavigate } from "react-router";
 
 /** แปลงสถานะเป็น badge สี ๆ ตาม Prisma: PENDING | APPROVED | REJECTED */
 function StatusPill({ value }) {
@@ -12,8 +14,8 @@ function StatusPill({ value }) {
     v === "APPROVED"
       ? "bg-emerald-100 text-emerald-700"
       : v === "REJECTED"
-      ? "bg-rose-100 text-rose-700"
-      : "bg-amber-100 text-amber-700"; // PENDING (หรืออื่น ๆ)
+        ? "bg-rose-100 text-rose-700"
+        : "bg-amber-100 text-amber-700"; // PENDING (หรืออื่น ๆ)
   return (
     <span className={`px-2 py-1 text-xs font-semibold rounded-full ${cls}`}>
       {v || "-"}
@@ -34,7 +36,9 @@ function isHttpUrl(url) {
 export default function SellerDoc() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | PENDING | APPROVED | REJECTED
-  const { authUser, loading } = useAuth();
+  const { authUser, loading, revalidateUser } = useAuth();
+  const [reviewingId, setReviewingId] = useState(null);
+  const navigate = useNavigate()
 
   const documents = authUser?.DocumentUpload || [];
 
@@ -54,6 +58,30 @@ export default function SellerDoc() {
   if (loading) {
     return <div className="p-6 text-center">กำลังโหลดข้อมูลเอกสาร...</div>;
   }
+
+  //ฟังก์ชั่น api
+  const handleReview = async (documentId, status) => {
+    // (แก้ไข) เปลี่ยนจาก comfirm เป็น confirm
+    if (!confirm(`คุณต้องการที่จะ "${status}" เอกสารนี้ใช่หรือไม่?`)) {
+      return;
+    }
+
+    setReviewingId(documentId);
+    try {
+      await apiClient.patch(`/update/document/${documentId}`, { status });
+      await revalidateUser();
+    } catch (error) {
+      console.error(`Failed to ${status} document:`, error);
+      alert(`เกิดข้อผิดพลาดในการ ${status} เอกสาร`);
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
+  if (loading && !reviewingId) {
+    return <div className="p-6 text-center">กำลังโหลดข้อมูลเอกสาร...</div>;
+  }
+
   // ฟังก์ชันสำหรับแสดงป้ายสถานะ (เพื่อความสะอาดของโค้ด)
   const StatusBadge = ({ status }) => {
     let colorClasses = 'bg-yellow-100 text-yellow-800'; // Default to PENDING
@@ -138,16 +166,49 @@ export default function SellerDoc() {
                 </div>
 
                 {/* (แก้ไข) ส่วนสถานะและปุ่ม (ขวา) */}
-                <div className="flex flex-col items-end gap-2">
+                <div className="flex flex-col items-end gap-2 min-w-[120px]">
                   <StatusBadge status={doc.Review_Status} />
 
-                  {/* (สำคัญ) เงื่อนไขการแสดงปุ่มชำระเงิน */}
+                  {/* (สำคัญ) เงื่อนไขแสดงปุ่มสำหรับ Seller */}
+                  {doc.Review_Status === 'PENDING' && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-red-500 text-red-500 hover:bg-red-50 hover:text-red-600"
+                        onClick={() => handleReview(doc.id, 'REJECTED')}
+                        disabled={reviewingId === doc.id}
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        ปฏิเสธ
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => handleReview(doc.id, 'APPROVED')}
+                        disabled={reviewingId === doc.id}
+                      >
+                        <Check className="w-4 h-4 mr-1" />
+                        อนุมัติ
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* --- (สำคัญ) เงื่อนไขแสดงปุ่มชำระเงินมัดจำ --- */}
                   {doc.Review_Status === 'APPROVED' && (
                     <Button
-                      onClick={() => navigate('/payment', { state: { documentData: doc } })}
-                      className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3 text-xs"
+                      onClick={() => {
+                        if (!authUser) {
+                          navigate("/login", { state: { from: location } })
+                        } else if (authUser.userType == "Buyer") {
+                          navigate('/buyer/deposit-payment', { state: { documentData: doc } })
+                        } else if (authUser.userType == "Seller") {
+                          navigate('/seller/deposit-payment', { state: { documentData: doc } })
+                        }
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3 text-xs mt-2"
                     >
-                      ดำเนินการชำระเงิน
+                      ชำระเงินมัดจำ
                     </Button>
                   )}
                 </div>
