@@ -304,8 +304,6 @@ const Deposit = () => {
             )}
 
 
-
-
             {post.Video && post.Video.length > 0 && (
               <div className="bg-white p-6 rounded-2xl shadow-md border">
                 <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
@@ -313,24 +311,17 @@ const Deposit = () => {
                   วิดีโอแนะนำ
                 </h3>
                 <div className="rounded-lg overflow-hidden space-y-2">
-                  <video
-                    src={post.Video[0].secure_url}
-                    controls
-                    width="100%"
-                    height="100%"
-                    playing={false}
-                    className="rounded-lg"
-                    loop
-                  />
-                  <video
-                    src={post.Video[1].secure_url}
-                    controls
-                    width="100%"
-                    height="100%"
-                    playing={false}
-                    className="rounded-lg"
-                    loop
-                  />
+                  {post.Video.map((video, index) => {
+                    return (
+                      <video
+                        key={index} // ใช้ index หรือ video.id ถ้ามี
+                        src={video.secure_url}
+                        controls
+                        width="100%"
+                        className="rounded-lg"
+                      />
+                    )
+                  })}
                 </div>
               </div>
             )}

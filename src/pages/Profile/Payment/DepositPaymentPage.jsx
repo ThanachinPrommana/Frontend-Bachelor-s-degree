@@ -54,6 +54,7 @@ export default function DepositPaymentPage() {
     const options = {
         clientSecret,
         appearance,
+        locale:"th"
     };
 
     return (
