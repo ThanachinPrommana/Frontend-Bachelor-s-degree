@@ -65,6 +65,13 @@ import { AuthProvider } from "@/context/AuthContext";
 import RegisterSeller from "@/pages/Auth/RegisterSeller";
 
 import NotFound from "@/pages/NotFound";
+import ContractForm from "@/pages/ContractForm";
+import DepositPaymentPage from "@/pages/Profile/Payment/DepositPaymentPage";
+import PaymentStatusPage from "@/pages/Profile/Payment/PaymentStatusPage";
+import { Elements } from "@stripe/react-stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
+
+const stripePromise = loadStripe('pk_test_51R6USEEHWiwlX27ITAS8FPSrge8gvKXeRe12WMaZl79xFCVeea2cpExdBdNgrD8IbaX7ZnGCtiXCFBmsuEjYwlrY00E1uHNRCr');
 
 const AppRouter = () => {
   return (
@@ -107,6 +114,21 @@ const AppRouter = () => {
               <Route path="payment" element={<Payment />} />
               <Route path="deposit/:id" element={<Deposit />} />
               <Route path="register/seller" element={<RegisterSeller />} />
+              <Route path="contract" element={<ContractForm />} />
+              {/* ----- (เพิ่ม) Routes สำหรับ Stripe Payment ----- */}
+              <Route
+                path="deposit-payment"
+                element={<DepositPaymentPage />}
+              />
+              <Route
+                path="payment-status"
+                element={
+                  <Elements stripe={stripePromise}>
+                    <PaymentStatusPage />
+                  </Elements>
+                }
+              />
+              {/* ------------------------------------------- */}
             </Route>
           </Route>
 
@@ -116,7 +138,8 @@ const AppRouter = () => {
               <Route index element={<Home />} />
               <Route path="profile" element={<ProfileSeller />} />
               <Route path="support" element={<Support />} />
-
+              <Route path="contract" element={<ContractForm />} />
+              <Route path="payment" element={<Payment />} />
               {/* Post For Sale - Seller Access */}
               <Route
                 element={
@@ -125,6 +148,20 @@ const AppRouter = () => {
                   </PostFormProvider>
                 }
               >
+                {/* ----- (เพิ่ม) Routes สำหรับ Stripe Payment ----- */}
+                <Route
+                  path="deposit-payment"
+                  element={<DepositPaymentPage />}
+                />
+                <Route
+                  path="payment-status"
+                  element={
+                    <Elements stripe={stripePromise}>
+                      <PaymentStatusPage />
+                    </Elements>
+                  }
+                />
+                {/* ------------------------------------------- */}
                 <Route path="post-for-sale" element={<PostForSaleLayout />}>
                   <Route path="title" element={<PostTitle />} />
                   <Route path="location" element={<PostLocation />} />

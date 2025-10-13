@@ -10,6 +10,7 @@ const numberOrUndefined = z.preprocess(
   z.number().optional()
 );
 
+
 /* ========== Schema ========== */
 const softSchema = z.object({
   // General
@@ -36,6 +37,8 @@ const softSchema = z.object({
   Year_Built: z.string().optional(),
   Parking_Space: numberOrUndefined,
   floor: numberOrUndefined,
+  NumberOfUnits: numberOrUndefined, // (เพิ่ม) จำนวนยูนิตทั้งหมด
+  propertyUnits: z.any().optional(), // (เพิ่ม) ใช้เก็บ array ของยูนิต
 
   // Arrays (enum list ใน Prisma)
   Nearby_Landmarks: z.array(z.string()).optional(),
@@ -88,6 +91,9 @@ export const PostFormProvider = ({ children }) => {
       Year_Built: "",
       Parking_Space: undefined,
       floor: undefined,
+      NumberOfUnits: 1, // (เพิ่ม) ค่าเริ่มต้นเป็น 1
+      propertyUnits: [{ Unit_Number: "" }],  // (เพิ่ม) ค่าเริ่มต้นเป็น array ว่าง
+
 
       // Features
       Nearby_Landmarks: [],
