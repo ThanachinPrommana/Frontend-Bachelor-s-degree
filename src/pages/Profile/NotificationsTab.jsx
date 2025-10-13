@@ -65,7 +65,7 @@ const TYPE_META = {
 
 export default function NotificationsTab() {
   const { authUser } = useAuth();
-  const { items, loading, clearAll, removeOne, markOneRead, load, error } =
+  const { items, loading, removeAll, removeOne, markOneRead, load, error } =
     useNotifications(authUser?.id);
 
   // ฟิลเตอร์ฝั่ง FE
@@ -137,8 +137,8 @@ export default function NotificationsTab() {
   // 3) แฮนด์เลอร์คงที่ ลด re-render ของลูก
   const handleClearAll = useCallback(async () => {
     if (!confirm("ต้องการลบการแจ้งเตือนทั้งหมดหรือไม่?")) return;
-    await clearAll();
-  }, [clearAll]);
+    await removeAll();
+  }, [removeAll]);
 
   const handleRemove = useCallback((id) => removeOne(id), [removeOne]);
   const handleMarkRead = useCallback((id) => markOneRead(id), [markOneRead]);

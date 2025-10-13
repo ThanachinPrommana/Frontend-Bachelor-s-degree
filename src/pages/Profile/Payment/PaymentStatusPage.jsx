@@ -1,57 +1,74 @@
+// PaymentStatusPage.js
 import { useState, useEffect } from 'react';
 import { useStripe } from '@stripe/react-stripe-js';
-import { CheckCircle, XCircle } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export default function PaymentStatusPage() {
     const stripe = useStripe();
     const [message, setMessage] = useState(null);
+    const [status, setStatus] = useState('loading'); // 'loading', 'succeeded', 'failed'
+    const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
+
+    const postId = searchParams.get("postId");
+    const unitId = searchParams.get("unitId");
+    const clientSecret = searchParams.get("payment_intent_client_secret");
 
     useEffect(() => {
-        if (!stripe) {
+        if (!stripe || !clientSecret) {
+            setStatus('failed');
+            setMessage('ข้อมูลการชำระเงินไม่ถูกต้อง');
             return;
         }
 
-        // 4. ดึง client_secret จาก URL
-        const clientSecret = new URLSearchParams(window.location.search).get(
-            "payment_intent_client_secret"
-        );
-
-        if (!clientSecret) {
-            return;
-        }
-
-        // 5. ดึงข้อมูล PaymentIntent ล่าสุดจาก Stripe
         stripe.retrievePaymentIntent(clientSecret).then(({ paymentIntent }) => {
             switch (paymentIntent.status) {
                 case "succeeded":
                     setMessage("การชำระเงินสำเร็จ!");
+                    setStatus('succeeded');
+                    // Redirect ไปยัง BookingScheduler หลัง delay เล็กน้อย
+                    setTimeout(() => {
+                        navigate(`/booking/${postId}/${unitId}`);
+                    }, 2000);
                     break;
                 case "processing":
                     setMessage("การชำระเงินของคุณกำลังดำเนินการ");
-                    break;
-                case "requires_payment_method":
-                    setMessage("การชำระเงินล้มเหลว กรุณาลองอีกครั้ง");
+                    setStatus('loading');
                     break;
                 default:
-                    setMessage("มีบางอย่างผิดพลาด");
+                    setMessage("การชำระเงินล้มเหลว");
+                    setStatus('failed');
                     break;
             }
         });
-    }, [stripe]);
+    }, [stripe, clientSecret, postId, unitId]);
+
+    const renderIcon = () => {
+        if (status === 'succeeded') {
+            return <CheckCircle className="mx-auto size-16 text-green-500 mb-4" />;
+        }
+        if (status === 'failed') {
+            return <XCircle className="mx-auto size-16 text-red-500 mb-4" />;
+        }
+        return <Loader2 className="mx-auto size-16 text-gray-500 mb-4 animate-spin" />;
+    };
 
     return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
             <div className="bg-white p-8 rounded-lg shadow-md text-center max-w-md w-full">
-                {message === "การชำระเงินสำเร็จ!" ? (
-                    <CheckCircle className="mx-auto size-16 text-green-500 mb-4" />
-                ) : (
-                    <XCircle className="mx-auto size-16 text-red-500 mb-4" />
+                {renderIcon()}
+                <h2 className="text-2xl font-bold mb-4">{message || "กำลังตรวจสอบ..."}</h2>
+
+                {/* fallback ปุ่มกรณีล้มเหลว */}
+                {status === 'failed' && (
+                    <a
+                        href="/profile/my-documents"
+                        className="text-blue-600 hover:underline mt-4 inline-block"
+                    >
+                        กลับไปที่หน้าเอกสารของฉัน
+                    </a>
                 )}
-                <h2 className="text-2xl font-bold">{message || "กำลังตรวจสอบ..."}</h2>
-                <Link to="/profile/my-documents" className="text-blue-600 hover:underline mt-4 inline-block">
-                    กลับไปที่หน้าเอกสารของฉัน
-                </Link>
             </div>
         </div>
     );

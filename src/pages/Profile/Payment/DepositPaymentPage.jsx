@@ -54,7 +54,7 @@ export default function DepositPaymentPage() {
     const options = {
         clientSecret,
         appearance,
-        locale:"th"
+        locale: "th"
     };
 
     return (
@@ -71,7 +71,7 @@ export default function DepositPaymentPage() {
                     clientSecret && (
                         // 2. เมื่อได้ clientSecret แล้ว ให้ส่งต่อไปให้ Elements provider
                         <Elements options={options} stripe={stripePromise}>
-                            <CheckoutForm />
+                            <CheckoutForm documentData={documentData} />
                         </Elements>
                     )
                 )}

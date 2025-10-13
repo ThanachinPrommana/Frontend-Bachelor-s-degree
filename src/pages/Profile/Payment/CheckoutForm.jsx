@@ -6,10 +6,12 @@ import {
 } from "@stripe/react-stripe-js";
 import { Button } from "@/components/ui/button"; // (ตัวอย่าง) Import Button จาก ShadCN/UI
 import { Loader2 } from "lucide-react"; // (ตัวอย่าง) Import Icon จาก Lucide
+import { useNavigate } from "react-router";
 
-export default function CheckoutForm() {
+export default function CheckoutForm({ documentData }) {
     const stripe = useStripe();
     const elements = useElements();
+    const navigate = useNavigate();
 
     const [message, setMessage] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -26,11 +28,18 @@ export default function CheckoutForm() {
         setIsLoading(true);
         setMessage(null); // Clear previous messages
 
+        const postId = documentData?.postId;
+        if (!postId) {
+            setMessage("เกิดข้อผิดพลาด: ไม่พบ Post ID");
+            setIsLoading(false);
+            return;
+        }
+
         const { error, paymentIntent } = await stripe.confirmPayment({
             elements,
             confirmParams: {
                 // URL ที่จะให้ Stripe redirect กลับมาหลังชำระเงินเสร็จ (สำหรับบางช่องทาง)
-                return_url: `${window.location.origin}/payment-status`,
+                return_url: `${window.location.origin}/payment-status?postId=${postId}`,
             },
             // ป้องกันการ redirect ทันที เพื่อให้เราจัดการ QR Code ได้
             redirect: "if_required",
@@ -52,8 +61,7 @@ export default function CheckoutForm() {
         } else if (paymentIntent && paymentIntent.status === "succeeded") {
             // กรณีจ่ายด้วยบัตรเครดิตสำเร็จทันที
             setMessage("การชำระเงินสำเร็จ!");
-            // สามารถ redirect ไปยังหน้าสถานะได้เลย
-            window.location.href = "/payment-status";
+            navigate(`/booking/${postId}/${unitId}`);
         }
 
         setIsLoading(false);

@@ -279,12 +279,12 @@ export default function PostUpload() {
     const formData = new FormData();
 
     // เหมาะกับ multer.fields([{name:'images'},{name:'videos'}])
-    (allData.images || []).forEach((img) =>
-      formData.append("images", img.file)
-    );
-    (allData.videos || []).forEach((vid) =>
-      formData.append("videos", vid.file)
-    );
+    // (allData.images || []).forEach((img) =>
+    //   formData.append("images", img.file)
+    // );
+    // (allData.videos || []).forEach((vid) =>
+    //   formData.append("videos", vid.file)
+    // );
 
     for (const key in allData) {
       if (!allData.hasOwnProperty(key)) continue;
