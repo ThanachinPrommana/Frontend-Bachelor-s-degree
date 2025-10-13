@@ -21,27 +21,33 @@ import { validateStep } from "@/lib/zodRHF";
 const toNumOrUndef = (v) =>
   v === "" || v === undefined || v === null ? undefined : Number(v);
 
-/* ---------- Zod Schema (ขายอย่างเดียว / ไม่จำกัดเพดานราคา / ยอมให้ 0) ---------- */
+/* ---------- Zod Schema (ขายเท่านั้น) ---------- */
 const priceSchema = z.object({
   // ต้องกรอก และยอมให้ 0 (>= 0). ว่างจะไม่ผ่าน
   Price: z.preprocess(
-    toNumOrUndef,
+    (v) => (v === "" || v === undefined || v === null ? undefined : Number(v)),
     z.number({ required_error: "กรุณากรอกราคา" }).min(0, "กรุณากรอกราคาให้ ≥ 0")
   ),
 
-  // เงินดาวน์ ไม่จำกัดเพดาน, เว้นว่างได้ (จะไม่ส่ง)
-  Deposit_Amount: z
-    .preprocess(toNumOrUndef, z.number().min(0))
-    .optional()
-    .nullable(),
+  // เงินดาวน์ บังคับกรอกเสมอ (ไม่มี RENT แล้ว)
+  Deposit_Amount: z.preprocess(
+    (v) => (v === "" || v === undefined || v === null ? undefined : Number(v)),
+    z
+      .number({ required_error: "กรุณากรอกเงินดาวน์" })
+      .min(1, "กรุณากรอกเงินดาวน์ให้ถูกต้อง")
+  ),
 
-  // ดอกเบี้ยโดยประมาณ (%/ปี) — จำกัดบนไว้เพื่อกันค่าเพี้ยน
+  // ดอกเบี้ยโดยประมาณ (%/ปี)
   Interest: z
-    .preprocess(toNumOrUndef, z.number().min(0).max(25))
+    .preprocess(
+      (v) =>
+        v === "" || v === undefined || v === null ? undefined : Number(v),
+      z.number().min(0).max(25)
+    )
     .optional()
     .nullable(),
 
-  // ข้อความอื่น ๆ
+  // รายจ่ายอื่น ๆ (ไม่บังคับ)
   Other_related_expenses: z.string().trim().max(200).optional(),
 });
 
@@ -190,6 +196,15 @@ function PostPrice() {
                             min={0}
                             max={25}
                             className="pr-10 h-11"
+                            onChange={(e) =>
+                              form.setValue(
+                                "Interest",
+                                e.target.value === ""
+                                  ? undefined
+                                  : Number(e.target.value),
+                                { shouldDirty: true, shouldValidate: true }
+                              )
+                            }
                           />
                           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                             %

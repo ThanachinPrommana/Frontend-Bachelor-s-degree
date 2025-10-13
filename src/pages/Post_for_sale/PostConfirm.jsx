@@ -3,13 +3,7 @@ import PostLayout from "@/layouts/PostLayout";
 import { Button } from "@/components/ui/button";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  CheckCircle,
-  Edit,
-  Image as ImageIcon,
-  Loader2,
-  Info,
-} from "lucide-react";
+import { CheckCircle, Image as ImageIcon, Loader2, Info } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import {
   AlertDialog,
@@ -20,6 +14,7 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import axios from "axios";
+import { useFormContext } from "react-hook-form";
 
 /** ใช้ env ก่อน แล้วค่อย fallback localhost */
 const API_URL = import.meta.env?.VITE_API_URL || "http://localhost:8200";
@@ -41,14 +36,22 @@ function fmtNumber(v) {
   return nfArea.format(n);
 }
 function fmtYear(v) {
-  if (!v && v !== 0) return "-";
-  const n = Number(v);
-  if (Number.isNaN(n) || n < 1800) return "-";
+  if (v === null || v === undefined || v === "") return "-";
+  const n = Number(String(v).trim());
+  if (!Number.isFinite(n) || n < 1800) return "-";
   return String(n);
 }
 function safeJoin(arr, sep = ", ") {
   return Array.isArray(arr) && arr.length ? arr.join(sep) : "-";
 }
+/** ดอกเบี้ยให้ทนทานต่อค่าว่าง/สตริง */
+const fmtInterest = (v) => {
+  if (v === null || v === undefined) return "-";
+  const s = String(v).trim();
+  if (s === "") return "-";
+  const n = Number(s);
+  return Number.isFinite(n) ? `${n}% / ปี` : "-";
+};
 
 /** sanitize url: เติม https:// และบังคับให้เป็น http/https เท่านั้น */
 function normalizeUrl(val) {
@@ -80,21 +83,37 @@ function getCategoryName(postData) {
   );
 }
 
-/** SELL/RENT label */
-function getSellRent(postData) {
-  const raw = postData?.Sell_Rent;
-  if (!raw) return "-";
+/** SELL/RENT label (ตอนนี้มีแต่ขาย แต่คง helper ไว้เพื่อ fallback draft/back-end) */
+function getSellRent(data) {
+  const raw = data?.Sell_Rent;
+  if (!raw) return "ขาย (SALE)"; // default เป็นขาย
   const v = String(raw).toUpperCase();
   if (v === "SALE") return "ขาย (SALE)";
   if (v === "RENT") return "ให้เช่า (RENT)";
   return raw;
 }
 
-/** ดึง URL ของรูปจากหลายรูปแบบ object */
+/** ดึง URL ของรูปจากหลายรูปแบบ object — อนุญาตเฉพาะ http(s), data:image/*, blob: */
 function getImageUrl(img) {
   if (!img) return null;
-  if (typeof img === "string") return normalizeUrl(img) || img;
-  return img.secure_url || img.url || img.path || img.Location || null;
+
+  const raw =
+    typeof img === "string"
+      ? String(img).trim()
+      : img.secure_url || img.url || img.path || img.Location || "";
+
+  if (!raw) return null;
+
+  const SAFE_SCHEMES = /^(https?:|data:image\/|blob:)/i;
+
+  // http/https → normalize, ถ้า normalize ไม่ผ่าน (protocol แปลก) ให้ทิ้ง
+  if (/^https?:/i.test(raw)) {
+    const norm = normalizeUrl(raw);
+    return norm || null;
+  }
+
+  // อนุญาต data:image/* และ blob:
+  return SAFE_SCHEMES.test(raw) ? raw : null;
 }
 
 /* ================= UI Partials ================= */
@@ -105,15 +124,11 @@ const Row = ({ label, value, right = false }) => (
   </div>
 );
 
-const Section = ({ title, onEdit, children }) => (
+/** ตัดปุ่มแก้ไขออกตามที่ขอ */
+const Section = ({ title, children }) => (
   <div>
     <div className="flex justify-between items-center mb-2">
       <h3 className="font-semibold text-lg">{title}</h3>
-      {onEdit && (
-        <Button variant="outline" size="sm" onClick={onEdit}>
-          <Edit className="w-4 h-4 mr-1" /> แก้ไข
-        </Button>
-      )}
     </div>
     {children}
   </div>
@@ -122,12 +137,15 @@ const Section = ({ title, onEdit, children }) => (
 const PostConfirm = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const form = useFormContext?.();
+  const draft = form?.getValues?.() || {}; // fallback ค่าจากฟอร์ม
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [postData, setPostData] = useState(null);
   const [resolvedCategoryName, setResolvedCategoryName] = useState("-");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   // รองรับกรณี refresh หน้า: ดึง id จาก query ได้ด้วย
   const urlId = new URLSearchParams(location.search).get("id");
@@ -194,18 +212,24 @@ const PostConfirm = () => {
     return () => controller.abort();
   }, [postData]);
 
-  const sellRentView = useMemo(() => getSellRent(postData), [postData]);
+  // ใช้ค่าจาก backend ถ้ามี ไม่งั้น fallback เป็น draft จากฟอร์ม
+  const sellRentView = useMemo(
+    () => getSellRent(postData) || getSellRent(draft),
+    [postData, draft]
+  );
 
   const handleSubmit = async () => {
+    if (submitting) return;
+    setSubmitting(true);
     try {
-      // ถ้าหลังบ้านมีสถานะ ก็อัปเดตที่นี่ เช่น:
+      // ตัวอย่าง: อัปเดตสถานะ ถ้าพร้อมเปิดใช้
       // await axios.patch(`${API_URL}/api/propertypost/${postId}`, { Status_post: "PENDING_REVIEW" }, { withCredentials: true });
+      navigate("/seller");
     } catch (e) {
-      // ไม่บล็อกการนำทาง แต่ log ไว้
       console.warn("Failed to set status:", e);
     } finally {
       setShowConfirm(false);
-      navigate("/seller");
+      setSubmitting(false);
     }
   };
 
@@ -247,58 +271,73 @@ const PostConfirm = () => {
       <div className="flex justify-center">
         <Card className="w-full max-w-3xl shadow-xl border-0 ring-1 ring-black/5">
           <CardHeader className="text-center space-y-2">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <CheckCircle className="w-6 h-6 text-primary" />
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+              <CheckCircle className="w-6 h-6 text-green-600" />
             </div>
+            {/* ✅ เปลี่ยนหัวข้อเป็นโทน “ผลลัพธ์/สรุปก่อนเผยแพร่” */}
             <CardTitle className="text-2xl font-semibold mt-1">
-              ยืนยันข้อมูล
+              สรุปข้อมูลประกาศก่อนเผยแพร่
             </CardTitle>
             <p className="text-muted-foreground text-sm">
-              กรุณาตรวจสอบข้อมูลของคุณก่อนโพสต์
+              โปรดตรวจสอบความถูกต้องของข้อมูลด้านล่าง หากเรียบร้อยแล้วกด
+              <span className="font-medium"> “ส่งประกาศ”</span>
             </p>
           </CardHeader>
 
           <CardContent className="space-y-8 px-6 md:px-8 pb-8">
-            {/* Helper banner */}
+            {/* Helper banner (อธิบายขั้นตอนต่อไป) */}
             <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground flex items-start gap-3">
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
-                หากพบข้อมูลไม่ถูกต้อง สามารถกดปุ่ม{" "}
-                <span className="font-medium">แก้ไข</span> ในแต่ละหมวด
-                แล้วกลับมาหน้านี้อีกครั้งได้
+                หลังจากส่งประกาศ
+                ระบบจะเข้าสู่ขั้นตอนตรวจสอบโดยผู้ดูแลและจะเผยแพร่ภายใน{" "}
+                <span className="font-medium">24 ชั่วโมงทำการ</span>
               </p>
             </div>
 
             {/* ข้อมูลประกาศ */}
-            <Section
-              title="ข้อมูลประกาศ"
-              onEdit={() => navigate("/seller/post-for-sale/title")}
-            >
+            <Section title="ข้อมูลประกาศ">
               <div className="space-y-1">
-                <Row label="หัวข้อ" value={postData?.Property_Name || "-"} />
-                <Row label="รายละเอียด" value={postData?.Description || "-"} />
+                <Row
+                  label="หัวข้อ"
+                  value={postData?.Property_Name ?? draft?.Property_Name ?? "-"}
+                />
+                <Row
+                  label="รายละเอียด"
+                  value={postData?.Description ?? draft?.Description ?? "-"}
+                />
                 <Row label="ประเภททรัพย์" value={resolvedCategoryName} />
               </div>
             </Section>
 
             {/* ที่ตั้ง */}
-            <Section
-              title="ที่ตั้ง"
-              onEdit={() => navigate("/seller/post-for-sale/location")}
-            >
+            <Section title="ที่ตั้ง">
               <div className="space-y-1">
-                <Row label="ที่อยู่" value={postData?.Address || "-"} />
-                <Row label="จังหวัด" value={postData?.Province || "-"} />
-                <Row label="อำเภอ/เขต" value={postData?.District || "-"} />
-                <Row label="ตำบล/แขวง" value={postData?.Subdistrict || "-"} />
+                <Row
+                  label="ที่อยู่"
+                  value={postData?.Address ?? draft?.Address ?? "-"}
+                />
+                <Row
+                  label="จังหวัด"
+                  value={postData?.Province ?? draft?.Province ?? "-"}
+                />
+                <Row
+                  label="อำเภอ/เขต"
+                  value={postData?.District ?? draft?.District ?? "-"}
+                />
+                <Row
+                  label="ตำบล/แขวง"
+                  value={postData?.Subdistrict ?? draft?.Subdistrict ?? "-"}
+                />
                 <Row
                   label="ลิงก์แผนที่"
                   value={
-                    postData?.LinkMap && normalizeUrl(postData.LinkMap) ? (
+                    (postData?.LinkMap ?? draft?.LinkMap) &&
+                    normalizeUrl(postData?.LinkMap ?? draft?.LinkMap) ? (
                       <a
-                        href={normalizeUrl(postData.LinkMap)}
+                        href={normalizeUrl(postData?.LinkMap ?? draft?.LinkMap)}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         className="text-primary underline underline-offset-2"
                       >
                         เปิดแผนที่
@@ -312,121 +351,124 @@ const PostConfirm = () => {
             </Section>
 
             {/* รายละเอียดทรัพย์ */}
-            <Section
-              title="รายละเอียดทรัพย์"
-              onEdit={() => navigate("/seller/post-for-sale/detail")}
-            >
+            <Section title="รายละเอียดทรัพย์">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Row
                   label="พื้นที่ใช้สอย"
                   value={
-                    postData?.Usable_Area
-                      ? `${fmtNumber(postData.Usable_Area)} ตร.ม.`
+                    (postData?.Usable_Area ?? draft?.Usable_Area) != null
+                      ? `${fmtNumber(
+                          postData?.Usable_Area ?? draft?.Usable_Area
+                        )} ตร.ม.`
                       : "-"
                   }
                 />
                 <Row
                   label="พื้นที่ดิน"
                   value={
-                    postData?.Land_Size
-                      ? `${fmtNumber(postData.Land_Size)} ตร.วา`
+                    (postData?.Land_Size ?? draft?.Land_Size) != null
+                      ? `${fmtNumber(
+                          postData?.Land_Size ?? draft?.Land_Size
+                        )} ตร.วา`
                       : "-"
                   }
                 />
-                <Row label="ปีที่สร้าง" value={fmtYear(postData?.Year_Built)} />
-                <Row label="ห้องนอน" value={fmtNumber(postData?.Bedrooms)} />
-                <Row label="ห้องน้ำ" value={fmtNumber(postData?.Bathroom)} />
+                <Row
+                  label="ปีที่สร้าง"
+                  value={fmtYear(postData?.Year_Built ?? draft?.Year_Built)}
+                />
+                <Row
+                  label="ห้องนอน"
+                  value={fmtNumber(postData?.Bedrooms ?? draft?.Bedrooms)}
+                />
+                <Row
+                  label="ห้องน้ำ"
+                  value={fmtNumber(postData?.Bathroom ?? draft?.Bathroom)}
+                />
                 <Row
                   label="จำนวนห้องทั้งหมด"
-                  value={fmtNumber(postData?.Total_Rooms)}
+                  value={fmtNumber(postData?.Total_Rooms ?? draft?.Total_Rooms)}
                 />
                 <Row
                   label="ที่จอดรถ"
-                  value={fmtNumber(postData?.Parking_Space)}
+                  value={fmtNumber(
+                    postData?.Parking_Space ?? draft?.Parking_Space
+                  )}
                 />
                 <div className="md:col-span-3">
                   <Row
                     label="สถานที่ใกล้เคียง"
-                    value={safeJoin(postData?.Nearby_Landmarks)}
+                    value={safeJoin(
+                      postData?.Nearby_Landmarks ?? draft?.Nearby_Landmarks
+                    )}
                   />
                 </div>
                 <div className="md:col-span-3">
                   <Row
                     label="สิ่งอำนวยความสะดวก"
-                    value={safeJoin(postData?.Additional_Amenities)}
+                    value={safeJoin(
+                      postData?.Additional_Amenities ??
+                        draft?.Additional_Amenities
+                    )}
                   />
                 </div>
               </div>
             </Section>
 
-            {/* ราคา */}
-            <Section
-              title="ราคา"
-              onEdit={() => navigate("/seller/post-for-sale/price")}
-            >
+            {/* ราคา (ระบบมีแต่ขาย) */}
+            <Section title="ราคา">
               <div className="space-y-1">
                 <Row label="ประเภทประกาศ" value={sellRentView} />
-                {String(postData?.Sell_Rent || "")
-                  .toUpperCase()
-                  .includes("RENT") ? (
-                  <>
-                    <Row
-                      label="ค่าเช่า"
-                      value={fmtBaht(postData?.Price)}
-                      right
-                    />
-                    <Row
-                      label="ค่ามัดจำ"
-                      value={fmtBaht(postData?.Deposit_Rent)}
-                      right
-                    />
-                  </>
-                ) : (
-                  <>
-                    <Row
-                      label="ราคาขาย"
-                      value={fmtBaht(postData?.Price)}
-                      right
-                    />
-                    <Row
-                      label="เงินดาวน์"
-                      value={fmtBaht(postData?.Deposit_Amount)}
-                      right
-                    />
-                    <Row
-                      label="ดอกเบี้ยโดยประมาณ"
-                      value={
-                        postData?.Interest || postData?.Interest === 0
-                          ? `${Number(postData.Interest)}% / ปี`
-                          : "-"
-                      }
-                      right
-                    />
-                  </>
-                )}
+                <Row
+                  label="ราคาขาย"
+                  value={fmtBaht(postData?.Price ?? draft?.Price)}
+                  right
+                />
+                <Row
+                  label="เงินดาวน์"
+                  value={fmtBaht(
+                    postData?.Deposit_Amount ?? draft?.Deposit_Amount
+                  )}
+                  right
+                />
+                <Row
+                  label="ดอกเบี้ยโดยประมาณ"
+                  value={fmtInterest(postData?.Interest ?? draft?.Interest)}
+                  right
+                />
                 <Row
                   label="ค่าใช้จ่ายอื่น ๆ"
-                  value={postData?.Other_related_expenses || "-"}
+                  value={
+                    postData?.Other_related_expenses ??
+                    draft?.Other_related_expenses ??
+                    "-"
+                  }
                 />
               </div>
             </Section>
 
             {/* ผู้ขาย */}
-            <Section
-              title="ข้อมูลผู้ขาย"
-              onEdit={() => navigate("/seller/post-for-sale/inform")}
-            >
+            <Section title="ข้อมูลผู้ขาย">
               <div className="space-y-1">
-                <Row label="ชื่อผู้ขาย" value={postData?.Name || "-"} />
-                <Row label="เบอร์โทร" value={postData?.Phone || "-"} />
+                <Row
+                  label="ชื่อผู้ขาย"
+                  value={postData?.Name ?? draft?.Name ?? "-"}
+                />
+                <Row
+                  label="เบอร์โทร"
+                  value={postData?.Phone ?? draft?.Phone ?? "-"}
+                />
                 <Row
                   label="LINE"
                   value={
-                    postData?.Link_line && normalizeUrl(postData.Link_line) ? (
+                    (postData?.Link_line ?? draft?.Link_line) &&
+                    normalizeUrl(postData?.Link_line ?? draft?.Link_line) ? (
                       <a
-                        href={normalizeUrl(postData.Link_line)}
+                        href={normalizeUrl(
+                          postData?.Link_line ?? draft?.Link_line
+                        )}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         className="text-primary underline underline-offset-2"
                       >
                         เปิดลิงก์ LINE
@@ -439,12 +481,16 @@ const PostConfirm = () => {
                 <Row
                   label="Facebook"
                   value={
-                    postData?.Link_facbook &&
-                    normalizeUrl(postData.Link_facbook) ? (
+                    (postData?.Link_facbook ?? draft?.Link_facbook) &&
+                    normalizeUrl(
+                      postData?.Link_facbook ?? draft?.Link_facbook
+                    ) ? (
                       <a
-                        href={normalizeUrl(postData.Link_facbook)}
+                        href={normalizeUrl(
+                          postData?.Link_facbook ?? draft?.Link_facbook
+                        )}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         className="text-primary underline underline-offset-2"
                       >
                         เปิด Facebook
@@ -458,10 +504,7 @@ const PostConfirm = () => {
             </Section>
 
             {/* รูปภาพ */}
-            <Section
-              title="รูปภาพประกาศ"
-              onEdit={() => navigate("/seller/post-for-sale/upload")}
-            >
+            <Section title="รูปภาพประกาศ">
               {hasImages ? (
                 <div className="grid grid-cols-3 gap-3">
                   {images.map((url, idx) => (
@@ -494,13 +537,13 @@ const PostConfirm = () => {
               )}
             </Section>
 
-            {/* ปุ่มยืนยัน */}
+            {/* ปุ่มยืนยัน (ไม่มีปุ่มย้อนกลับ/แก้ไขแล้ว) */}
             <div className="flex justify-end pt-2">
               <Button
                 onClick={() => setShowConfirm(true)}
-                className="min-w-[140px]"
+                className="min-w-[160px]"
               >
-                สำเร็จ
+                ส่งประกาศ
               </Button>
             </div>
           </CardContent>
@@ -511,13 +554,16 @@ const PostConfirm = () => {
       <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>รอการอนุมัติจากแอดมิน</AlertDialogTitle>
+            <AlertDialogTitle>ประกาศถูกส่งรอการอนุมัติ</AlertDialogTitle>
           </AlertDialogHeader>
           <p className="text-sm text-muted-foreground">
-            อยู่ในขั้นตอนตรวจสอบ จะเห็นประกาศได้ภายใน 24 ชม. ทำการ
+            ระบบกำลังตรวจสอบประกาศของคุณ คุณจะเห็นประกาศบนหน้าเว็บภายใน 24
+            ชั่วโมงทำการ
           </p>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={handleSubmit}>สำเร็จ</AlertDialogAction>
+            <AlertDialogAction onClick={handleSubmit} disabled={submitting}>
+              {submitting ? "กำลังบันทึก..." : "ตกลง"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

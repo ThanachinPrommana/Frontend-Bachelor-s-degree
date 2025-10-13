@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import React, { useMemo, useState, useCallback } from "react";
 import Formuploadimage from "@/components/form/Formuploadimage";
-import { updateSeller } from "@/api/user";
+import { updateSeller, updateImage } from "@/api/user"; // ✅ เพิ่ม updateImage
 import { useAuth } from "@/context/AuthContext";
 import ModalShell from "@/components/profile/ModalShell";
 import SellerEditForm from "@/components/profile/seller/SellerEditForm";
@@ -68,7 +68,6 @@ const absolutize = (maybeUrl) => {
   if (!s) return null;
 
   if (isSafeHttpUrl(s)) return s; // already absolute + safe
-  // treat as server-relative path
   const base = (import.meta.env.VITE_API_URL || window.location.origin).replace(
     /\/$/,
     ""
@@ -157,28 +156,25 @@ const SELLER_ALLOWED = [
   // ไม่อนุญาตแก้ Seller.publicId
 ];
 
-// helper ว่างจริง ๆ (ย้ายขึ้นมาก่อนใช้งาน)
+// helper ว่างจริง ๆ
 const isEmptyObject = (o) => !o || Object.keys(o).length === 0;
 
-/* ===== version A: sanitize รองรับ {user,buyer,seller} และ {First_name,..., Buyer, Seller} ===== */
+/* ===== sanitize รองรับ {user,buyer,seller} และ {First_name,..., Buyer, Seller} ===== */
 const sanitizeNestedDiff = (nested) => {
   const safe = {};
   const top = nested || {};
 
-  // --- user: รวมได้ทั้ง top.user และ top-level user fields (First_name, Phone, image ฯลฯ)
   const userTop = deepPick(top, USER_ALLOWED);
   const userObj = top.user ? deepPick(top.user, USER_ALLOWED) : {};
   const userMerged = { ...userObj, ...userTop };
   if (!isEmptyObject(userMerged)) safe.user = userMerged;
 
-  // --- buyer: รองรับ top.buyer และ top.Buyer
   const buyerSrc = top.buyer ?? top.Buyer ?? null;
   if (buyerSrc) {
     const picked = deepPick(buyerSrc, BUYER_ALLOWED);
     if (!isEmptyObject(picked)) safe.buyer = picked;
   }
 
-  // --- seller: รองรับ top.seller และ top.Seller
   const sellerSrc = top.seller ?? top.Seller ?? null;
   if (sellerSrc) {
     const picked = deepPick(sellerSrc, SELLER_ALLOWED);
@@ -195,6 +191,7 @@ export default function SellerInfo() {
   const [showImageModal, setShowImageModal] = useState(false);
   const [avatarBust, setAvatarBust] = useState(0);
   const [localAvatar, setLocalAvatar] = useState(null);
+  const [uploading, setUploading] = useState(false); // ✅ ใหม่: กันปิด modal ระหว่างอัปโหลด
 
   const detailRows = useMemo(() => {
     const b = user?.Buyer || {};
@@ -215,7 +212,6 @@ export default function SellerInfo() {
       { label: "สิ่งอำนวยความสะดวก", value: nearbyLabel(b?.Nearby_Facilities) },
       { label: "ไลฟ์สไตล์", value: lifestyleLabel(b?.Lifestyle_Preferences) },
       { label: "ความต้องการพิเศษ", value: b?.Special_Requirements || "-" },
-      // — ชุดล่าง —
       { label: "เลขบัตรประชาชน", value: maskThaiID(s?.National_ID) },
       { label: "บริษัท", value: s?.Company_Name || "-" },
       { label: "ใบอนุญาตนายหน้า", value: s?.RealEstate_License || "-" },
@@ -240,9 +236,7 @@ export default function SellerInfo() {
         document.execCommand("copy");
         document.body.removeChild(ta);
       }
-    } catch {
-      // เงียบ ๆ
-    }
+    } catch {}
   }, [user?.Email]);
 
   const avatarSrc = useMemo(() => {
@@ -331,7 +325,6 @@ export default function SellerInfo() {
               <DetailRow key={row.label} label={row.label} value={row.value} />
             ))}
 
-            {/* เส้นคั่น */}
             <div className="col-span-1 sm:col-span-2 my-2">
               <div className="h-px bg-gray-200" />
             </div>
@@ -348,8 +341,11 @@ export default function SellerInfo() {
               description="รองรับไฟล์รูปภาพทั่วไป (แนะนำ ≥ 400×400px)"
               icon={<ImageIcon className="w-5 h-5" />}
               onClose={() => {
-                setShowImageModal(false);
-                setLocalAvatar(null);
+                if (!uploading) {
+                  // ✅ กันปิดระหว่างอัปโหลด
+                  setShowImageModal(false);
+                  setLocalAvatar(null);
+                }
               }}
             >
               <div className="flex items-center gap-4 mb-4">
@@ -374,23 +370,27 @@ export default function SellerInfo() {
                 </div>
               </div>
 
+              {/* ✅ ปรับให้ยิง updateImage ที่นี่เหมือน BuyerInfo */}
               <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 mb-4 bg-gray-50">
                 <Formuploadimage
-                  onUploadSuccess={async (payloadOrUrl) => {
+                  onUploadSuccess={async (data) => {
                     try {
-                      const payload =
-                        typeof payloadOrUrl === "string"
-                          ? { url: payloadOrUrl }
-                          : payloadOrUrl || {};
-                      if (payload.preview) setLocalAvatar(payload.preview);
+                      setUploading(true);
+                      // รองรับทั้งรูปแบบที่ component ส่ง FormData มาโดยตรง
+                      // หรือ object ที่มี { formData, preview }
+                      const formData = data?.formData ?? data;
+                      if (data?.preview) setLocalAvatar(data.preview);
 
-                      await revalidateUser();
+                      await updateImage(formData); // 🔑 ยิง API อัปเดตรูป
+                      await revalidateUser(); // ดึง user ใหม่
                       setAvatarBust(Date.now()); // bust cache
                       setLocalAvatar(null);
                       setShowImageModal(false);
                     } catch (err) {
                       console.error("รูปภาพอัปเดตล้มเหลว:", err);
                       alert("ไม่สามารถบันทึกรูปได้");
+                    } finally {
+                      setUploading(false);
                     }
                   }}
                 />
@@ -424,8 +424,14 @@ export default function SellerInfo() {
                     return;
                   }
 
+                  const payload = {
+                    ...(safeDiff.user || {}),
+                    ...(safeDiff.buyer ? { Buyer: safeDiff.buyer } : {}),
+                    ...(safeDiff.seller ? { Seller: safeDiff.seller } : {}),
+                  };
+
                   try {
-                    await updateSeller(safeDiff);
+                    await updateSeller(payload);
                     await revalidateUser();
                     setShowModal(false);
                   } catch (err) {

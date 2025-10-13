@@ -1,13 +1,22 @@
-// src/pages/Profile/ProfileSeller.jsx
+// src/pages/Profile/Seller/ProfileSeller.jsx
 import React, { useState, useMemo, useEffect, lazy, Suspense } from "react";
-import { FaUser, FaHome, FaBell, FaFileAlt } from "react-icons/fa";
+import {
+  FaUser,
+  FaHome,
+  FaBell,
+  FaFileAlt,
+  FaCalendarAlt,
+  FaClipboardCheck,
+} from "react-icons/fa";
 import { useAuth } from "@/context/AuthContext";
 
-// 👉 ปรับเป็น Lazy imports (ปรับ path ให้ตรงโครงสร้างโปรเจกต์ของคุณ)
+// 👉 Lazy imports (ไฟล์ทั้งหมดอยู่โฟลเดอร์เดียวกัน)
 const SellerInfo = lazy(() => import("./SellerInfo"));
 const SellerPost = lazy(() => import("./SellerPost"));
 const SellerNoti = lazy(() => import("./SellerNoti"));
 const SellerDoc = lazy(() => import("./SellerDoc"));
+const SellerSchedule = lazy(() => import("./SellerSchedule"));
+const SellerBooking = lazy(() => import("./SellerBooking"));
 
 // สเกเลตันง่าย ๆ ระหว่างโหลดแท็บ
 const LoadingPane = () => (
@@ -28,7 +37,7 @@ const isSafeHttpUrl = (u) => {
 const ProfileSeller = () => {
   const { authUser, loading } = useAuth();
 
-  // Persist tab: โหลดค่าจาก localStorage และบันทึกกลับเมื่อเปลี่ยน
+  // ✅ จำแท็บล่าสุด
   const [selectedTab, setSelectedTab] = useState(() => {
     return localStorage.getItem("sellerTab") || "info";
   });
@@ -36,11 +45,25 @@ const ProfileSeller = () => {
     localStorage.setItem("sellerTab", selectedTab);
   }, [selectedTab]);
 
-  // แท็บ (icon เป็น instance คงที่ ไม่ก่อ re-render)
+  // ✅ ตั้งชื่อแท็บให้สอดคล้องกับ Buyer
   const tabs = useMemo(
     () => [
-      { label: "ข้อมูลผู้ขาย", key: "info", icon: <FaUser className="mr-2" /> },
-      { label: "โพสต์ของฉัน", key: "post", icon: <FaHome className="mr-2" /> },
+      {
+        label: "ข้อมูลส่วนตัว",
+        key: "info",
+        icon: <FaUser className="mr-2" />,
+      },
+      { label: "ประกาศของฉัน", key: "post", icon: <FaHome className="mr-2" /> },
+      {
+        label: "ตารางเวลา",
+        key: "schedule",
+        icon: <FaCalendarAlt className="mr-2" />,
+      },
+      {
+        label: "การจอง",
+        key: "booking",
+        icon: <FaClipboardCheck className="mr-2" />,
+      },
       { label: "การแจ้งเตือน", key: "noti", icon: <FaBell className="mr-2" /> },
       { label: "เอกสาร", key: "doc", icon: <FaFileAlt className="mr-2" /> },
     ],
@@ -75,7 +98,7 @@ const ProfileSeller = () => {
     authUser?.lastName,
   ]);
 
-  // avatar: ถ้า image เป็น http/https ใช้เลย ไม่งั้น fallback เป็น UI Avatars
+  // avatar: ถ้าเป็น http/https ใช้เลย ไม่งั้น fallback UI Avatars
   const avatarUrl = useMemo(() => {
     const candidate = authUser?.image;
     if (isSafeHttpUrl(candidate)) return candidate;
@@ -148,10 +171,10 @@ const ProfileSeller = () => {
 
         {/* Content */}
         <main className="w-full md:w-3/4 p-6 md:p-10 overflow-y-auto">
-          {/* Breadcrumb */}
+          {/* Breadcrumb ใช้คำกลางเหมือน Buyer */}
           <nav className="text-sm text-gray-500 mb-4" aria-label="breadcrumb">
             <span className="hover:text-gray-700">หน้าหลัก</span> /{" "}
-            <span className="hover:text-gray-700">โปรไฟล์ผู้ขาย</span> /{" "}
+            <span className="hover:text-gray-700">โปรไฟล์</span> /{" "}
             <span className="text-gray-800">{currentTab?.label}</span>
           </nav>
 
@@ -161,7 +184,7 @@ const ProfileSeller = () => {
             <span>{currentTab?.label}</span>
           </h1>
 
-          {/* Views (โหลดแบบ lazy + Suspense) */}
+          {/* Views (lazy + Suspense) */}
           <section
             id={`panel-${currentTab?.key}`}
             role="tabpanel"
@@ -170,6 +193,8 @@ const ProfileSeller = () => {
             <Suspense fallback={<LoadingPane />}>
               {selectedTab === "info" && <SellerInfo />}
               {selectedTab === "post" && <SellerPost />}
+              {selectedTab === "schedule" && <SellerSchedule />}
+              {selectedTab === "booking" && <SellerBooking />}
               {selectedTab === "noti" && <SellerNoti />}
               {selectedTab === "doc" && <SellerDoc />}
             </Suspense>
