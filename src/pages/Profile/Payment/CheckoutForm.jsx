@@ -7,18 +7,21 @@ import {
 import { Button } from "@/components/ui/button"; // (ตัวอย่าง) Import Button จาก ShadCN/UI
 import { Loader2 } from "lucide-react"; // (ตัวอย่าง) Import Icon จาก Lucide
 import { useNavigate } from "react-router";
+import { useAuth } from "@/context/AuthContext";
 
 export default function CheckoutForm({ documentData }) {
     const stripe = useStripe();
     const elements = useElements();
     const navigate = useNavigate();
-
+    const { authUser } = useAuth()
     const [message, setMessage] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [qrCodeUrl, setQrCodeUrl] = useState("");
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+
 
         if (!stripe || !elements) {
             // Stripe.js hasn't yet loaded.
@@ -29,8 +32,29 @@ export default function CheckoutForm({ documentData }) {
         setMessage(null); // Clear previous messages
 
         const postId = documentData?.postId;
-        if (!postId) {
-            setMessage("เกิดข้อผิดพลาด: ไม่พบ Post ID");
+        const unitId = documentData?.unitId;
+
+        let returnUrl = '';
+        const userType = authUser?.userType;
+
+        if (!userType) {
+            setMessage("เกิดข้อผิดพลาด: ไม่สามารถระบุประเภทผู้ใช้ได้");
+            setIsLoading(false);
+            return;
+        }
+        if (!postId || !unitId) { // (เพิ่ม) ตรวจสอบ unitId ด้วย
+            setMessage("เกิดข้อผิดพลาด: ไม่พบ Post ID หรือ Unit ID");
+            setIsLoading(false);
+            return;
+        }
+
+        if (userType === 'Buyer') {
+            returnUrl = `${window.location.origin}/buyer/payment-status?postId=${postId}&unitId=${unitId}`;
+        } else if (userType === 'Seller') {
+            returnUrl = `${window.location.origin}/seller/payment-status?postId=${postId}&unitId=${unitId}`;
+        } else {
+            // กรณีที่ไม่พบ userType หรือเป็นประเภทอื่น ให้มี URL สำรองหรือแสดง Error
+            setMessage("เกิดข้อผิดพลาด: ไม่สามารถระบุประเภทผู้ใช้ได้");
             setIsLoading(false);
             return;
         }
@@ -39,7 +63,7 @@ export default function CheckoutForm({ documentData }) {
             elements,
             confirmParams: {
                 // URL ที่จะให้ Stripe redirect กลับมาหลังชำระเงินเสร็จ (สำหรับบางช่องทาง)
-                return_url: `${window.location.origin}/payment-status?postId=${postId}`,
+                return_url: returnUrl
             },
             // ป้องกันการ redirect ทันที เพื่อให้เราจัดการ QR Code ได้
             redirect: "if_required",

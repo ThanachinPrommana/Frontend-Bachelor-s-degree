@@ -17,10 +17,11 @@ const formatDateTime = (isoString) => {
     return date.toLocaleDateString('th-TH', options);
 };
 
+
 const BookingScheduler = () => {
     const { postId, unitId } = useParams();
     const [slots, setSlots] = useState([]);
-    const [selectedSlotId, setSelectedSlotId] = useState(null);
+    const [selectedSlotId, setSelectedSlotId] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [bookingSuccess, setBookingSuccess] = useState(false);
@@ -55,21 +56,22 @@ const BookingScheduler = () => {
         try {
             setIsSubmitting(true);
             setError('');
-            const response = await fetch('/api/v1/bookings/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    dateTimeSlotId: selectedSlotId,
-                    unitId: unitId,
-                }),
+
+            // ==========================================================
+            // (แก้ไข) เปลี่ยนจาก fetch เป็น apiClient.post และใช้ Path ที่ถูกต้อง
+            // ==========================================================
+            const response = await apiClient.post('/user/booking', {
+                dateTimeSlotId: selectedSlotId,
+                unitId: unitId,
             });
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.message || 'เกิดข้อผิดพลาดในการจอง');
-            }
+            // ==========================================================
+
+            // ไม่ต้อง .json() เองแล้ว เพราะ apiClient จัดการให้แล้ว
             setBookingSuccess(true);
+
         } catch (err) {
-            setError(err.message);
+            // apiClient จะโยน Error ที่มี response.data มาให้เลย
+            setError(err.response?.data?.message || err.message || 'เกิดข้อผิดพลาดในการจอง');
         } finally {
             setIsSubmitting(false);
         }
@@ -89,7 +91,7 @@ const BookingScheduler = () => {
     }
 
     return (
-        <div className="font-sans max-w-2xl mx-auto my-8 p-8 bg-white rounded-lg shadow-lg">
+        <div className="font-sans max-w-lg mx-auto my-8 p-8 bg-white rounded-lg shadow-lg">
             <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">เลือกวันและเวลาที่สะดวกเพื่อนัดหมาย</h2>
 
             {error && (
@@ -99,23 +101,27 @@ const BookingScheduler = () => {
             )}
 
             {slots.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    {slots.map((slot) => (
-                        <button
-                            key={slot.id}
-                            className={`p-3 text-center rounded-md transition-colors duration-200 
-                                ${selectedSlotId === slot.id
-                                    ? 'bg-blue-500 text-white font-bold shadow-md'
-                                    : 'bg-gray-50 border border-gray-300 hover:bg-blue-100 hover:border-blue-500'
-                                }`}
-                            onClick={() => setSelectedSlotId(slot.id)}
-                        >
-                            {formatDateTime(slot.startTime)}
-                        </button>
-                    ))}
+                // (แก้ไข) เปลี่ยนจาก div grid เป็นฟอร์มที่มี select
+                <div className="mb-6">
+                    <label htmlFor="slot-select" className="block text-sm font-medium text-gray-700 mb-2">
+                        ช่วงเวลาที่ว่าง:
+                    </label>
+                    <select
+                        id="slot-select"
+                        value={selectedSlotId}
+                        onChange={(e) => setSelectedSlotId(e.target.value)}
+                        className="w-full p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                        <option value="" disabled>-- กรุณาเลือกช่วงเวลา --</option>
+                        {slots.map((slot) => (
+                            <option key={slot.id} value={slot.id}>
+                                {formatDateTime(slot.startTime)}
+                            </option>
+                        ))}
+                    </select>
                 </div>
             ) : (
-                <p className="text-center text-gray-500">ขออภัย ขณะนี้ยังไม่มีช่วงเวลาที่ว่าง</p>
+                <p className="text-center text-gray-500 mb-6">ขออภัย ขณะนี้ยังไม่มีช่วงเวลาที่ว่าง</p>
             )}
 
             {slots.length > 0 && (

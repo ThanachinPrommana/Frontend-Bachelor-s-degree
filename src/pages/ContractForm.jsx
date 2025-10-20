@@ -9,11 +9,9 @@ import SignaturePad from 'react-signature-pad-wrapper';
 import { useLocation, useNavigate } from "react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
-import { Upload, FileText, Loader2, X } from "lucide-react";
+import { Upload, FileText, Loader2, X, Trash2 } from "lucide-react";
 import { Button } from "@headlessui/react";
 import { apiClient } from "@/api/authconfig";
-
-
 
 // (แก้ไข) 1. ย้าย InputField ออกมาไว้นอก Component หลัก
 // และรับ register เข้ามาเป็น prop
@@ -79,7 +77,8 @@ const ContractForm = () => {
 
     // --- (เพิ่ม) State สำหรับ Modal และการอัปโหลด ---
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [fileToUpload, setFileToUpload] = useState(null);
+    // ใช้ชื่อเป็นพหูพจน์ และกำหนดค่าเริ่มต้นเป็น Array ว่าง
+    const [filesToUpload, setFilesToUpload] = useState([]);;
     const [isUploading, setIsUploading] = useState(false);
     const [uploadError, setUploadError] = useState('');
 
@@ -98,26 +97,36 @@ const ContractForm = () => {
         return () => clearTimeout(timer);
     }, [postData, selectedUnit, navigate]);
 
-    // --- (เพิ่ม) ฟังก์ชันสำหรับจัดการ Modal และการอัปโหลด ---
-    const handleFileSelect = (e) => {
-        const file = e.target.files[0];
-        if (file && file.type === "application/pdf") {
-            setFileToUpload(file);
-            setUploadError('');
-        } else {
-            setFileToUpload(null);
-            setUploadError("กรุณาเลือกไฟล์ PDF เท่านั้น");
-        }
+    const handleRemoveFile = (indexToRemove) => {
+        setFilesToUpload(prevFiles => prevFiles.filter((_, index) => index !== indexToRemove));
     };
 
+    // --- (เพิ่ม) ฟังก์ชันสำหรับจัดการ Modal และการอัปโหลด ---
+    const handleFileSelect = (e) => {
+        const chosenFiles = Array.from(e.target.files);
+
+        // ตรวจสอบว่าไฟล์ใหม่รวมกับของเดิมแล้วเกิน 3 ไฟล์หรือไม่
+        if (filesToUpload.length + chosenFiles.length > 3) {
+            setUploadError("คุณสามารถอัปโหลดได้สูงสุด 3 ไฟล์เท่านั้น");
+            return;
+        }
+
+        // กรองเอาเฉพาะไฟล์ PDF
+        const pdfFiles = chosenFiles.filter(file => file.type === "application/pdf");
+
+        if (pdfFiles.length !== chosenFiles.length) {
+            setUploadError("กรุณาเลือกไฟล์ PDF เท่านั้น");
+        } else {
+            setUploadError('');
+        }
+
+        // เพิ่มไฟล์ใหม่ที่ถูกต้องเข้าไปใน State (ต่อท้าย Array เดิม)
+        setFilesToUpload(prevFiles => [...prevFiles, ...pdfFiles]);
+    };
 
     const handleUploadSubmit = async () => {
-        console.log("Checking data before upload:");
-        console.log("postData:", postData);
-        console.log("selectedUnit:", selectedUnit);
-        console.log("Value for postId:", postData?.id);
-        console.log("Value for unitId:", selectedUnit?.id);
-        if (!fileToUpload) {
+        // (แก้ไข) ตรวจสอบจาก Array
+        if (filesToUpload.length === 0) {
             setUploadError("กรุณาเลือกไฟล์ที่จะอัปโหลด");
             return;
         }
@@ -125,7 +134,14 @@ const ContractForm = () => {
         setUploadError('');
 
         const formData = new FormData();
-        formData.append("document", fileToUpload);
+
+        // (หัวใจหลัก) วน Loop เพื่อส่งไฟล์ทั้งหมดใน Array
+        // และใช้ key "documents" ให้ตรงกับที่กำหนดใน Backend Router
+        for (const file of filesToUpload) {
+            formData.append("documents", file);
+        }
+
+        // append ข้อมูลอื่นๆ เหมือนเดิม
         formData.append("postId", postData.id);
         formData.append("unitId", selectedUnit.id);
         formData.append("DocumentName", `เอกสารมัดจำ ${postData.Property_Name}`);
@@ -133,15 +149,17 @@ const ContractForm = () => {
         if (authUser?.userId) {
             formData.append("userId", authUser.userId);
         }
-
         try {
+            // (สำคัญ) Path "/document" ต้องตรงกับใน Router ของคุณ
             const response = await apiClient.post("/document", formData, {
                 headers: { "Content-Type": "multipart/form-data" },
             });
+
             console.log("Upload successful:", response.data);
             setIsModalOpen(false);
-            // เมื่อสำเร็จ อาจจะพาไปหน้า "ขอบคุณ" หรือหน้า Payment
-            // navigate("/payment", { state: { documentData: response.data.document } });
+            setFilesToUpload([]); // เคลียร์ไฟล์หลังอัปโหลดสำเร็จ
+            // navigate("/success-page");
+
         } catch (err) {
             console.error("Upload failed:", err);
             setUploadError(err.response?.data?.message || "การอัปโหลดล้มเหลว");
@@ -149,9 +167,6 @@ const ContractForm = () => {
             setIsUploading(false);
         }
     };
-
-
-
 
     return (
         <div className="bg-gray-200 min-h-screen p-4 sm:p-8 flex items-center justify-center font-['Sarabun']">
@@ -342,7 +357,6 @@ const ContractForm = () => {
                             </FormField>
                         </div>
 
-
                     </div>
 
                     {/* --- ค่าใช้จ่ายในการโอน --- */}
@@ -363,9 +377,6 @@ const ContractForm = () => {
 
                     <SectionHeader title="ข้อ 6. หากผู้จะซื้อผิดสัญญา ผู้จะซื้อยอมให้ผู้จะขายริบเงินที่ได้ชำระไว้แล้วทั้งสิ้น หากผู้จะขายผิดสัญญา ผู้จะขายต้องคืนเงินที่ได้ชำระไว้จากผู้จะซื้อทั้งหมด และยอมชดใช้ค่าเสียหายให้ผู้จะซื้อจำนวนเงินเท่ากับเงินที่ผู้จะซื้อได้วางมัดจำ
                     สัญญานี้ทำขึ้นเป็นสามฉบับ แต่ละฉบับมีข้อความถูกต้องตรงกันทุกประการ ทั้งสองฝ่ายต่างได้อ่านและเข้าใจดี เห็นว่าตรงตามความประสงค์ของตนแล้ว จึงได้ลงลายมือชื่อไว้เป็นสำคัญต่อหน้าพยาน" />
-
-
-
 
                     {/* Signature Section */}
                     <div className="grid grid-cols-1 gap-y-5 mt-24 pt-8 border-t-2 border-dotted">
@@ -455,7 +466,6 @@ const ContractForm = () => {
 
 
                     </div>
-
                     {/*---- Agreement for Purchase and Sale ----*/}
                     <div className="text-center mb-12 mt-20">
                         <h1 className="text-3xl font-bold text-gray-900">
@@ -574,7 +584,6 @@ const ContractForm = () => {
 
 
                 </div>
-
                 {/* --- Action Button --- */}
 
                 <div className="mt-8 flex flex-col md:flex-row gap-4">
@@ -624,8 +633,6 @@ const ContractForm = () => {
 
                 </div>
 
-
-
                 {/* --- (เพิ่ม) Modal สำหรับอัปโหลด --- */}
                 <AnimatePresence>
                     {isModalOpen && (
@@ -641,43 +648,77 @@ const ContractForm = () => {
                                 exit={{ scale: 0.9, y: -20 }}
                                 className="bg-white rounded-xl shadow-2xl w-full max-w-lg"
                             >
-                                <div className="p-6 border-b flex justify-between items-center ">
-                                    <h3 className="text-xl font-bold ">อัปโหลดสัญญาที่ลงนามแล้ว</h3>
-                                    <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                                <div className="p-6 border-b flex justify-between items-center">
+                                    <h3 className="text-xl font-bold">อัปโหลดสัญญาที่ลงนามแล้ว</h3>
+                                    <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                                         <X size={24} />
                                     </button>
                                 </div>
                                 <div className="p-6 space-y-6">
-                                    <label className="cursor-pointer block w-full border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 hover:bg-blue-50 transition-colors">
+                                    {/* (เพิ่ม) ส่วนของคำอธิบาย */}
+                                    <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                                        <p className="font-semibold mb-2">กรุณาอัปโหลดเอกสารทั้งหมด 3 ฉบับ (PDF):</p>
+                                        <ul className="list-disc pl-5 space-y-1">
+                                            <li>เอกสารสัญญา (ที่ลงนามแล้ว)</li>
+                                            <li>สำเนาบัตรประชาชน</li>
+                                            <li>สำเนาทะเบียนบ้าน</li>
+                                        </ul>
+                                    </div>
+                                    {/* (แก้ไข) ส่วนของการเลือกไฟล์ */}
+                                    <label className={`cursor-pointer block w-full border-2 border-dashed border-gray-300 rounded-lg p-8 text-center transition-colors ${filesToUpload.length < 3 ? 'hover:border-blue-500 hover:bg-blue-50' : 'opacity-60 cursor-not-allowed'}`}>
                                         <div className="flex flex-col items-center justify-center">
                                             <Upload size={40} className="text-gray-400 mb-2" />
                                             <span className="font-semibold text-gray-700">
-                                                {fileToUpload ? fileToUpload.name : "คลิกเพื่อเลือกไฟล์ PDF"}
+                                                {filesToUpload.length < 3 ? "คลิกเพื่อเลือกไฟล์ PDF" : "อัปโหลดได้สูงสุด 3 ไฟล์"}
                                             </span>
-                                            <span className="text-sm text-gray-500">ไฟล์ PDF เท่านั้น</span>
+                                            <span className="text-sm text-gray-500">คุณอัปโหลดแล้ว {filesToUpload.length} / 3 ไฟล์</span>
                                         </div>
-                                        <input type="file" accept="application/pdf" className="hidden" onChange={handleFileSelect} />
+                                        <input
+                                            type="file"
+                                            accept="application/pdf"
+                                            multiple // (สำคัญ) เพิ่ม multiple
+                                            className="hidden"
+                                            onChange={handleFileSelect}
+                                            disabled={filesToUpload.length >= 3} // ปิดการใช้งานเมื่อครบ 3 ไฟล์
+                                        />
                                     </label>
+
+                                    {/* (เพิ่ม) ส่วนแสดงรายชื่อไฟล์ที่เลือก */}
+                                    {filesToUpload.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="font-semibold text-sm">ไฟล์ที่เลือก:</p>
+                                            <ul className="space-y-1">
+                                                {filesToUpload.map((file, index) => (
+                                                    <li key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded-md text-sm">
+                                                        <span className="truncate pr-2">{file.name}</span>
+                                                        <button
+                                                            onClick={() => handleRemoveFile(index)}
+                                                            className="text-red-500 hover:text-red-700 flex-shrink-0"
+                                                            aria-label={`Remove ${file.name}`}
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
 
                                     {uploadError && <p className="text-red-500 text-sm text-center">{uploadError}</p>}
                                 </div>
-                                <div className="p-6 bg-gray-50 rounded-b-xl flex justify-end gap-4 ">
+                                <div className="p-6 bg-gray-50 rounded-b-xl flex justify-end gap-4">
                                     <Button variant="ghost" onClick={() => setIsModalOpen(false)}>ยกเลิก</Button>
                                     <Button
                                         onClick={handleUploadSubmit}
-                                        disabled={isUploading || !fileToUpload}
-                                        className="bg-blue-600 hover:bg-blue-700 rounded-xl  h-[30px] w-[90px] cursor-pointer text-white"
+                                        disabled={isUploading || filesToUpload.length !== 3}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-9 px-4 flex items-center justify-center disabled:bg-gray-400 disabled:cursor-not-allowed" // (เพิ่ม) เพิ่มสไตล์สำหรับตอน disabled
                                     >
-
                                         {isUploading ? (
-                                            <div className="flex justify-center items-center">
-                                                <Loader2 size={16} className="animate-spin" />
-                                            </div>
-
+                                            <Loader2 size={16} className="animate-spin" />
                                         ) : (
                                             "ยืนยันการส่ง"
-                                        )
-                                        }
+                                        )}
                                     </Button>
                                 </div>
                             </motion.div>
@@ -689,9 +730,6 @@ const ContractForm = () => {
             </div>
         </div>
     );
-
-
-
 };
 
 export default ContractForm;

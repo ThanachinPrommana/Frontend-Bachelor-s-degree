@@ -1,17 +1,33 @@
-import { Link } from "react-router";
+import { Link } from "react-router-dom";
 import { Facebook, Instagram, Youtube, HeartPlus } from "lucide-react";
 import { useEffect, useState } from "react";
-import mockHouses from "@/data/mockHouses";
+import { apiClient } from "@/api/authconfig";
+
 const Credit = () => {
   const [expanded, setExpanded] = useState(false);
-  const [house, setHouse] = useState([]);
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   const toggleTex = () => {
     setExpanded((prev) => !prev);
   };
+
   useEffect(() => {
-    // โหลดข้อมูลเมื่อ component mount
-    setHouse(mockHouses);
+    const fetchPosts = async () => {
+      try {
+        setLoading(true);
+        const response = await apiClient.get("/credit/post");
+        setPosts(response.data);
+      } catch (error) {
+        console.error("Failed to fetch posts:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPosts();
   }, []);
+
   return (
     <div className="w-full bg-white ">
       <div className="flex items-center justify-between bg-[#2c3e50] h-20 border-b-2 border-white px-6 sm:px-10 lg:px-70">
@@ -24,7 +40,6 @@ const Credit = () => {
             </div>
           </Link>
         </div>
-
         <div className="flex space-x-8">
           <p className="text-white">Follow Us</p>
           <Facebook className="text-white hover:text-blue-300 cursor-pointer " />
@@ -34,9 +49,8 @@ const Credit = () => {
       </div>
       <div className="bg-gray-200 w-full lg:px-70 sm:px-10 pt-5 pb-8">
         <p
-          className={`text-black text-sm opacity-70 transition-all duration-300 ease-in-out ${
-            expanded ? "line-clamp-none" : "line-clamp-1"
-          }`}
+          className={`text-black text-sm opacity-70 transition-all duration-300 ease-in-out ${expanded ? "line-clamp-none" : "line-clamp-1"
+            }`}
         >
           Yuu Yenn Property - “เพราะบ้าน...คือมากกว่าหลังคาและผนัง”
           มันคือจุดเริ่มต้นของชีวิตใหม่ ความฝันของครอบครัว พื้นที่เล็ก ๆ
@@ -64,19 +78,29 @@ const Credit = () => {
           {expanded ? "ซ่อนรายละเอียด" : "อ่านเพิ่มเติม"}
         </button>
         <div className="p-4">
-          <h2 className="text-xl font-semibold mb-4">รายชื่อบ้าน</h2>
-          <ul className="list-disc pl-6">
-            {house.map((house, index) => (
-              <li key={index}>{house.name}</li>
-            ))}
-          </ul>
+          <h2 className="text-xl font-semibold mb-4">โครงการทั้งหมด</h2>
+          {loading ? (
+            <p>กำลังโหลดข้อมูลโครงการ...</p>
+          ) : (
+            // (แก้ไข) เปลี่ยน ul ให้เป็น grid container และลบ list-disc ออก
+            <ul className="grid grid-cols-5 gap-x-6 gap-y-3">
+              {posts.map((post) => (
+                // (แนะนำ) ทำให้แต่ละรายการเป็นลิงก์ และตัดข้อความที่ยาวเกินไป
+                <li key={post.id} className="truncate hover:text-blue-600 transition-colors">
+                  <Link to={`/deposit/${post.id}`} title={post.Property_Name}>
+                    {post.Property_Name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
-      <div className=" flex bg-[#2c3e50] h-20 w-full  border-t-2 border-while  justify-between pl-70 pr-70 pt-5">
+      <div className=" flex bg-[#1c2a38] h-20 w-full  border-t-2 border-while  justify-between pl-70 pr-70 pt-5">
         <Link to="Support">
-          <p className="text-white">...</p>
+          <p className="text-white">ศูนย์ช่วยเหลือ</p>
         </Link>
-        <p className="flex text-white ">© 2025 AllProperty Media Co. Ltd.</p>
+        <p className="flex text-white ">© 2025 Yuu Yenn Property LIMITED</p>
       </div>
     </div>
   );

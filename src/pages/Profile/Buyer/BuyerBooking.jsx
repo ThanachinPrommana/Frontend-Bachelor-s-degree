@@ -13,21 +13,19 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { RefreshCcw, ChevronLeft, ChevronRight } from "lucide-react";
-
-import { getProfile as apiGetProfile } from "@/api/user";
-
-// ✅ ส่วนกลาง
-import { fmtDateTimeTH, maskEmail } from "@/lib/bookingUtils";
+import { useAuth } from "@/context/AuthContext";
+import { fmtDateTimeTH } from "@/lib/bookingUtils";
 import StatusBadge from "@/components/booking/StatusBadge";
 import SlipButton from "@/components/booking/SlipButton";
 
 export default function BuyerBooking() {
   const { toast } = useToast();
+  const { authUser, revalidateUser, loading: authLoading } = useAuth();
 
-  const [bookings, setBookings] = useState([]); // ฉันเป็นผู้จอง (buyer)
-  const [loading, setLoading] = useState(false);
+  const [bookings, setBookings] = useState([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // search (debounce)
+  // Search (debounce)
   const [rawQ, setRawQ] = useState("");
   const [q, setQ] = useState("");
   useEffect(() => {
@@ -35,11 +33,11 @@ export default function BuyerBooking() {
     return () => clearTimeout(t);
   }, [rawQ]);
 
-  // pagination
+  // Pagination
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  // slip preview
+  // Slip preview
   const [slipOpen, setSlipOpen] = useState(false);
   const [slipUrl, setSlipUrl] = useState("");
 
@@ -49,13 +47,12 @@ export default function BuyerBooking() {
 
     return bookings.filter((b) =>
       [
-        b?.post?.title,
-        b?.status,
-        b?.slot?.start,
-        b?.slot?.end,
-        // ฝั่ง Buyer แสดงข้อมูลของ "ผู้ขาย"
-        b?.seller?.name,
-        b?.seller?.email,
+        b?.propertyUnit?.propertyPost?.Property_Name,
+        b?.bookingStatus,
+        b?.dateTimeSlot?.startTime,
+        b?.dateTimeSlot?.endTime,
+        b?.Buyer?.user?.First_name, // ค้นหาจากชื่อตัวเอง
+        b?.Buyer?.user?.Last_name,
       ]
         .filter(Boolean)
         .some((x) => String(x).toLowerCase().includes(term))
@@ -69,30 +66,31 @@ export default function BuyerBooking() {
     return filtered.slice(start, start + pageSize);
   }, [filtered, currentPage]);
 
-  async function load() {
+  useEffect(() => {
+    if (authUser?.Buyer?.Booking) {
+      const userBookings = authUser.Buyer.Booking;
+      setBookings(Array.isArray(userBookings) ? userBookings : []);
+    } else {
+      setBookings([]);
+    }
+  }, [authUser]);
+
+  async function handleRefresh() {
+    setIsRefreshing(true);
     try {
-      setLoading(true);
-      const res = await apiGetProfile();
-      const byMe =
-        res?.bookings || res?.bookingsByMe || res?.buyerBookings || [];
-      setBookings(Array.isArray(byMe) ? byMe : []);
-      setPage(1);
+      await revalidateUser();
+      toast({ title: "ข้อมูลล่าสุดแล้ว" });
     } catch (e) {
       console.error(e);
       toast({
-        title: "โหลดข้อมูลไม่สำเร็จ",
+        title: "รีเฟรชข้อมูลไม่สำเร็จ",
         description: e?.response?.data?.message || "โปรดลองอีกครั้ง",
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      setIsRefreshing(false);
     }
   }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     setPage(1);
@@ -118,13 +116,20 @@ export default function BuyerBooking() {
         <CardContent className="p-4 flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
           <h3 className="font-semibold flex-1">การจองของฉัน</h3>
           <Input
-            placeholder="ค้นหา (ประกาศ/ผู้ขาย/สถานะ/เวลา)"
+            placeholder="ค้นหา (ประกาศ/สถานะ/เวลา)"
             className="md:max-w-xs"
             value={rawQ}
             onChange={(e) => setRawQ(e.target.value)}
           />
-          <Button variant="outline" onClick={load}>
-            <RefreshCcw className="w-4 h-4 mr-2" /> รีเฟรช
+          <Button
+            variant="outline"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+          >
+            <RefreshCcw
+              className={`w-4 h-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
+            />{" "}
+            รีเฟรช
           </Button>
         </CardContent>
       </Card>
@@ -136,7 +141,7 @@ export default function BuyerBooking() {
             <thead className="bg-muted">
               <tr>
                 <th className="text-left px-4 py-2">ประกาศ</th>
-                <th className="text-left px-4 py-2">ผู้ขาย</th>
+                <th className="text-left px-4 py-2">ผู้ขาย (เจ้าของโพสต์)</th>
                 <th className="text-left px-4 py-2">ช่วงเวลา</th>
                 <th className="text-left px-4 py-2">สถานะ</th>
                 <th className="text-left px-4 py-2">สลิป</th>
@@ -144,7 +149,7 @@ export default function BuyerBooking() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {authLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={`sk-${i}`} className="border-t">
                     {[...Array(6)].map((__, j) => (
@@ -159,46 +164,48 @@ export default function BuyerBooking() {
               ) : (
                 paged.map((b) => (
                   <tr key={b.id} className="border-t">
-                    {/* ประกาศ (ลิงก์) */}
+                    {/* 1. แสดงชื่อประกาศ */}
                     <td className="px-4 py-2">
-                      {b.post?.title ? (
-                        <a href={`/post/${b.postId}`} className="underline">
-                          {b.post.title}
+                      {b.propertyUnit?.propertyPost?.Property_Name ? (
+                        <a
+                          href={`/deposit/${b.propertyUnit.propertyPost.id}`}
+                          className="underline"
+                        >
+                          {b.propertyUnit.propertyPost.Property_Name}
                         </a>
                       ) : (
                         "-"
                       )}
                     </td>
 
-                    {/* ผู้ขาย */}
+                    {/* 2. แสดงชื่อผู้ซื้อ (Buyer) เอง */}
                     <td className="px-4 py-2">
-                      {b.seller?.name
-                        ? b.seller.name
-                        : b.seller?.email
-                        ? maskEmail(b.seller.email)
+                      {`${b.Seller?.user?.First_name || ""} ${
+                        b.Seller?.user?.Last_name || ""
+                      }`.trim() || "-"}
+                    </td>
+
+                    {/* 3. แสดงช่วงเวลา */}
+                    <td className="px-4 py-2">
+                      {b.dateTimeSlot
+                        ? `${fmtDateTimeTH(
+                            b.dateTimeSlot.startTime
+                          )} – ${fmtDateTimeTH(b.dateTimeSlot.endTime)}`
                         : "-"}
                     </td>
 
-                    {/* ช่วงเวลา */}
+                    {/* 4. แสดงสถานะ */}
                     <td className="px-4 py-2">
-                      {b.slot
-                        ? `${fmtDateTimeTH(b.slot.start)} – ${fmtDateTimeTH(
-                            b.slot.end
-                          )}`
-                        : "-"}
+                      <StatusBadge status={b.bookingStatus} />
                     </td>
 
-                    {/* สถานะ */}
+                    {/* 5. แสดงสลิป */}
                     <td className="px-4 py-2">
-                      <StatusBadge status={b.status} />
+                      <SlipButton url={b.Buyer.user.Payment.Payment_Slip} onOpen={openSlip} />
                     </td>
+                    
 
-                    {/* สลิป */}
-                    <td className="px-4 py-2">
-                      <SlipButton url={b.slipUrl} onOpen={openSlip} />
-                    </td>
-
-                    {/* การดำเนินการ */}
+                    {/* 6. แสดงการดำเนินการ */}
                     <td className="px-4 py-2 space-x-2">
                       <span className="text-muted-foreground">—</span>
                     </td>
