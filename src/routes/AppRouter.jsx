@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 // Layouts
 import Layout from "../layouts/Layout";
@@ -60,6 +60,7 @@ import RejectSeller from "@/pages/admin/User account/RejectSeller";
 import PayDeposit from "@/pages/admin/Payment/PayDeposit";
 import PayBank from "@/pages/admin/Payment/PayBank";
 import DescriptionReport from "@/pages/admin/DescriptionReport";
+
 import { PostFormProvider } from "@/pages/Post_for_sale/PostFormProvider";
 import { AuthProvider } from "@/context/AuthContext";
 import RegisterSeller from "@/pages/Auth/RegisterSeller";
@@ -71,7 +72,9 @@ import PaymentStatusPage from "@/pages/Profile/Payment/PaymentStatusPage";
 import { Elements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
 
-const stripePromise = loadStripe('pk_test_51R6USEEHWiwlX27ITAS8FPSrge8gvKXeRe12WMaZl79xFCVeea2cpExdBdNgrD8IbaX7ZnGCtiXCFBmsuEjYwlrY00E1uHNRCr');
+const stripePromise = loadStripe(
+  "pk_test_51R6USEEHWiwlX27ITAS8FPSrge8gvKXeRe12WMaZl79xFCVeea2cpExdBdNgrD8IbaX7ZnGCtiXCFBmsuEjYwlrY00E1uHNRCr"
+);
 
 const AppRouter = () => {
   return (
@@ -115,11 +118,8 @@ const AppRouter = () => {
               <Route path="deposit/:id" element={<Deposit />} />
               <Route path="register/seller" element={<RegisterSeller />} />
               <Route path="contract" element={<ContractForm />} />
-              {/* ----- (เพิ่ม) Routes สำหรับ Stripe Payment ----- */}
-              <Route
-                path="deposit-payment"
-                element={<DepositPaymentPage />}
-              />
+              {/* ----- Routes สำหรับ Stripe Payment ----- */}
+              <Route path="deposit-payment" element={<DepositPaymentPage />} />
               <Route
                 path="payment-status"
                 element={
@@ -128,7 +128,7 @@ const AppRouter = () => {
                   </Elements>
                 }
               />
-              {/* ------------------------------------------- */}
+              {/* --------------------------------------- */}
             </Route>
           </Route>
 
@@ -140,37 +140,35 @@ const AppRouter = () => {
               <Route path="support" element={<Support />} />
               <Route path="contract" element={<ContractForm />} />
               <Route path="payment" element={<Payment />} />
-              {/* Post For Sale - Seller Access */}
+
+              {/* ----- Routes สำหรับ Stripe Payment (ฝั่ง Seller) ----- */}
+              <Route path="deposit-payment" element={<DepositPaymentPage />} />
               <Route
+                path="payment-status"
+                element={
+                  <Elements stripe={stripePromise}>
+                    <PaymentStatusPage />
+                  </Elements>
+                }
+              />
+              {/* ---------------------------------------------------- */}
+
+              {/* Post For Sale - ห่อด้วย PostFormProvider ทั้ง flow */}
+              <Route
+                path="post-for-sale/*"
                 element={
                   <PostFormProvider>
-                    <Outlet />
+                    <PostForSaleLayout />
                   </PostFormProvider>
                 }
               >
-                {/* ----- (เพิ่ม) Routes สำหรับ Stripe Payment ----- */}
-                <Route
-                  path="deposit-payment"
-                  element={<DepositPaymentPage />}
-                />
-                <Route
-                  path="payment-status"
-                  element={
-                    <Elements stripe={stripePromise}>
-                      <PaymentStatusPage />
-                    </Elements>
-                  }
-                />
-                {/* ------------------------------------------- */}
-                <Route path="post-for-sale" element={<PostForSaleLayout />}>
-                  <Route path="title" element={<PostTitle />} />
-                  <Route path="location" element={<PostLocation />} />
-                  <Route path="detail" element={<PostDetail />} />
-                  <Route path="price" element={<PostPrice />} />
-                  <Route path="inform" element={<PostInform />} />
-                  <Route path="upload" element={<PostUpload />} />
-                  <Route path="confirm" element={<PostConfirm />} />
-                </Route>
+                <Route path="title" element={<PostTitle />} />
+                <Route path="location" element={<PostLocation />} />
+                <Route path="detail" element={<PostDetail />} />
+                <Route path="price" element={<PostPrice />} />
+                <Route path="inform" element={<PostInform />} />
+                <Route path="upload" element={<PostUpload />} />
+                <Route path="confirm" element={<PostConfirm />} />
               </Route>
             </Route>
           </Route>

@@ -1,5 +1,5 @@
 // src/pages/Post_for_sale/PostPrice.jsx
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { useFormContext } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -7,7 +7,6 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormControl,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -17,45 +16,86 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Coins, Info } from "lucide-react";
 import { validateStep } from "@/lib/zodRHF";
 
-/* ---------- helper: แปลงค่าว่างเป็น undefined เพื่อบังคับ required ---------- */
-const toNumOrUndef = (v) =>
-  v === "" || v === undefined || v === null ? undefined : Number(v);
+/* ----------------------------------------------------------------
+ * 1) Presets & categoryId → label (+ alias กันสะกด)
+ * ---------------------------------------------------------------- */
+const RECURRING_EXPENSE_PRESETS = {
+  บ้านเดี่ยว: [
+    "ค่าส่วนกลางหมู่บ้าน",
+    "ค่าบำรุงถนน/ไฟสาธารณะ",
+    "ค่าดูแลสวนส่วนกลาง",
+    "ค่ากำจัดปลวกหรือแมลงประจำปี",
+    "ค่าซ่อมบำรุงระบบไฟ/น้ำ",
+    "ค่าที่จอดรถนอกตัวบ้าน",
+  ],
+  ทาวน์เฮาส์: [
+    "ค่าส่วนกลางหมู่บ้าน",
+    "ค่าบำรุงถนน/ไฟสาธารณะ",
+    "ค่าดูแลสวนส่วนกลาง",
+    "ค่ากำจัดปลวกหรือแมลงประจำปี",
+    "ค่าซ่อมบำรุงระบบไฟ/น้ำ",
+    "ค่าที่จอดรถนอกตัวบ้าน",
+  ],
+  คอนโดมิเนียม: [
+    "ค่าส่วนกลาง",
+    "ค่าเช่าที่จอดรถรายเดือน",
+    "ค่าบริการอินเทอร์เน็ต/เคเบิล/ทีวี",
+    "ค่าสมาชิกฟิตเนส/สระว่ายน้ำ",
+  ],
+  วิลล่า: [
+    "ค่าส่วนกลาง",
+    "ค่าดูแลสระว่ายน้ำ",
+    "ค่าดูแลสวน/ภูมิทัศน์รอบบ้าน",
+    "ค่ากำจัดปลวกหรือแมลง",
+    "ค่าบริการคลับเฮาส์/สปอร์ตคลับ",
+  ],
+};
 
-/* ---------- Zod Schema (ขายเท่านั้น) ---------- */
-const priceSchema = z.object({
-  // ต้องกรอก และยอมให้ 0 (>= 0). ว่างจะไม่ผ่าน
-  Price: z.preprocess(
-    (v) => (v === "" || v === undefined || v === null ? undefined : Number(v)),
-    z.number({ required_error: "กรุณากรอกราคา" }).min(0, "กรุณากรอกราคาให้ ≥ 0")
-  ),
+// ให้ตรงกับหน้า PostDetail ที่ใช้ id ชุดนี้
+const CATEGORY_LABEL_BY_ID = {
+  cmegzfhx70007w2bwp63cbc1w: "บ้านเดี่ยว",
+  cmegzft08000aw2bwx91l68z9: "ทาวน์เฮาส์",
+  cmegzfdya0006w2bwq5d8alc7: "คอนโดมิเนียม",
+  cmegzfov30009w2bwrxjpt7xn: "วิลล่า",
+};
 
-  // เงินดาวน์ บังคับกรอกเสมอ (ไม่มี RENT แล้ว)
-  Deposit_Amount: z.preprocess(
-    (v) => (v === "" || v === undefined || v === null ? undefined : Number(v)),
-    z
-      .number({ required_error: "กรุณากรอกเงินดาวน์" })
-      .min(1, "กรุณากรอกเงินดาวน์ให้ถูกต้อง")
-  ),
+// กันสะกดผิด (เช่น เทาวน์เฮาส์ → ทาวน์เฮาส์)
+const CATEGORY_LABEL_ALIAS = {
+  เทาวน์เฮาส์: "ทาวน์เฮาส์",
+};
 
-  // ดอกเบี้ยโดยประมาณ (%/ปี)
-  Interest: z
-    .preprocess(
-      (v) =>
-        v === "" || v === undefined || v === null ? undefined : Number(v),
-      z.number().min(0).max(25)
-    )
-    .optional()
-    .nullable(),
+/* ----------------------------------------------------------------
+ * 2) Dynamic Zod schema: จำกัดให้เลือกได้เฉพาะรายการของหมวดนั้น
+ * ---------------------------------------------------------------- */
+const getPriceSchemaFor = (allowedOptions) => {
+  const AllowedEnum = z.enum(
+    allowedOptions.length ? allowedOptions : ["__dummy__"]
+  );
+  return z.object({
+    Price: z.preprocess(
+      (v) => (v === "" || v == null ? undefined : Number(v)),
+      z
+        .number({ required_error: "กรุณากรอกราคา" })
+        .min(0, "กรุณากรอกราคาให้ ≥ 0")
+    ),
+    Deposit_Amount: z.preprocess(
+      (v) => (v === "" || v == null ? undefined : Number(v)),
+      z
+        .number({ required_error: "กรุณากรอกเงินดาวน์" })
+        .min(1, "กรุณากรอกเงินดาวน์ให้ถูกต้อง")
+    ),
+    Other_related_expenses: z.array(AllowedEnum).optional().default([]),
+  });
+};
 
-  // รายจ่ายอื่น ๆ (ไม่บังคับ)
-  Other_related_expenses: z.string().trim().max(200).optional(),
-});
-
+/* ----------------------------------------------------------------
+ * 3) Component (JSX ล้วน)
+ * ---------------------------------------------------------------- */
 function PostPrice() {
   const navigate = useNavigate();
   const form = useFormContext();
 
-  // บังคับค่า Sell_Rent เป็น "SALE" เสมอ (ให้ตรงกับหลังบ้าน/Prisma)
+  // บังคับค่า Sell_Rent เป็น "SALE" เสมอ
   useEffect(() => {
     if (form.getValues("Sell_Rent") !== "SALE") {
       form.setValue("Sell_Rent", "SALE", {
@@ -65,28 +105,114 @@ function PostPrice() {
     }
   }, [form]);
 
+  // อ่าน categoryId จากฟอร์ม (เลือกไว้จากหน้า Detail)
+  const rawCategoryId = form.watch("categoryId");
+  let categoryLabel = CATEGORY_LABEL_BY_ID[rawCategoryId] || "";
+  if (CATEGORY_LABEL_ALIAS[categoryLabel]) {
+    categoryLabel = CATEGORY_LABEL_ALIAS[categoryLabel];
+  }
+
+  // ตัวเลือกที่อนุญาตตามหมวดนั้น ๆ
+  const allowedOptions = useMemo(() => {
+    return RECURRING_EXPENSE_PRESETS[categoryLabel] || [];
+  }, [categoryLabel]);
+
+  // สร้าง schema ตามตัวเลือกที่อนุญาต
+  const priceSchema = useMemo(
+    () => getPriceSchemaFor(allowedOptions),
+    [allowedOptions]
+  );
+
+  // กรองค่าที่เคยเลือกไว้ให้เหลือเฉพาะของหมวดนั้น เมื่อหมวดเปลี่ยน
+  useEffect(() => {
+    const cur = form.getValues("Other_related_expenses") || [];
+    if (!Array.isArray(cur)) {
+      form.setValue("Other_related_expenses", [], {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+      return;
+    }
+    const filtered = cur.filter((x) => allowedOptions.includes(x));
+    if (filtered.length !== cur.length) {
+      form.setValue("Other_related_expenses", filtered, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+  }, [allowedOptions, form]);
+
+  // toggle เลือก/ยกเลิกเลือก
+  const toggleExpense = (label) => {
+    const cur = form.getValues("Other_related_expenses") || [];
+    const next = cur.includes(label)
+      ? cur.filter((x) => x !== label)
+      : [...cur, label];
+    form.setValue("Other_related_expenses", next, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
+
+  // ลัด: เลือกทั้งหมด / ล้างทั้งหมด
+  const selectAll = () => {
+    if (allowedOptions.length === 0) return;
+    form.setValue("Other_related_expenses", [...allowedOptions], {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
+  const clearAll = () => {
+    form.setValue("Other_related_expenses", [], {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
+
+  // onSubmit: กรองและเช็คประเภทก่อน validate เสมอ + log ให้เห็นชัด
   const onSubmit = () => {
-    // validate เฉพาะฟิลด์ของหน้า "ขาย"
-    const ok = validateStep(form, priceSchema, [
+    const categoryId = form.getValues("categoryId");
+    let label = CATEGORY_LABEL_BY_ID[categoryId] || "";
+    if (CATEGORY_LABEL_ALIAS[label]) label = CATEGORY_LABEL_ALIAS[label];
+    const allowed = RECURRING_EXPENSE_PRESETS[label] || [];
+
+    console.log("[PostPrice] submit", {
+      categoryId,
+      categoryLabel: label,
+      allowedOptions: allowed,
+      currentExpenses: form.getValues("Other_related_expenses"),
+      price: form.getValues("Price"),
+      deposit: form.getValues("Deposit_Amount"),
+    });
+
+    if (!label) {
+      form.setError("categoryId", {
+        type: "manual",
+        message: "กรุณาเลือกประเภททรัพย์สินในหน้า ‘รายละเอียด’ ก่อน",
+      });
+      return;
+    }
+
+    // กรองรายการก่อน validate
+    const cur = form.getValues("Other_related_expenses") || [];
+    const cleaned = Array.isArray(cur)
+      ? cur.filter((x) => allowed.includes(x))
+      : [];
+    if (cleaned.length !== cur.length) {
+      form.setValue("Other_related_expenses", cleaned, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+
+    // validate ด้วย schema ไดนามิก
+    const schema = getPriceSchemaFor(allowed);
+    const ok = validateStep(form, schema, [
       "Price",
       "Deposit_Amount",
-      "Interest",
       "Other_related_expenses",
     ]);
     if (!ok) return;
-
-    const v = form.getValues();
-    const payload = {
-      Sell_Rent: "SALE",
-      Price: v.Price,
-      // ถ้าผู้ใช้เว้นว่าง จะไม่มีค่าใน form (undefined) → แปลงเป็น null ก่อนส่ง
-      Deposit_Amount: v.Deposit_Amount ?? null,
-      Interest: v.Interest ?? null,
-      Other_related_expenses: v.Other_related_expenses?.trim() || undefined,
-    };
-
-    // TODO: เรียก API อัปเดตราคา ถ้าต้องการ
-    // await updatePostPrice(postId, payload);
 
     navigate("/seller/post-for-sale/inform");
   };
@@ -111,8 +237,11 @@ function PostPrice() {
             <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground flex items-start gap-3">
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
-                ระบบนี้เปิดใช้งานเฉพาะการ{" "}
-                <span className="font-medium">ขาย (SALE)</span> เท่านั้น
+                ประเภททรัพย์สิน:{" "}
+                <span className="font-medium">
+                  {categoryLabel || "ยังไม่เลือก"}
+                </span>{" "}
+                — ระบบจะแสดงเฉพาะรายการค่าใช้จ่ายรายเดือน/รายปีของประเภทนั้น
               </p>
             </div>
 
@@ -122,124 +251,123 @@ function PostPrice() {
               className="space-y-8"
               noValidate
             >
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Price */}
-                  <FormField
-                    control={form.control}
-                    name="Price"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>ราคาขาย (บาท)</FormLabel>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                            ฿
-                          </span>
-                          <Input
-                            type="number"
-                            inputMode="decimal"
-                            placeholder="เช่น 2,500,000"
-                            {...field}
-                            onWheel={(e) => e.currentTarget.blur()}
-                            min={0} // 👈 อนุญาต 0 ที่ตัว input ด้วย
-                            step="0.01"
-                            className="pl-7 h-11"
-                          />
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Deposit_Amount */}
-                  <FormField
-                    control={form.control}
-                    name="Deposit_Amount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>เงินดาวน์ (บาท)</FormLabel>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                            ฿
-                          </span>
-                          <Input
-                            type="number"
-                            inputMode="decimal"
-                            placeholder="เช่น 250,000"
-                            {...field}
-                            onWheel={(e) => e.currentTarget.blur()}
-                            min={0}
-                            step="0.01"
-                            className="pl-7 h-11"
-                          />
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Interest */}
-                  <FormField
-                    control={form.control}
-                    name="Interest"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>ดอกเบี้ยโดยประมาณ (%/ปี)</FormLabel>
-                        <div className="relative">
-                          <Input
-                            type="number"
-                            inputMode="decimal"
-                            step="0.01"
-                            placeholder="เช่น 3.50"
-                            {...field}
-                            onWheel={(e) => e.currentTarget.blur()}
-                            min={0}
-                            max={25}
-                            className="pr-10 h-11"
-                            onChange={(e) =>
-                              form.setValue(
-                                "Interest",
-                                e.target.value === ""
-                                  ? undefined
-                                  : Number(e.target.value),
-                                { shouldDirty: true, shouldValidate: true }
-                              )
-                            }
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                            %
-                          </span>
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <p className="text-xs text-muted-foreground">
-                  * ตัวเลขเป็นค่าประมาณเพื่อช่วยประกาศขายเท่านั้น
-                </p>
-              </div>
-
-              {/* Others */}
-              <div className="space-y-3">
+              {/* ราคา + เงินดาวน์ */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="Other_related_expenses"
+                  name="Price"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>รายจ่ายอื่น ๆ (ถ้ามี)</FormLabel>
-                      <FormControl>
+                      <FormLabel>ราคาขาย (บาท)</FormLabel>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                          ฿
+                        </span>
                         <Input
-                          placeholder="เช่น ค่าส่วนกลาง 500 บาท/เดือน"
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="เช่น 2,500,000"
                           {...field}
-                          className="h-11"
+                          value={field.value ?? ""} // ✅ controlled
+                          onWheel={(e) => e.currentTarget.blur()}
+                          min={0}
+                          step="0.01"
+                          className="pl-7 h-11"
                         />
-                      </FormControl>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+                <FormField
+                  control={form.control}
+                  name="Deposit_Amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>เงินดาวน์ (บาท)</FormLabel>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                          ฿
+                        </span>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="เช่น 250,000"
+                          {...field}
+                          value={field.value ?? ""} // ✅ controlled
+                          onWheel={(e) => e.currentTarget.blur()}
+                          min={0}
+                          step="0.01"
+                          className="pl-7 h-11"
+                        />
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* รายจ่ายอื่น ๆ: เลือกจากพรีเซ็ตตามประเภท (หลายรายการได้) */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <FormLabel>รายจ่ายอื่น ๆ (เลือกหลายรายการได้)</FormLabel>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={selectAll}
+                      disabled={allowedOptions.length === 0}
+                    >
+                      เลือกทั้งหมด
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={clearAll}
+                    >
+                      ล้างทั้งหมด
+                    </Button>
+                  </div>
+                </div>
+
+                {allowedOptions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    ยังไม่มีพรีเซ็ต (โปรดเลือกประเภทในหน้ารายละเอียดก่อน)
+                  </p>
+                ) : (
+                  <FormField
+                    control={form.control}
+                    name="Other_related_expenses"
+                    render={({ field }) => {
+                      const selected = field.value || [];
+                      return (
+                        <div className="flex flex-wrap gap-2">
+                          {allowedOptions.map((label) => {
+                            const active = selected.includes(label);
+                            return (
+                              <Button
+                                key={label}
+                                type="button"
+                                variant={active ? "default" : "outline"}
+                                onClick={() => toggleExpense(label)}
+                                aria-pressed={active}
+                                className="h-9"
+                              >
+                                {label}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      );
+                    }}
+                  />
+                )}
+
+                <p className="text-xs text-muted-foreground">
+                  ระบบจะบันทึกเฉพาะตัวเลือกที่คุณกดเลือกเท่านั้น
+                </p>
               </div>
 
               {/* Footer actions */}

@@ -19,7 +19,6 @@ import { postInformSchema } from "@/components/schemas/postSchemas/postInformSch
 import { validateStep } from "@/lib/zodRHF";
 
 /* ========= helpers ========= */
-/** ปรับ URL ให้ปลอดภัย: เติม https:// ถ้าไม่มี และให้เฉพาะ http/https เท่านั้น */
 const normalizeUrl = (val) => {
   if (!val) return "";
   const raw = String(val).trim();
@@ -34,15 +33,12 @@ const normalizeUrl = (val) => {
   }
 };
 
-/** ล้างค่าสำหรับบันทึกในฟอร์ม */
 const sanitize = (v) => ({
   ...v,
   Name: v?.Name?.trim() || "",
-  // เก็บเฉพาะตัวเลข และ trim; ตัวอย่างไทยต้อง 10 หลักขึ้นต้น 0 (เช็คอีกชั้นใน zod)
   Phone: (v?.Phone || "").replace(/\D+/g, "").trim(),
   Link_line: normalizeUrl(v?.Link_line),
   Link_facbook: normalizeUrl(v?.Link_facbook),
-  // Contract_Seller: v?.Contract_Seller?.trim() || "",
 });
 
 const PostInform = () => {
@@ -50,21 +46,17 @@ const PostInform = () => {
   const form = useFormContext();
 
   const onSubmit = () => {
-    // validate เฉพาะช่องของ step นี้
     const ok = validateStep(form, postInformSchema, [
       "Name",
       "Phone",
       "Link_line",
       "Link_facbook",
-      // "Contract_Seller",
     ]);
     if (!ok) return;
 
-    // sanitize ก่อนขยับ step
     const current = form.getValues();
     const nextValues = sanitize(current);
 
-    // อัปเดตกลับเข้า form (shouldUnregister: false ทำให้ค่าคงอยู่ทุกหน้า)
     form.reset(
       { ...current, ...nextValues },
       { keepDirty: true, keepTouched: true }
@@ -78,7 +70,6 @@ const PostInform = () => {
       <div className="flex justify-center">
         <Card className="w-full max-w-3xl shadow-xl border-0 ring-1 ring-black/5">
           <CardContent className="py-8 px-6 md:px-8 space-y-8">
-            {/* Header */}
             <div className="text-center space-y-2">
               <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                 <User className="w-6 h-6 text-primary" />
@@ -89,7 +80,6 @@ const PostInform = () => {
               </p>
             </div>
 
-            {/* Helper banner */}
             <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground flex items-start gap-3">
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
@@ -99,11 +89,12 @@ const PostInform = () => {
               </p>
             </div>
 
-            {/* Form */}
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              {/* Basic info */}
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-8"
+              noValidate
+            >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* ชื่อผู้ขาย */}
                 <FormField
                   control={form.control}
                   name="Name"
@@ -114,6 +105,7 @@ const PostInform = () => {
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
                           {...field}
+                          value={field.value ?? ""}
                           placeholder="นายสมชาย บ้านดี"
                           className="pl-9 h-11"
                           autoComplete="name"
@@ -127,7 +119,6 @@ const PostInform = () => {
                   )}
                 />
 
-                {/* เบอร์โทรศัพท์ (ไทย 10 หลัก เริ่มด้วย 0) */}
                 <FormField
                   control={form.control}
                   name="Phone"
@@ -138,12 +129,14 @@ const PostInform = () => {
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
                           {...field}
+                          type="tel"
+                          value={field.value ?? ""}
                           inputMode="tel"
                           autoComplete="tel-national"
                           placeholder="0812345678"
                           className="pl-9 h-11"
                           maxLength={10}
-                          pattern="^0\d{9}$"
+                          pattern="^0\\d{9}$"
                           title="กรุณากรอกเบอร์โทรศัพท์ไทย 10 หลัก (เริ่มด้วย 0)"
                           onBlur={(e) =>
                             field.onChange(
@@ -167,7 +160,6 @@ const PostInform = () => {
                 />
               </div>
 
-              {/* Social links */}
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-medium text-foreground/80">
@@ -175,7 +167,6 @@ const PostInform = () => {
                   </h3>
                 </div>
 
-                {/* LINE */}
                 <FormField
                   control={form.control}
                   name="Link_line"
@@ -187,6 +178,7 @@ const PostInform = () => {
                         <Input
                           {...field}
                           type="url"
+                          value={field.value ?? ""}
                           placeholder="https://line.me/ti/p/..."
                           className="pl-9 h-11"
                           autoComplete="url"
@@ -201,7 +193,6 @@ const PostInform = () => {
                   )}
                 />
 
-                {/* Facebook (คงชื่อฟิลด์ Link_facbook ให้ตรง backend) */}
                 <FormField
                   control={form.control}
                   name="Link_facbook"
@@ -213,6 +204,7 @@ const PostInform = () => {
                         <Input
                           {...field}
                           type="url"
+                          value={field.value ?? ""}
                           placeholder="https://facebook.com/username"
                           className="pl-9 h-11"
                           autoComplete="url"
@@ -228,26 +220,6 @@ const PostInform = () => {
                 />
               </div>
 
-              {/* (ถ้ามี) เงื่อนไข/ข้อตกลงผู้ขาย 
-              <FormField
-                control={form.control}
-                name="Contract_Seller"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>เงื่อนไข/ข้อตกลงผู้ขาย</FormLabel>
-                    <Input
-                      {...field}
-                      placeholder="เช่น นัดดูห้องวันทำการ, เงื่อนไขค่าธรรมเนียม"
-                      className="h-11"
-                      onBlur={(e) => field.onChange(e.target.value.trim())}
-                    />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              */}
-
-              {/* Actions */}
               <div className="flex items-center justify-between pt-2">
                 <Button
                   type="button"
