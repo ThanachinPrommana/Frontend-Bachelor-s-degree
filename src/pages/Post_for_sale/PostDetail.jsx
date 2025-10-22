@@ -728,7 +728,7 @@ export default function PostDetail() {
                         <option value="0">ไม่มีที่จอด</option>
                         <option value="1">1 คัน</option>
                         <option value="2">2 คัน</option>
-                        <option value="3">3 คันขึ้นไป (บันทึกเป็น 3+)</option>
+                        <option value="3">3 คันขึ้นไป </option>
                       </select>
                       <FormMessage />
                     </FormItem>

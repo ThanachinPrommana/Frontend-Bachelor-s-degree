@@ -20,8 +20,8 @@ const ACCEPT_VIDEOS = ["video/mp4", "video/quicktime", "video/webm"];
 /* ================== Helpers ================== */
 const prettySizeMB = (bytes) => (bytes / (1024 * 1024)).toFixed(2) + " MB";
 
-/** กัน duplicate ด้วยชื่อ:ขนาด:lastModified */
-const fileSig = (f) => `${f.name}:${f.size}:${f.lastModified}`;
+// id สำหรับ key
+const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 const generateVideoThumbnail = (videoFile) => {
   return new Promise((resolve) => {
@@ -70,7 +70,7 @@ export default function PostUpload() {
   const fileInputRef = useRef(null);
   const videoInputRef = useRef(null);
 
-  // เก็บ objectURL ที่สร้าง เพื่อ revoke ตอน unmount/ลบ
+  // เก็บ objectURL เพื่อ revoke ตอน unmount/ลบ
   const urlBinRef = useRef(new Set());
 
   const openFilePicker = () => fileInputRef.current?.click();
@@ -85,8 +85,6 @@ export default function PostUpload() {
       const arr = Array.from(files || []);
       if (!arr.length) return false;
 
-      // ตรวจชนิด/ขนาด และ dedupe
-      const existing = new Set(images.map((i) => fileSig(i.file)));
       const next = [];
       for (const file of arr) {
         if (!isAllowedImage(file)) {
@@ -99,16 +97,15 @@ export default function PostUpload() {
           setError(`"${file.name}" ขนาดเกิน ${prettySizeMB(MAX_IMAGE_SIZE)}`);
           return false;
         }
-        const sig = fileSig(file);
-        if (existing.has(sig)) continue; // ข้ามซ้ำ
+        const id = uid();
         const preview = URL.createObjectURL(file);
         urlBinRef.current.add(preview);
         next.push({
+          id,
           file,
           name: file.name,
           size: file.size,
           preview,
-          _sig: sig,
         });
       }
 
@@ -164,7 +161,6 @@ export default function PostUpload() {
       const arr = Array.from(files || []);
       if (!arr.length) return false;
 
-      const existing = new Set(videos.map((v) => fileSig(v.file)));
       const next = [];
       for (const file of arr) {
         if (!isAllowedVideo(file)) {
@@ -180,18 +176,17 @@ export default function PostUpload() {
       }
 
       for (const file of arr) {
-        const sig = fileSig(file);
-        if (existing.has(sig)) continue; // ข้ามซ้ำ
+        const id = uid();
         const preview = URL.createObjectURL(file);
         urlBinRef.current.add(preview);
         const thumbnail = await generateVideoThumbnail(file);
         next.push({
+          id,
           file,
           name: file.name,
           size: file.size,
           preview,
           thumbnail,
-          _sig: sig,
         });
       }
 
@@ -303,10 +298,23 @@ export default function PostUpload() {
       }
     }
 
+    // 🔎 DEBUG: แสดงรายการที่แนบใน FormData (ควรเห็น FD> images (File) ...)
+    for (const [k, v] of formData.entries()) {
+      // eslint-disable-next-line no-console
+      console.log(
+        "FD>",
+        k,
+        v instanceof File ? `(File) ${v.name} ${v.type} ${v.size}` : v
+      );
+    }
+
     try {
       const response = await apiClient.post("/propertypost", formData, {
-        // ปล่อย Axios จัด Content-Type + boundary เอง
         withCredentials: true, // ถ้า backend ใช้ session/cookie
+        // ❗ห้ามกำหนด Content-Type เอง ให้เบราว์เซอร์ตั้ง boundary อัตโนมัติ
+        headers: { "Content-Type": undefined },
+        // กัน Axios ไปแปลง FormData เป็นอย่างอื่น
+        transformRequest: [(data) => data],
       });
 
       form.reset();
@@ -319,6 +327,7 @@ export default function PostUpload() {
         apiError?.message ||
         "เกิดข้อผิดพลาดในการสร้างโพสต์";
       setError(message);
+      // eslint-disable-next-line no-console
       console.error("การส่งข้อมูลผิดพลาด:", apiError);
     } finally {
       setIsSubmitting(false);
@@ -392,7 +401,7 @@ export default function PostUpload() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {images.map((img, idx) => (
                     <div
-                      key={img._sig || idx}
+                      key={img.id || idx}
                       className="relative group rounded-lg overflow-hidden ring-1 ring-black/5"
                     >
                       <img
@@ -480,7 +489,7 @@ export default function PostUpload() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   {videos.map((vid, idx) => (
                     <div
-                      key={vid._sig || idx}
+                      key={vid.id || idx}
                       className="relative group rounded-lg overflow-hidden ring-1 ring-black/5"
                     >
                       <video
