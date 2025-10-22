@@ -5,13 +5,13 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 /* ========== Helper ========== */
+// แปลงค่าว่างเป็น undefined แล้วค่อย Number()
 const numberOrUndefined = z.preprocess(
   (v) => (v === "" || v === undefined || v === null ? undefined : Number(v)),
   z.number().optional()
 );
 
-
-/* ========== Schema ========== */
+/* ========== Schema (soft, ใช้รวมทุกสเต็ป) ========== */
 const softSchema = z.object({
   // General
   Property_Name: z.string().min(5, "หัวข้ออย่างน้อย 5 ตัว").optional(),
@@ -37,28 +37,26 @@ const softSchema = z.object({
   Year_Built: z.string().optional(),
   Parking_Space: numberOrUndefined,
   floor: numberOrUndefined,
-  NumberOfUnits: numberOrUndefined, // (เพิ่ม) จำนวนยูนิตทั้งหมด
-  propertyUnits: z.any().optional(), // (เพิ่ม) ใช้เก็บ array ของยูนิต
+  NumberOfUnits: numberOrUndefined,
+  propertyUnits: z.any().optional(), // validate รายสเต็ปแทน
 
-  // Arrays (enum list ใน Prisma)
+  // Arrays
   Nearby_Landmarks: z.array(z.string()).optional(),
   Additional_Amenities: z.array(z.string()).optional(),
 
-  // Price / Payment-ish
+  // Price (เฉพาะขาย)
   Price: numberOrUndefined,
-  Deposit_Amount: numberOrUndefined, // SALE
-  Deposit_Rent: numberOrUndefined, // RENT
-  Interest: numberOrUndefined, // SALE
-  Other_related_expenses: z.string().trim().max(200).optional(),
+  Deposit_Amount: numberOrUndefined, // เงินดาวน์
+  Other_related_expenses: z.array(z.string().trim()).optional(), // รายจ่ายอื่น ๆ
 
-  // Inform (ผู้ขาย/ติดต่อ)
+  // Inform (ข้อมูลผู้ขาย)
   Name: z.string().optional(),
-  Phone: z.string().optional(), // จะบังคับในสเต็ป PostInform
+  Phone: z.string().optional(), // จะบังคับในหน้าสเต็ป PostInform
   Link_line: z.string().optional(),
   Link_facbook: z.string().optional(),
   Contract_Seller: z.string().optional(),
 
-  // Upload (ภาพ/วิดีโอ)
+  // Upload (สื่อ)
   images: z.any().optional(),
   videos: z.any().optional(),
 });
@@ -91,22 +89,19 @@ export const PostFormProvider = ({ children }) => {
       Year_Built: "",
       Parking_Space: undefined,
       floor: undefined,
-      NumberOfUnits: 1, // (เพิ่ม) ค่าเริ่มต้นเป็น 1
-      propertyUnits: [{ Unit_Number: "" }],  // (เพิ่ม) ค่าเริ่มต้นเป็น array ว่าง
-
+      NumberOfUnits: 1,
+      propertyUnits: [{ Unit_Number: "" }],
 
       // Features
       Nearby_Landmarks: [],
       Additional_Amenities: [],
 
-      // Price
+      // Price (เฉพาะขาย)
       Price: undefined,
-      Deposit_Amount: undefined, // SALE
-      Deposit_Rent: undefined, // RENT
-      Interest: undefined, // SALE
-      Other_related_expenses: "",
+      Deposit_Amount: undefined,
+      Other_related_expenses: [],
 
-      // Inform (contact)
+      // Inform
       Name: "",
       Phone: "",
       Link_line: "",
@@ -120,7 +115,7 @@ export const PostFormProvider = ({ children }) => {
     resolver: zodResolver(softSchema),
     mode: "onSubmit",
     reValidateMode: "onSubmit",
-    shouldUnregister: false, // เก็บค่าทุกช่องแม้ถูกซ่อน (คงค่าข้ามสเต็ป)
+    shouldUnregister: false,
   });
 
   return <FormProvider {...methods}>{children}</FormProvider>;

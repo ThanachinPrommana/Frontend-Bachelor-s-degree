@@ -17,6 +17,9 @@ import { useAuth } from "@/context/AuthContext";
 import { fmtDateTimeTH } from "@/lib/bookingUtils";
 import StatusBadge from "@/components/booking/StatusBadge";
 import SlipButton from "@/components/booking/SlipButton";
+import UploadFinalSlipButton from "@/components/UploadFinalSlipButton";
+
+
 
 export default function BuyerBooking() {
   const { toast } = useToast();
@@ -109,6 +112,7 @@ export default function BuyerBooking() {
     </tr>
   );
 
+
   return (
     <div className="space-y-4">
       {/* Header + search */}
@@ -162,55 +166,83 @@ export default function BuyerBooking() {
               ) : paged.length === 0 ? (
                 <EmptyMessage />
               ) : (
-                paged.map((b) => (
-                  <tr key={b.id} className="border-t">
-                    {/* 1. แสดงชื่อประกาศ */}
-                    <td className="px-4 py-2">
-                      {b.propertyUnit?.propertyPost?.Property_Name ? (
-                        <a
-                          href={`/deposit/${b.propertyUnit.propertyPost.id}`}
-                          className="underline"
-                        >
-                          {b.propertyUnit.propertyPost.Property_Name}
-                        </a>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
+                paged.map((b) => {
+                  // --- (เพิ่ม) Logic สำหรับค้นหาสลิปที่ถูกต้อง ---
+                  const relevantUnitId = b.propertyUnitId;
+                  const allUserPayments = authUser?.Payment || [];
 
-                    {/* 2. แสดงชื่อผู้ซื้อ (Buyer) เอง */}
-                    <td className="px-4 py-2">
-                      {`${b.Seller?.user?.First_name || ""} ${
-                        b.Seller?.user?.Last_name || ""
-                      }`.trim() || "-"}
-                    </td>
+                  const thisBookingPayment = relevantUnitId
+                    ? allUserPayments.find(p => p.unitId === relevantUnitId)
+                    : null;
 
-                    {/* 3. แสดงช่วงเวลา */}
-                    <td className="px-4 py-2">
-                      {b.dateTimeSlot
-                        ? `${fmtDateTimeTH(
+                  const slipForThisBooking = thisBookingPayment?.Payment_Slip;
+
+                  // ==========================================================
+                  // (สำคัญ) เพิ่ม CONSOLE.LOG ตรงนี้
+                  // ==========================================================
+                  console.log(`
+    ----- DEBUGGING ROW -----
+    Booking ID: ${b.id}
+    Unit ID to find: ${relevantUnitId}
+    All Payments Received by Frontend:`, allUserPayments);
+                  console.log(`Found Payment for this unit:`, thisBookingPayment);
+                  console.log(`Final Slip URL: ${slipForThisBooking}`);
+                  console.log(`-------------------------`);
+                  // ==========================================================
+                  // --- สิ้นสุดส่วนที่เพิ่ม ---
+
+                  return (
+                    <tr key={b.id} className="border-t">
+                      {/* 1. แสดงชื่อประกาศ */}
+                      <td className="px-4 py-2">
+                        {b.propertyUnit?.propertyPost?.Property_Name ? (
+                          <a
+                            href={`/deposit/${b.propertyUnit.propertyPost.id}`}
+                            className="underline"
+                          >
+                            {b.propertyUnit.propertyPost.Property_Name}
+                          </a>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+
+                      {/* 2. แสดงชื่อผู้ขาย (Seller) */}
+                      <td className="px-4 py-2">
+                        {`${b.Seller?.user?.First_name || ""} ${b.Seller?.user?.Last_name || ""
+                          }`.trim() || "-"}
+                      </td>
+
+                      {/* 3. แสดงช่วงเวลา */}
+                      <td className="px-4 py-2">
+                        {b.dateTimeSlot
+                          ? `${fmtDateTimeTH(
                             b.dateTimeSlot.startTime
                           )} – ${fmtDateTimeTH(b.dateTimeSlot.endTime)}`
-                        : "-"}
-                    </td>
+                          : "-"}
+                      </td>
 
-                    {/* 4. แสดงสถานะ */}
-                    <td className="px-4 py-2">
-                      <StatusBadge status={b.bookingStatus} />
-                    </td>
+                      {/* 4. แสดงสถานะ */}
+                      <td className="px-4 py-2">
+                        <StatusBadge status={b.bookingStatus} />
+                      </td>
 
-                    {/* 5. แสดงสลิป */}
-                    <td className="px-4 py-2">
-                      <SlipButton url={b.Buyer.user.Payment.Payment_Slip} onOpen={openSlip} />
-                    </td>
-                    
+                      {/* 5. (สำคัญ) แก้ไขการแสดงสลิป */}
+                      <td className="px-4 py-2">
+                        {/* (สำคัญ) SlipButton จะทำงานได้ทันที */}
+                        <SlipButton url={slipForThisBooking} />
+                      </td>
 
-                    {/* 6. แสดงการดำเนินการ */}
-                    <td className="px-4 py-2 space-x-2">
-                      <span className="text-muted-foreground">—</span>
-                    </td>
-                  </tr>
-                ))
+                      {/* 6. แสดงการดำเนินการ */}
+                      <td className="px-4 py-2">
+                        <UploadFinalSlipButton
+                          booking={b}
+                          onUploadSuccess={revalidateUser}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -245,21 +277,25 @@ export default function BuyerBooking() {
       </div>
 
       {/* Slip Preview Dialog */}
+      {/* Slip Preview Dialog */}
       <Dialog open={slipOpen} onOpenChange={setSlipOpen}>
-        <DialogContent className="sm:max-w-xl">
+        {/* (แนะนำ) เพิ่มความสูงให้ Dialog เพื่อให้ iframe แสดงผลได้เต็มที่ */}
+        <DialogContent className="sm:max-w-2xl h-[85vh]">
           <DialogHeader>
             <DialogTitle>สลิปการชำระเงิน</DialogTitle>
           </DialogHeader>
-          <div className="w-full">
+
+          {/* (สำคัญ) แก้ไขส่วนนี้ทั้งหมด */}
+          <div className="w-full h-full border rounded-md overflow-hidden">
             {slipUrl ? (
-              <img
+              <iframe
                 src={slipUrl}
-                alt="Slip Preview"
-                className="w-full h-auto rounded-md"
+                title="Stripe Receipt"
+                className="w-full h-full border-0"
               />
             ) : (
-              <div className="text-center text-muted-foreground py-8">
-                ไม่พบสลิป
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                ไม่พบ URL ของสลิป
               </div>
             )}
           </div>

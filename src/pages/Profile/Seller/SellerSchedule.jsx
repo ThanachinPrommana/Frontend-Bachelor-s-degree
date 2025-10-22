@@ -1,11 +1,13 @@
 // ===============================
 // File: src/pages/Profile/Seller/SellerSchedule.jsx
-// Purpose: Manage seller's DateTimeSlots — filter, list, create
+// Purpose: Manage seller's DateTimeSlots — filter, list, create (UX ง่ายขึ้น)
 // Notes:
-// - Relies on API helpers from '@/api/user':
-//     createSlot(payload), searchSellerSlots(filters), getProfile()
-// - UI intentionally minimal to fit your existing design.
-// - Fix: shadcn <SelectItem> must not use empty string value. Use 'ALL' sentinel.
+// - API createSlot ตอนนี้ต้องใช้ { postId, date: 'YYYY-MM-DD', timeSlots: [{start:'HH:mm', end:'HH:mm'}] }
+// - ดึงโพสต์จาก data.user.PropertyPost
+// - Calendar + กริดเวลา (step 30 นาที) และคำนวณเวลาสิ้นสุดอัตโนมัติ
+// - ปิดเวลาที่ชนกับ slot เดิม (รวมถึงที่ถูกจอง)
+// - ค่าใน <SelectItem> เป็น string เสมอ
+// - ใช้ 'ALL' เป็น sentinel ในตัวกรอง และไม่ส่งไป backend
 // ===============================
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -19,9 +21,21 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Plus, Search, Loader2 } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Loader2,
+  Calendar as CalendarIcon,
+  Clock,
+} from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 
-// 👉 Adjust these imports to match your API layer
+// ✅ API functions
 import {
   createSlot as apiCreateSlot,
   searchSellerSlots as apiSearchSellerSlots,
@@ -30,40 +44,73 @@ import {
 
 const DEFAULT_PAGE_SIZE = 20;
 
+/* ============ Helpers ============ */
+const pad2 = (n) => String(n).padStart(2, "0");
+
+function generateTimeOptions(start = "08:00", end = "18:00", stepMin = 30) {
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  const startMin = sh * 60 + sm;
+  const endMin = eh * 60 + em;
+  const arr = [];
+  for (let t = startMin; t <= endMin; t += stepMin) {
+    arr.push(`${pad2(Math.floor(t / 60))}:${pad2(t % 60)}`);
+  }
+  return arr;
+}
+
+// (เดิมใช้รวมเป็น ISO แต่ตอนนี้ backend เอา HH:mm เลย)
+function isOverlapping(startA, endA, startB, endB) {
+  return Math.max(startA, startB) < Math.min(endA, endB);
+}
+
+function slotsOfDayForPost(allSlots, postId, ymd) {
+  const startOfDay = new Date(ymd + "T00:00:00");
+  const endOfDay = new Date(ymd + "T23:59:59");
+  return (allSlots || []).filter((s) => {
+    if (String(s.postId) !== String(postId)) return false;
+    const st = new Date(s.start);
+    return st >= startOfDay && st <= endOfDay;
+  });
+}
+
+/* ============ Hook: ดึงโพสต์ของผู้ขาย ============ */
 function useSellerPosts() {
   const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(false);
-
   useEffect(() => {
     let ignore = false;
-    async function run() {
+    (async () => {
       try {
-        setLoading(true);
-        // Expect your getProfile to include seller posts under something like user.PropertyPost
-        const res = await apiGetProfile();
-        const sellerPosts =
-          res?.user?.PropertyPost || res?.sellerPosts || res?.posts || [];
-        if (!ignore) setPosts(sellerPosts);
+        const data = await apiGetProfile();
+        const raw = data?.user?.PropertyPost ?? [];
+        const normalized = raw
+          .filter((p) => p && (p.id ?? p.postId ?? p._id))
+          .map((p) => ({
+            id: String(p.id ?? p.postId ?? p._id),
+            label:
+              p.Property_Name ||
+              p.title ||
+              `โพสต์ #${p.id ?? p.postId ?? p._id}`,
+          }));
+        if (!ignore) setPosts(normalized);
       } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
+        console.error("getProfile failed:", e);
+        if (!ignore) setPosts([]);
       }
-    }
-    run();
+    })();
     return () => {
       ignore = true;
     };
   }, []);
-
-  return { posts, loading };
+  return { posts };
 }
 
+/* ============ Main Component ============ */
 export default function SellerSchedule() {
-  const todayISO = useMemo(() => new Date().toISOString().slice(0, 10), []); // YYYY-MM-DD
+  const todayISO = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   const [filters, setFilters] = useState({
-    postId: "ALL", // 🔧 ใช้ 'ALL' แทนค่าว่าง
+    postId: "ALL",
     dateFrom: todayISO,
     dateTo: "",
     status: "ALL",
@@ -82,20 +129,37 @@ export default function SellerSchedule() {
     end: "",
   });
 
+  // UX ใหม่
+  const [selectedDate, setSelectedDate] = useState(""); // 'YYYY-MM-DD'
+  const [startTime, setStartTime] = useState(""); // 'HH:mm'
+  const [duration, setDuration] = useState(30); // นาที
+
   const { posts } = useSellerPosts();
+
+  const postMap = useMemo(() => {
+    const m = new Map();
+    posts.forEach((p) => m.set(p.id, p.label));
+    return m;
+  }, [posts]);
+
+  function onFilterChange(key, value) {
+    setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
+  }
 
   async function fetchSlots() {
     try {
       setLoading(true);
+      // ✅ ส่ง postId เป็น string หรือ undefined
+      const postIdForApi =
+        filters.postId === "ALL" ? undefined : String(filters.postId);
       const res = await apiSearchSellerSlots({
         ...filters,
-        // 🔧 ไม่ส่ง 'ALL' ไปหลังบ้าน ให้ตีความเป็นไม่ได้กรอง
-        postId: filters.postId === "ALL" ? undefined : filters.postId,
+        postId: postIdForApi,
       });
       setSlots(res?.items || []);
       setTotal(res?.total ?? 0);
     } catch (e) {
-      console.error(e);
+      console.error("fetchSlots error:", e?.response?.data || e);
     } finally {
       setLoading(false);
     }
@@ -113,30 +177,51 @@ export default function SellerSchedule() {
     filters.pageSize,
   ]);
 
-  function onFilterChange(key, value) {
-    setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
-  }
-
-  async function handleCreateSlot(e) {
-    e?.preventDefault?.();
-    if (!createForm.postId || !createForm.start || !createForm.end) {
-      alert("กรอกข้อมูลให้ครบ (โพสต์, เวลาเริ่ม, เวลาสิ้นสุด)");
+  async function handleCreateSlotButton() {
+    if (!createForm.postId || !selectedDate || !startTime) {
+      alert("กรอกข้อมูลให้ครบ (โพสต์, วัน, เวลาเริ่ม)");
       return;
     }
+
     try {
       setCreating(true);
-      await apiCreateSlot({
-        postId: createForm.postId,
-        start: new Date(createForm.start).toISOString(),
-        end: new Date(createForm.end).toISOString(),
-      });
+
+      // ✅ ใช้ postId เป็น string (รองรับ ObjectId)
+      const postIdForApi = String(createForm.postId).trim();
+      if (!postIdForApi) {
+        alert("postId ไม่ถูกต้อง");
+        setCreating(false);
+        return;
+      }
+
+      // คำนวณเวลาสิ้นสุดจาก duration เป็น HH:mm
+      const [hh, mm] = startTime.split(":").map(Number);
+      const endMins = hh * 60 + mm + duration;
+      const endHH = pad2(Math.floor(endMins / 60));
+      const endMM = pad2(endMins % 60);
+      const endTime = `${endHH}:${endMM}`;
+
+      // ✅ ฟอร์แมตใหม่ตาม backend: { date, timeSlots: [{start,end}] }
+      const payload = {
+        postId: postIdForApi,
+        date: selectedDate, // 'YYYY-MM-DD'
+        timeSlots: [
+          { start: startTime, end: endTime }, // 'HH:mm'
+        ],
+      };
+
+      await apiCreateSlot(payload);
+
       // reset & refresh
       setCreateForm({ postId: "", start: "", end: "" });
+      setSelectedDate("");
+      setStartTime("");
+      setDuration(30);
       await fetchSlots();
-      alert("สร้างนัดสำเร็จ");
+      alert("✅ สร้างนัดสำเร็จ!");
     } catch (e) {
-      console.error(e);
-      alert(e?.response?.data?.message || "สร้างนัดไม่สำเร็จ");
+      console.error("createSlot error:", e?.response?.data || e);
+      alert(e?.response?.data?.message || "❌ สร้างนัดไม่สำเร็จ");
     } finally {
       setCreating(false);
     }
@@ -152,20 +237,20 @@ export default function SellerSchedule() {
             <Select
               value={filters.postId}
               onValueChange={(v) => onFilterChange("postId", v)}
+              disabled={!posts.length}
             >
               <SelectTrigger className="mt-1">
-                <SelectValue placeholder="เลือกโพสต์" />
+                <SelectValue
+                  placeholder={posts.length ? "เลือกโพสต์" : "ไม่มีโพสต์"}
+                />
               </SelectTrigger>
               <SelectContent>
-                {/* 🔧 ห้าม value="" */}
                 <SelectItem value="ALL">ทั้งหมด</SelectItem>
-                {posts
-                  ?.filter((p) => p?.id)
-                  ?.map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>
-                      {p.Property_Name || p.title || p.id}
-                    </SelectItem>
-                  ))}
+                {posts.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -179,6 +264,7 @@ export default function SellerSchedule() {
               onChange={(e) => onFilterChange("dateFrom", e.target.value)}
             />
           </div>
+
           <div>
             <label className="text-sm">ถึงวันที่</label>
             <Input
@@ -188,6 +274,7 @@ export default function SellerSchedule() {
               onChange={(e) => onFilterChange("dateTo", e.target.value)}
             />
           </div>
+
           <div>
             <label className="text-sm">สถานะ</label>
             <Select
@@ -216,13 +303,10 @@ export default function SellerSchedule() {
       {/* Create Slot */}
       <Card>
         <CardContent className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold">สร้างนัดใหม่</h3>
-          </div>
-          <form
-            className="grid gap-3 md:grid-cols-4"
-            onSubmit={handleCreateSlot}
-          >
+          <h3 className="font-semibold">สร้างนัดใหม่</h3>
+
+          <div className="grid gap-3 md:grid-cols-4">
+            {/* โพสต์ */}
             <div>
               <label className="text-sm">ประกาศ</label>
               <Select
@@ -235,53 +319,116 @@ export default function SellerSchedule() {
                   <SelectValue placeholder="เลือกโพสต์" />
                 </SelectTrigger>
                 <SelectContent>
-                  {posts
-                    ?.filter((p) => p?.id)
-                    ?.map((p) => (
-                      <SelectItem key={p.id} value={String(p.id)}>
-                        {p.Property_Name || p.title || p.id}
-                      </SelectItem>
-                    ))}
+                  {posts.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+
+            {/* วัน */}
             <div>
-              <label className="text-sm">เริ่ม</label>
-              <Input
-                type="datetime-local"
-                className="mt-1"
-                value={createForm.start}
-                onChange={(e) =>
-                  setCreateForm((s) => ({ ...s, start: e.target.value }))
-                }
-              />
+              <label className="text-sm">วันนัด</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full mt-1 justify-start"
+                  >
+                    <CalendarIcon className="w-4 h-4 mr-2" />
+                    {selectedDate || "เลือกวันที่"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-2" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate ? new Date(selectedDate) : undefined}
+                    onSelect={(d) => {
+                      if (d) {
+                        const y = d.getFullYear();
+                        const m = pad2(d.getMonth() + 1);
+                        const dd = pad2(d.getDate());
+                        setSelectedDate(`${y}-${m}-${dd}`);
+                        setStartTime("");
+                      }
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
+
+            {/* ระยะเวลา */}
             <div>
-              <label className="text-sm">สิ้นสุด</label>
-              <Input
-                type="datetime-local"
-                className="mt-1"
-                value={createForm.end}
-                onChange={(e) =>
-                  setCreateForm((s) => ({ ...s, end: e.target.value }))
-                }
-              />
+              <label className="text-sm">ระยะเวลา</label>
+              <Select
+                value={String(duration)}
+                onValueChange={(v) => setDuration(Number(v))}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 นาที</SelectItem>
+                  <SelectItem value="60">60 นาที</SelectItem>
+                  <SelectItem value="90">90 นาที</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="flex items-end">
-              <Button type="submit" className="w-full" disabled={creating}>
-                {creating ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Plus className="w-4 h-4 mr-2" />
-                )}
-                สร้างนัด
-              </Button>
+
+            {/* เวลาเริ่ม */}
+            <div>
+              <label className="text-sm">เวลาเริ่ม</label>
+              <div className="mt-1 flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                <div className="text-sm">{startTime || "-"}</div>
+              </div>
             </div>
-          </form>
+          </div>
+
+          {/* กริดเวลา */}
+          <TimeGridPicker
+            selectedDate={selectedDate}
+            postId={createForm.postId}
+            duration={duration}
+            allSlots={slots}
+            onPick={(t) => setStartTime(t)}
+          />
+
+          {/* End time preview */}
+          <div className="text-sm text-muted-foreground">
+            {selectedDate && startTime
+              ? (() => {
+                  const [hh, mm] = startTime.split(":").map(Number);
+                  const startM = hh * 60 + mm;
+                  const endM = startM + duration;
+                  return `สิ้นสุดประมาณ ${pad2(Math.floor(endM / 60))}:${pad2(
+                    endM % 60
+                  )} น.`;
+                })()
+              : "เลือกเวลาเริ่มเพื่อคำนวณเวลาสิ้นสุดอัตโนมัติ"}
+          </div>
+
+          <div className="flex items-end">
+            <Button
+              className="w-full md:w-auto"
+              onClick={handleCreateSlotButton}
+              disabled={creating}
+            >
+              {creating ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Plus className="w-4 h-4 mr-2" />
+              )}
+              สร้างนัด
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Slots Table */}
+      {/* ตาราง */}
       <Card>
         <CardContent className="p-0 overflow-x-auto">
           <table className="w-full text-sm">
@@ -296,25 +443,27 @@ export default function SellerSchedule() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="px-4 py-6" colSpan={4}>
+                  <td colSpan={4} className="text-center py-6">
                     กำลังโหลด...
                   </td>
                 </tr>
               ) : slots.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-6" colSpan={4}>
+                  <td colSpan={4} className="text-center py-6">
                     ไม่พบข้อมูล
                   </td>
                 </tr>
               ) : (
                 slots.map((s) => (
                   <tr key={s.id} className="border-t">
-                    <td className="px-4 py-2">{s.postId}</td>
                     <td className="px-4 py-2">
-                      {new Date(s.start).toLocaleString()}
+                      {postMap.get(String(s.postId)) || s.postId}
                     </td>
                     <td className="px-4 py-2">
-                      {new Date(s.end).toLocaleString()}
+                      {new Date(s.start).toLocaleString("th-TH")}
+                    </td>
+                    <td className="px-4 py-2">
+                      {new Date(s.end).toLocaleString("th-TH")}
                     </td>
                     <td className="px-4 py-2">
                       {s.isBooked ? "ถูกจอง" : "ว่าง"}
@@ -324,28 +473,65 @@ export default function SellerSchedule() {
               )}
             </tbody>
           </table>
-          {/* Pagination */}
-          <div className="flex items-center justify-between p-3">
-            <div>ทั้งหมด {total} รายการ</div>
-            <div className="space-x-2">
-              <Button
-                variant="outline"
-                disabled={filters.page <= 1}
-                onClick={() => setFilters((f) => ({ ...f, page: f.page - 1 }))}
-              >
-                ก่อนหน้า
-              </Button>
-              <Button
-                variant="outline"
-                disabled={slots.length < filters.pageSize}
-                onClick={() => setFilters((f) => ({ ...f, page: f.page + 1 }))}
-              >
-                ถัดไป
-              </Button>
-            </div>
-          </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/* ============ TimeGridPicker ============ */
+function TimeGridPicker({ selectedDate, postId, duration, allSlots, onPick }) {
+  if (!selectedDate || !postId) {
+    return (
+      <div className="text-sm text-muted-foreground">
+        เลือก “ประกาศ” และ “วันนัด” ก่อน จากนั้นจะมีเวลาขึ้นมาให้เลือก
+      </div>
+    );
+  }
+
+  const options = useMemo(() => generateTimeOptions("08:00", "18:00", 30), []);
+  const daySlots = slotsOfDayForPost(allSlots, postId, selectedDate).map(
+    (s) => ({
+      startMs: new Date(s.start).getTime(),
+      endMs: new Date(s.end).getTime(),
+      isBooked: !!s.isBooked,
+    })
+  );
+
+  function isAvailable(timeStr) {
+    // ประเมินทับซ้อนจากข้อมูลที่มีอยู่ (ใช้เวลา HH:mm + duration)
+    const [hh, mm] = timeStr.split(":").map(Number);
+    const startMs = new Date(`${selectedDate}T${timeStr}:00`).getTime();
+    const endMins = hh * 60 + mm + duration;
+    const endHH = pad2(Math.floor(endMins / 60));
+    const endMM = pad2(endMins % 60);
+    const endMs = new Date(`${selectedDate}T${endHH}:${endMM}:00`).getTime();
+
+    const hardEnd = new Date(`${selectedDate}T18:00:00`).getTime();
+    if (endMs > hardEnd + 60 * 1000) return false;
+
+    for (const s of daySlots) {
+      if (isOverlapping(startMs, endMs, s.startMs, s.endMs)) return false;
+    }
+    return true;
+  }
+
+  return (
+    <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+      {options.map((t) => {
+        const ok = isAvailable(t);
+        return (
+          <Button
+            key={t}
+            variant={ok ? "outline" : "secondary"}
+            className="justify-center"
+            disabled={!ok}
+            onClick={() => ok && onPick(t)}
+          >
+            {t}
+          </Button>
+        );
+      })}
     </div>
   );
 }

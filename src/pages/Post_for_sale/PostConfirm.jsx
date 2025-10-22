@@ -44,14 +44,6 @@ function fmtYear(v) {
 function safeJoin(arr, sep = ", ") {
   return Array.isArray(arr) && arr.length ? arr.join(sep) : "-";
 }
-/** ดอกเบี้ยให้ทนทานต่อค่าว่าง/สตริง */
-const fmtInterest = (v) => {
-  if (v === null || v === undefined) return "-";
-  const s = String(v).trim();
-  if (s === "") return "-";
-  const n = Number(s);
-  return Number.isFinite(n) ? `${n}% / ปี` : "-";
-};
 
 /** sanitize url: เติม https:// และบังคับให้เป็น http/https เท่านั้น */
 function normalizeUrl(val) {
@@ -68,34 +60,24 @@ function normalizeUrl(val) {
   }
 }
 
-/** อ่านชื่อ category จาก payload ได้หลายรูปแบบ */
-function getCategoryNameFromObject(obj) {
-  if (!obj) return null;
-  return obj.Property_type || obj.name || obj.title || null;
-}
-function getCategoryName(postData) {
-  return (
-    getCategoryNameFromObject(postData?.Category) ||
-    getCategoryNameFromObject(postData?.category) ||
-    postData?.categoryName ||
-    postData?.Propertytype ||
-    "-"
-  );
-}
-
-/** SELL/RENT label (ตอนนี้มีแต่ขาย แต่คง helper ไว้เพื่อ fallback draft/back-end) */
+/** SELL/RENT label */
 function getSellRent(data) {
   const raw = data?.Sell_Rent;
-  if (!raw) return "ขาย (SALE)"; // default เป็นขาย
+  if (!raw) return "ขาย (SALE)";
   const v = String(raw).toUpperCase();
   if (v === "SALE") return "ขาย (SALE)";
   if (v === "RENT") return "ให้เช่า (RENT)";
   return raw;
 }
 
-/** ดึง URL ของรูปจากหลายรูปแบบ object — อนุญาตเฉพาะ http(s), data:image/*, blob: */
+/** ดึง URL ของรูป: รองรับ object จาก backend และ wrapper จากฟอร์ม (มี preview/file) */
 function getImageUrl(img) {
   if (!img) return null;
+
+  // พรีวิวจากฟอร์ม (PostUpload.jsx เก็บไว้เป็น { file, preview, ... })
+  if (typeof img === "object" && img.preview) {
+    return String(img.preview).trim() || null;
+  }
 
   const raw =
     typeof img === "string"
@@ -106,13 +88,10 @@ function getImageUrl(img) {
 
   const SAFE_SCHEMES = /^(https?:|data:image\/|blob:)/i;
 
-  // http/https → normalize, ถ้า normalize ไม่ผ่าน (protocol แปลก) ให้ทิ้ง
   if (/^https?:/i.test(raw)) {
     const norm = normalizeUrl(raw);
     return norm || null;
   }
-
-  // อนุญาต data:image/* และ blob:
   return SAFE_SCHEMES.test(raw) ? raw : null;
 }
 
@@ -124,7 +103,6 @@ const Row = ({ label, value, right = false }) => (
   </div>
 );
 
-/** ตัดปุ่มแก้ไขออกตามที่ขอ */
 const Section = ({ title, children }) => (
   <div>
     <div className="flex justify-between items-center mb-2">
@@ -179,38 +157,17 @@ const PostConfirm = () => {
     return () => controller.abort();
   }, [postId]);
 
-  // resolve ชื่อประเภททรัพย์ (ถ้า payload ไม่มี)
+  // resolve ชื่อประเภททรัพย์จาก payload โดยตรง
   useEffect(() => {
     if (!postData) return;
-
-    const nameNow = getCategoryName(postData);
-    if (nameNow && nameNow !== "-") {
-      setResolvedCategoryName(nameNow);
-      return;
-    }
-
-    const cid =
-      postData?.categoryId || postData?.Category?.id || postData?.category?.id;
-    if (!cid) return;
-
-    const controller = new AbortController();
-    axios
-      .get(`${API_URL}/api/category/${cid}`, {
-        signal: controller.signal,
-        withCredentials: true,
-      })
-      .then((r) => {
-        const n =
-          getCategoryNameFromObject(r.data) ||
-          r.data?.name ||
-          r.data?.categoryName ||
-          "-";
-        setResolvedCategoryName(n || "-");
-      })
-      .catch(() => setResolvedCategoryName("-"));
-
-    return () => controller.abort();
-  }, [postData]);
+    const nameNow =
+      postData?.Category?.name ||
+      postData?.Category?.Property_type ||
+      draft?.Category?.name ||
+      draft?.categoryName ||
+      "-";
+    setResolvedCategoryName(nameNow || "-");
+  }, [postData, draft]);
 
   // ใช้ค่าจาก backend ถ้ามี ไม่งั้น fallback เป็น draft จากฟอร์ม
   const sellRentView = useMemo(
@@ -222,8 +179,8 @@ const PostConfirm = () => {
     if (submitting) return;
     setSubmitting(true);
     try {
-      // ตัวอย่าง: อัปเดตสถานะ ถ้าพร้อมเปิดใช้
-      // await axios.patch(`${API_URL}/api/propertypost/${postId}`, { Status_post: "PENDING_REVIEW" }, { withCredentials: true });
+      // ถ้าจะเปลี่ยนสถานะหลังยืนยัน:
+      // await axios.patch(`${API_URL}/api/propertypost/${postId}`, { Status_post: "PENDING" }, { withCredentials: true });
       navigate("/seller");
     } catch (e) {
       console.warn("Failed to set status:", e);
@@ -258,12 +215,19 @@ const PostConfirm = () => {
 
   if (!postData) return null;
 
-  // รองรับได้ทั้ง Image/Images/images และทั้ง string/object
-  const rawImages =
-    postData?.images || postData?.Images || postData?.Image || [];
-  const images = Array.isArray(rawImages)
-    ? rawImages.map((it) => getImageUrl(it)).filter(Boolean)
+  /** ============ รูปภาพ ============
+   *  1) พยายามใช้รูปจาก backend: postData.Image (array ของ {url, secure_url})
+   *  2) ถ้าไม่มี ให้ fallback เป็นรูปพรีวิวจากฟอร์ม: draft.images (array ของ { preview, file, ... })
+   */
+  const backendImages = Array.isArray(postData?.Image)
+    ? postData.Image.map((it) => getImageUrl(it)).filter(Boolean)
     : [];
+
+  const draftImages = Array.isArray(draft?.images)
+    ? draft.images.map((it) => getImageUrl(it)).filter(Boolean)
+    : [];
+
+  const images = backendImages.length > 0 ? backendImages : draftImages;
   const hasImages = images.length > 0;
 
   return (
@@ -274,7 +238,6 @@ const PostConfirm = () => {
             <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
               <CheckCircle className="w-6 h-6 text-green-600" />
             </div>
-            {/* ✅ เปลี่ยนหัวข้อเป็นโทน “ผลลัพธ์/สรุปก่อนเผยแพร่” */}
             <CardTitle className="text-2xl font-semibold mt-1">
               สรุปข้อมูลประกาศก่อนเผยแพร่
             </CardTitle>
@@ -285,7 +248,7 @@ const PostConfirm = () => {
           </CardHeader>
 
           <CardContent className="space-y-8 px-6 md:px-8 pb-8">
-            {/* Helper banner (อธิบายขั้นตอนต่อไป) */}
+            {/* Helper banner */}
             <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground flex items-start gap-3">
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
@@ -415,7 +378,7 @@ const PostConfirm = () => {
               </div>
             </Section>
 
-            {/* ราคา (ระบบมีแต่ขาย) */}
+            {/* ราคา */}
             <Section title="ราคา">
               <div className="space-y-1">
                 <Row label="ประเภทประกาศ" value={sellRentView} />
@@ -432,17 +395,11 @@ const PostConfirm = () => {
                   right
                 />
                 <Row
-                  label="ดอกเบี้ยโดยประมาณ"
-                  value={fmtInterest(postData?.Interest ?? draft?.Interest)}
-                  right
-                />
-                <Row
                   label="ค่าใช้จ่ายอื่น ๆ"
-                  value={
+                  value={safeJoin(
                     postData?.Other_related_expenses ??
-                    draft?.Other_related_expenses ??
-                    "-"
-                  }
+                      draft?.Other_related_expenses
+                  )}
                 />
               </div>
             </Section>
@@ -512,18 +469,12 @@ const PostConfirm = () => {
                       key={url || idx}
                       className="relative w-full aspect-square rounded-lg overflow-hidden ring-1 ring-black/5"
                     >
-                      {url ? (
-                        <img
-                          src={url}
-                          alt={`property-${idx}`}
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center h-full text-muted-foreground bg-muted">
-                          <ImageIcon className="w-5 h-5" />
-                        </div>
-                      )}
+                      <img
+                        src={url}
+                        alt={`property-${idx}`}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
                       <div className="absolute left-2 top-2 text-xs px-2 py-0.5 rounded-full bg-black/60 text-white">
                         {idx + 1}
                       </div>
@@ -537,7 +488,7 @@ const PostConfirm = () => {
               )}
             </Section>
 
-            {/* ปุ่มยืนยัน (ไม่มีปุ่มย้อนกลับ/แก้ไขแล้ว) */}
+            {/* ปุ่มยืนยัน */}
             <div className="flex justify-end pt-2">
               <Button
                 onClick={() => setShowConfirm(true)}

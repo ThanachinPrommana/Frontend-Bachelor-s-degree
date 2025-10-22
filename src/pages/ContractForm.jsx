@@ -156,6 +156,7 @@ const ContractForm = () => {
             });
 
             console.log("Upload successful:", response.data);
+            alert("เอกสารถูกจัดส่งแล้ว");
             setIsModalOpen(false);
             setFilesToUpload([]); // เคลียร์ไฟล์หลังอัปโหลดสำเร็จ
             // navigate("/success-page");

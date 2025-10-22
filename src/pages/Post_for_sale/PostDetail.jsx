@@ -1,5 +1,5 @@
 // src/pages/Post_for_sale/PostDetail.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useFieldArray, useFormContext } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -18,7 +18,7 @@ import { validateStep } from "@/lib/zodRHF";
 
 const currentYear = new Date().getFullYear();
 
-/* ------------ helpers: แปลงเลขให้ถูกชนิด ------------ */
+/* ------------ helpers ------------ */
 const toFloatOrUndef = (v) => {
   if (v === "" || v === null || v === undefined) return undefined;
   const n = Number(v);
@@ -30,7 +30,7 @@ const toIntOrUndef = (v) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
-/* ------------ Prisma enums (จำกัดค่าที่รับ) ------------ */
+/* ------------ enums ------------ */
 const LandmarkEnum = z.enum([
   "BTS_MRT",
   "School",
@@ -45,7 +45,7 @@ const AmenityEnum = z.enum([
   "Pet_Friendly",
 ]);
 
-/* ------------ Year_Built: Prisma = String? (ปี 4 หลัก) ------------ */
+/* ------------ Year_Built as string(yyyy) ------------ */
 const yearStringOpt = z
   .string()
   .trim()
@@ -55,56 +55,97 @@ const yearStringOpt = z
   .transform((y) => String(y))
   .optional();
 
-/* ------------ Schema ใช้ตรวจหน้า Detail เท่านั้น ------------ */
-const detailSchema = z.object({
+/* ------------ Schema (Total_Rooms optional + refine) ------------ */
+const baseSchema = z.object({
   categoryId: z.string().min(1, "กรุณาเลือกประเภททรัพย์สิน"),
-  // ทศนิยมได้
   Usable_Area: z.preprocess(toFloatOrUndef, z.number().min(0).optional()),
   Land_Size: z.preprocess(toFloatOrUndef, z.number().min(0).optional()),
-  // จำนวนเต็ม
   Total_Rooms: z.preprocess(toIntOrUndef, z.number().int().min(0).optional()),
   Bedrooms: z.preprocess(toIntOrUndef, z.number().int().min(0)),
   Bathroom: z.preprocess(toIntOrUndef, z.number().int().min(0)),
-  floor: z.preprocess(toIntOrUndef, z.number().int().min(0).optional()),
+  floor: z.preprocess(toIntOrUndef, z.number().int().min(0).optional()), // UI จะซ่อนเฉพาะคอนโด
   Parking_Space: z.preprocess(toIntOrUndef, z.number().int().min(0).optional()),
-  // Year_Built เป็น string? ใน Prisma
   Year_Built: yearStringOpt,
-  // arrays ต้องเป็นค่าที่อยู่ใน enum เท่านั้น
   Nearby_Landmarks: z.array(LandmarkEnum).optional(),
   Additional_Amenities: z.array(AmenityEnum).optional(),
-
   NumberOfUnits: z.preprocess(
     toIntOrUndef,
-    z.number({
-      invalid_type_error: "กรุณากรอกเป็นตัวเลข", // ข้อความเมื่อกรอกตัวอักษร
-      required_error: "กรุณาระบุจำนวนยูนิต",      // ข้อความเมื่อค่าเป็น undefined
-    }).int().min(1, "ต้องมีอย่างน้อย 1 ยูนิต")
+    z.number().int().min(1, "ต้องมีอย่างน้อย 1")
   ),
-  // (แก้ไข) ตรวจสอบ array of objects
-  propertyUnits: z.array(
-    z.object({
-      Unit_Number: z.string().min(1, "กรุณากรอกเลขที่ยูนิต"),
-    })
-  ).min(1, "ต้องมีอย่างน้อย 1 ยูนิต"),
+  propertyUnits: z
+    .array(z.object({ Unit_Number: z.string().min(1, "กรุณากรอกเลขที่") }))
+    .min(1),
 });
 
-// แสดงผลไทย แต่ส่งค่า id เดิม (ปรับตามฐานข้อมูลของคุณ)
+const detailSchema = baseSchema.superRefine((data, ctx) => {
+  if (
+    data.Total_Rooms != null &&
+    data.Bedrooms != null &&
+    data.Bathroom != null &&
+    data.Total_Rooms < data.Bedrooms + data.Bathroom
+  ) {
+    ctx.addIssue({
+      path: ["Total_Rooms"],
+      code: z.ZodIssueCode.custom,
+      message: "จำนวนห้องทั้งหมดต้องไม่น้อยกว่าห้องนอน + ห้องน้ำ",
+    });
+  }
+});
+
+/* ------------ categories ------------ */
 const categories = [
-  { id: "cmegzfdya0006w2bwq5d8alc7", label: "คอนโดมิเนียม" },
   { id: "cmegzfhx70007w2bwp63cbc1w", label: "บ้านเดี่ยว" },
-  { id: "cmegzfls20008w2bwf0arh8jq", label: "ที่ดิน" },
-  { id: "cmegzfov30009w2bwrxjpt7xn", label: "วิลล่า" },
   { id: "cmegzft08000aw2bwx91l68z9", label: "ทาวน์เฮาส์" },
-  { id: "cmegzg3t1000cw2bw8shu6whw", label: "ตึกแถว/ช้อปเฮาส์" },
-  { id: "cmegzg9ez000dw2bwgkdliy1a", label: "อพาร์ตเมนต์" },
-  { id: "cmegzgcmy000ew2bw72nen7zo", label: "เพนท์เฮาส์" },
-  { id: "cmegzgfvz000fw2bwgppl0ci5", label: "รีสอร์ท" },
-  { id: "cmegzgif1000gw2bw1z7xda7u", label: "โรงแรม" },
-  { id: "cmegzgky4000hw2bwe83xrvrg", label: "ออฟฟิศ" },
-  { id: "cmegzgq6g000iw2bwl51st9pg", label: "อาคารพาณิชย์" },
-  { id: "cmegzgu1s000jw2bwdhco4e1r", label: "โรงงาน" },
-  { id: "cmegzgxsj000kw2bwebelhpmm", label: "โกดัง" },
+  { id: "cmegzfdya0006w2bwq5d8alc7", label: "คอนโดมิเนียม" },
+  { id: "cmegzfov30009w2bwrxjpt7xn", label: "วิลล่า" },
 ];
+const ALLOWED_CATEGORY_IDS = new Set(categories.map((c) => c.id));
+
+/* ------------ dynamic config ------------ */
+const CATEGORY_META = {
+  condo: {
+    id: "cmegzfdya0006w2bwq5d8alc7",
+    show: { Land_Size: false, floor: false, Parking_Space: true, Units: true }, // ⬅ ซ่อน floor
+    required: ["categoryId", "Bedrooms", "Bathroom"], // ไม่บังคับ floor
+    defaults: { NumberOfUnits: 1, propertyUnits: [{ Unit_Number: "" }] },
+  },
+  house: {
+    id: "cmegzfhx70007w2bwp63cbc1w",
+    show: { Land_Size: true, floor: true, Parking_Space: true, Units: true },
+    required: ["categoryId", "Bedrooms", "Bathroom"],
+    defaults: { NumberOfUnits: 1, propertyUnits: [{ Unit_Number: "" }] },
+  },
+  townhouse: {
+    id: "cmegzft08000aw2bwx91l68z9",
+    show: { Land_Size: true, floor: true, Parking_Space: true, Units: true },
+    required: ["categoryId", "Bedrooms", "Bathroom"],
+    defaults: { NumberOfUnits: 1, propertyUnits: [{ Unit_Number: "" }] },
+  },
+  villa: {
+    id: "cmegzfov30009w2bwrxjpt7xn",
+    show: { Land_Size: true, floor: true, Parking_Space: true, Units: true },
+    required: ["categoryId", "Bedrooms", "Bathroom"],
+    defaults: { NumberOfUnits: 1, propertyUnits: [{ Unit_Number: "" }] },
+  },
+};
+const META_BY_ID = Object.fromEntries(
+  Object.values(CATEGORY_META).map((m) => [m.id, m])
+);
+
+/* ------------ unit labels per category ------------ */
+const getUnitLabel = (categoryId) => {
+  switch (categoryId) {
+    case CATEGORY_META.condo.id:
+      return { group: "ข้อมูลห้องที่ขาย", item: "เลขห้องที่" }; // ⬅ คอนโด
+    case CATEGORY_META.house.id:
+    case CATEGORY_META.villa.id:
+      return { group: "ข้อมูลบ้านที่ขาย", item: "บ้านเลขที่" };
+    case CATEGORY_META.townhouse.id:
+      return { group: "ข้อมูลคูหาที่ขาย", item: "เลขคูหาที่" };
+    default:
+      return { group: "ข้อมูลยูนิตที่ขาย", item: "เลขยูนิตที่" };
+  }
+};
 
 const landmarks = [
   { value: "BTS_MRT", label: "ใกล้รถไฟฟ้า (BTS/MRT)" },
@@ -121,13 +162,10 @@ const amenitiesList = [
   { value: "Pet_Friendly", label: "เลี้ยงสัตว์ได้" },
 ];
 
-const PostDetail = () => {
+export default function PostDetail() {
   const navigate = useNavigate();
   const form = useFormContext();
-
   const { control, watch } = form;
-
-
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -135,55 +173,107 @@ const PostDetail = () => {
   });
 
   const numberOfUnits = watch("NumberOfUnits");
+  const categoryId = watch("categoryId");
+  const meta = META_BY_ID[categoryId] || { show: {} };
+  const unitLabel = getUnitLabel(categoryId);
 
   const toggleArrayValue = (fieldName, value) => {
-    const currentValues = form.getValues(fieldName) || [];
-    const next = currentValues.includes(value)
-      ? currentValues.filter((x) => x !== value)
-      : [...currentValues, value];
+    const cur = Array.isArray(form.getValues(fieldName))
+      ? form.getValues(fieldName)
+      : [];
+    const next = cur.includes(value)
+      ? cur.filter((x) => x !== value)
+      : [...cur, value];
     form.setValue(fieldName, next, { shouldDirty: true, shouldValidate: true });
   };
 
-  // (สำคัญ) useEffect สำหรับจัดการเพิ่ม/ลดช่องกรอกอัตโนมัติ
+  // กันโพสต์เก่า: reset categoryId ถ้า id ไม่อยู่ใน allowed
+  useEffect(() => {
+    const cur = form.getValues("categoryId");
+    if (cur && !ALLOWED_CATEGORY_IDS.has(cur)) {
+      form.setValue("categoryId", "", {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ปรับค่าตามประเภท + ล้าง field ที่ถูกซ่อน
+  useEffect(() => {
+    const m = META_BY_ID[categoryId];
+    if (!m) return;
+
+    // ใส่ defaults เมื่อไม่มีค่า
+    Object.entries(m.defaults || {}).forEach(([k, v]) => {
+      const cur = form.getValues(k);
+      if (cur === undefined || (Array.isArray(cur) && cur.length === 0)) {
+        form.setValue(k, v, { shouldDirty: true, shouldValidate: false });
+      }
+    });
+
+    // ล้างเมื่อซ่อน
+    if (m.show.Land_Size === false) {
+      form.setValue("Land_Size", undefined, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+    if (m.show.floor === false) {
+      form.setValue("floor", undefined, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [categoryId, form]);
+
+  // sync จำนวนช่องกับ NumberOfUnits
   useEffect(() => {
     const currentCount = fields.length;
-    const targetCount = parseInt(numberOfUnits, 10) || 0;
-
-    if (currentCount < targetCount) {
-      // ถ้าช่องมีน้อยกว่าที่ระบุ ให้เพิ่มช่องว่างเข้าไป
-      for (let i = currentCount; i < targetCount; i++) {
-        append({ Unit_Number: "" });
-      }
-    } else if (currentCount > targetCount) {
-      // ถ้าช่องมีเยอะกว่าที่ระบุ ให้ลบช่องท้ายๆ ออก
-      for (let i = currentCount; i > targetCount; i--) {
-        remove(i - 1);
-      }
+    const target = parseInt(numberOfUnits, 10) || 0;
+    if (currentCount < target) {
+      for (let i = currentCount; i < target; i++) append({ Unit_Number: "" });
+    } else if (currentCount > target) {
+      for (let i = currentCount; i > target; i--) remove(i - 1);
     }
   }, [numberOfUnits, fields.length, append, remove]);
 
+  const BASE_REQUIRED = ["categoryId", "Bedrooms", "Bathroom"];
+
   const onSubmit = () => {
-    console.log("Form data before validation:", form.getValues());
+    const required = Array.from(
+      new Set([...BASE_REQUIRED, ...(META_BY_ID[categoryId]?.required || [])])
+    );
+
+    // guard เผื่อผู้ใช้กรอก NumberOfUnits = 0
+    const nUnits = form.getValues("NumberOfUnits");
+    if (!nUnits || nUnits < 1) {
+      form.setError("NumberOfUnits", {
+        type: "manual",
+        message: "ต้องมีอย่างน้อย 1",
+      });
+    }
+
     const ok = validateStep(form, detailSchema, [
       "categoryId",
       "Usable_Area",
       "Land_Size",
-      "Total_Rooms",
+      "Total_Rooms", // ไม่บังคับ แต่ validate ถ้ามี
       "Year_Built",
       "Bedrooms",
       "Bathroom",
-      "floor",
+      // ไม่ต้อง include 'floor' ก็ได้ เพราะคอนโดถูกล้างค่า/ซ่อนอยู่แล้ว
       "Nearby_Landmarks",
       "Additional_Amenities",
       "Parking_Space",
-      "NumberOfUnits", // (เพิ่ม) ตรวจสอบ field นี้ด้วย
+      "NumberOfUnits",
       "propertyUnits",
+      ...required,
     ]);
-    if (!ok) {
-      // (สำคัญ) ดู Error ที่เกิดขึ้น
-      console.log("Zod Validation Errors:", form.formState.errors);
-      return;
-    }
+
+    console.log("[PostDetail] submit", { ok, errors: form.formState.errors });
+
+    if (!ok) return;
     navigate("/seller/post-for-sale/price");
   };
 
@@ -286,38 +376,42 @@ const PostDetail = () => {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  name="Land_Size"
-                  control={form.control}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>พื้นที่ดิน (ตร.วา)</FormLabel>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        placeholder="เช่น 50"
-                        {...field}
-                        value={field.value ?? ""}
-                        onChange={(e) =>
-                          form.setValue(
-                            "Land_Size",
-                            toFloatOrUndef(e.target.value),
-                            {
-                              shouldDirty: true,
-                              shouldValidate: true,
-                            }
-                          )
-                        }
-                        min={0}
-                        step="0.01"
-                        onWheel={(e) => e.currentTarget.blur()}
-                        className="h-11"
-                      />
-                      <p className="text-xs mt-1 h-5 invisible">placeholder</p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {meta.show.Land_Size !== false && (
+                  <FormField
+                    name="Land_Size"
+                    control={form.control}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>พื้นที่ดิน (ตร.วา)</FormLabel>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="เช่น 50"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) =>
+                            form.setValue(
+                              "Land_Size",
+                              toFloatOrUndef(e.target.value),
+                              {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              }
+                            )
+                          }
+                          min={0}
+                          step="0.01"
+                          onWheel={(e) => e.currentTarget.blur()}
+                          className="h-11"
+                        />
+                        <p className="text-xs mt-1 h-5 invisible">
+                          placeholder
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <FormField
                   name="Year_Built"
                   control={form.control}
@@ -331,7 +425,7 @@ const PostDetail = () => {
                         {...field}
                         value={field.value ?? ""}
                         onChange={(e) => {
-                          const raw = e.target.value.trim(); // เก็บเป็น string ให้ตรง Prisma
+                          const raw = e.target.value.trim();
                           form.setValue(
                             "Year_Built",
                             raw === "" ? undefined : raw,
@@ -355,7 +449,7 @@ const PostDetail = () => {
                 />
               </div>
 
-              {/* ห้องนอน/ห้องน้ำ/ห้องทั้งหมด/ชั้น */}
+              {/* ห้องนอน/ห้องน้ำ/ห้องทั้งหมด/(ชั้น — ซ่อนในคอนโด) */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <FormField
                   name="Bedrooms"
@@ -447,81 +541,96 @@ const PostDetail = () => {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  name="floor"
-                  control={form.control}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>จำนวนชั้น</FormLabel>
-                      <Input
-                        type="number"
-                        inputMode="numeric"
-                        placeholder="เช่น 2"
-                        {...field}
-                        value={field.value ?? ""}
-                        onChange={(e) =>
-                          form.setValue("floor", toIntOrUndef(e.target.value), {
-                            shouldDirty: true,
-                            shouldValidate: true,
-                          })
-                        }
-                        min={0}
-                        step="1"
-                        onWheel={(e) => e.currentTarget.blur()}
-                        className="h-11"
-                      />
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {/* (แก้ไข) ส่วนของ Unit ทั้งหมด */}
-              <div className="space-y-4 rounded-lg border p-4">
-                <h3 className="font-semibold">ข้อมูลยูนิตและเลขที่บ้าน/ห้อง</h3>
-                {/* 1. ช่องกรอกจำนวนยูนิต */}
-                <FormField
-                  name="NumberOfUnits"
-                  control={control}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>จำนวนยูนิตทั้งหมด</FormLabel>
-                      <Input
-                        type="number"
-                        inputMode="numeric"
-                        placeholder="เช่น 3"
-                        {...field}
-                        value={field.value ?? ""}
-                        onChange={(e) => form.setValue("NumberOfUnits", toIntOrUndef(e.target.value))}
-                        min={1}
-                        step="1"
-                        className="h-11 w-full md:w-1/2"
-                      />
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* 2. ช่องกรอกเลขที่ยูนิต (สร้างอัตโนมัติ) */}
-                {fields.map((field, index) => (
+                {meta.show.floor !== false && (
                   <FormField
-                    key={field.id}
-                    name={`propertyUnits.${index}.Unit_Number`}
-                    control={control}
-                    render={({ field: inputField }) => (
+                    name="floor"
+                    control={form.control}
+                    render={({ field }) => (
                       <FormItem>
-                        <FormLabel>เลขที่ยูนิตที่ {index + 1}</FormLabel>
+                        <FormLabel>จำนวนชั้น</FormLabel>
                         <Input
-                          placeholder={`เช่น 27/222 หรือ A-101`}
-                          {...inputField}
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="เช่น 2"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) =>
+                            form.setValue(
+                              "floor",
+                              toIntOrUndef(e.target.value),
+                              {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              }
+                            )
+                          }
+                          min={0}
+                          step="1"
+                          onWheel={(e) => e.currentTarget.blur()}
+                          className="h-11"
                         />
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                ))}
+                )}
               </div>
 
+              {/* ยูนิต/บ้าน/ห้อง ที่ขาย */}
+              {meta.show.Units !== false && (
+                <div className="space-y-4 rounded-lg border p-4">
+                  <h3 className="font-semibold">{unitLabel.group}</h3>
+                  <FormField
+                    name="NumberOfUnits"
+                    control={control}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>จำนวนทั้งหมดที่ต้องการขาย</FormLabel>
+                        <Input
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="เช่น 3"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) =>
+                            form.setValue(
+                              "NumberOfUnits",
+                              toIntOrUndef(e.target.value)
+                            )
+                          }
+                          min={1}
+                          step="1"
+                          className="h-11 w-full md:w-1/2"
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {fields.map((f, index) => (
+                    <FormField
+                      key={f.id}
+                      name={`propertyUnits.${index}.Unit_Number`}
+                      control={control}
+                      render={({ field: inputField }) => (
+                        <FormItem>
+                          <FormLabel>
+                            {unitLabel.item} {index + 1}
+                          </FormLabel>
+                          <Input
+                            placeholder={
+                              unitLabel.item.includes("ห้อง")
+                                ? `เช่น A-${100 + index}`
+                                : `เช่น 27/${index + 1}`
+                            }
+                            {...inputField}
+                          />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ))}
+                </div>
+              )}
 
               {/* สถานที่ใกล้เคียง */}
               <FormField
@@ -593,37 +702,39 @@ const PostDetail = () => {
               />
 
               {/* ที่จอดรถ */}
-              <FormField
-                name="Parking_Space"
-                control={form.control}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>ที่จอดรถ</FormLabel>
-                    <select
-                      className="w-full h-11 px-3 border rounded bg-background"
-                      value={field.value ?? ""}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        form.setValue(
-                          "Parking_Space",
-                          v === "" ? undefined : parseInt(v, 10),
-                          {
-                            shouldDirty: true,
-                            shouldValidate: true,
-                          }
-                        );
-                      }}
-                    >
-                      <option value="">เลือกจำนวนที่จอด</option>
-                      <option value="0">ไม่มีที่จอด</option>
-                      <option value="1">1 คัน</option>
-                      <option value="2">2 คัน</option>
-                      <option value="3">3 คันขึ้นไป</option>
-                    </select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {meta.show.Parking_Space !== false && (
+                <FormField
+                  name="Parking_Space"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>ที่จอดรถ</FormLabel>
+                      <select
+                        className="w-full h-11 px-3 border rounded bg-background"
+                        value={field.value ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          form.setValue(
+                            "Parking_Space",
+                            v === "" ? undefined : parseInt(v, 10),
+                            {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            }
+                          );
+                        }}
+                      >
+                        <option value="">เลือกจำนวนที่จอด</option>
+                        <option value="0">ไม่มีที่จอด</option>
+                        <option value="1">1 คัน</option>
+                        <option value="2">2 คัน</option>
+                        <option value="3">3 คันขึ้นไป (บันทึกเป็น 3+)</option>
+                      </select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               {/* นำทาง */}
               <div className="flex items-center justify-between pt-2">
@@ -644,6 +755,4 @@ const PostDetail = () => {
       </div>
     </PostLayout>
   );
-};
-
-export default PostDetail;
+}

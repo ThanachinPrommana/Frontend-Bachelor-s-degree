@@ -6,7 +6,6 @@ import PostLayout from "@/layouts/PostLayout";
 import { useNavigate } from "react-router-dom";
 import { Trash2, Image as ImageIcon, Video as VideoIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { createpost } from "@/api/post";
 import { apiClient } from "@/api/authconfig";
 
 /* ================== Config ================== */
@@ -38,9 +37,7 @@ const generateVideoThumbnail = (videoFile) => {
     video.onloadeddata = () => {
       try {
         video.currentTime = Math.min(1, (video.duration || 2) * 0.2);
-      } catch {
-        // บางเบราว์เซอร์อาจ throw ถ้า duration ยังไม่พร้อม
-      }
+      } catch {}
     };
     video.onseeked = () => {
       const w = video.videoWidth || 320;
@@ -251,7 +248,7 @@ export default function PostUpload() {
       urlBinRef.current.forEach((u) => {
         try {
           URL.revokeObjectURL(u);
-        } catch { }
+        } catch {}
       });
       urlBinRef.current.clear();
     };
@@ -278,57 +275,44 @@ export default function PostUpload() {
     const allData = form.getValues();
     const formData = new FormData();
 
-    // เหมาะกับ multer.fields([{name:'images'},{name:'videos'}])
-    // (allData.images || []).forEach((img) =>
-    //   formData.append("images", img.file)
-    // );
-    // (allData.videos || []).forEach((vid) =>
-    //   formData.append("videos", vid.file)
-    // );
-
+    // รวมทุกฟิลด์ไว้ในลูปเดียวกัน (กัน append ซ้ำ)
     for (const key in allData) {
-      if (!allData.hasOwnProperty(key)) continue;
+      if (!Object.prototype.hasOwnProperty.call(allData, key)) continue;
       const value = allData[key];
-
       if (value === null || value === undefined) continue;
 
-      // --- เงื่อนไขการแปลงข้อมูล ---
-
-      // 1. (สำคัญ) แปลง propertyUnits ให้เป็น JSON String
+      // 1) propertyUnits -> JSON string
       if (key === "propertyUnits") {
         formData.append(key, JSON.stringify(value));
       }
-      // 2. จัดการไฟล์รูปภาพและวิดีโอ
+      // 2) รูป/วิดีโอ -> append ไฟล์จริง
       else if (key === "images" || key === "videos") {
         (value || []).forEach((fileWrapper) => {
-          // ส่งเฉพาะ object File จริงๆ
-          formData.append(key, fileWrapper.file);
+          if (fileWrapper?.file instanceof File) {
+            formData.append(key, fileWrapper.file);
+          }
         });
       }
-      // 3. จัดการ Array อื่นๆ (เช่น สถานที่ใกล้เคียง)
+      // 3) Array อื่นๆ -> append ทีละค่า
       else if (Array.isArray(value)) {
-        value.forEach((item) => {
-          formData.append(key, String(item));
-        });
+        value.forEach((item) => formData.append(key, String(item)));
       }
-      // 4. ข้อมูลอื่นๆ ที่เหลือ
+      // 4) ค่าทั่วไป -> append เป็น string
       else {
         formData.append(key, String(value));
       }
     }
 
     try {
-      // (แก้ไข) เรียกใช้ API ผ่าน apiClient ที่ import มา ไม่ใช่ createpost โดยตรง
       const response = await apiClient.post("/propertypost", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        // ปล่อย Axios จัด Content-Type + boundary เอง
+        withCredentials: true, // ถ้า backend ใช้ session/cookie
       });
 
       form.reset();
-      // (แก้ไข) ส่งต่อไปยังหน้า Confirm พร้อม postId ที่ได้รับจาก response
       navigate("/seller/post-for-sale/confirm", {
         state: { postId: response.data.id },
       });
-
     } catch (apiError) {
       const message =
         apiError?.response?.data?.message ||
@@ -374,13 +358,15 @@ export default function PostUpload() {
                 onDrop={handleDropImages}
                 onDragOver={handleDragOverImages}
                 onDragLeave={handleDragLeaveImages}
-                className={`rounded-xl border-2 border-dashed transition-colors p-6 md:p-8 text-center ${canAddMoreImages
-                  ? "cursor-pointer hover:bg-primary/10"
-                  : "opacity-60 cursor-not-allowed"
-                  } ${isDraggingImg
+                className={`rounded-xl border-2 border-dashed transition-colors p-6 md:p-8 text-center ${
+                  canAddMoreImages
+                    ? "cursor-pointer hover:bg-primary/10"
+                    : "opacity-60 cursor-not-allowed"
+                } ${
+                  isDraggingImg
                     ? "border-primary bg-primary/10"
                     : "border-primary/40"
-                  }`}
+                }`}
               >
                 <p className="font-medium">
                   {canAddMoreImages
@@ -459,13 +445,15 @@ export default function PostUpload() {
                 onDrop={handleDropVideos}
                 onDragOver={handleDragOverVideos}
                 onDragLeave={handleDragLeaveVideos}
-                className={`rounded-xl border-2 border-dashed transition-colors p-6 md:p-8 text-center ${canAddMoreVideos
-                  ? "cursor-pointer hover:bg-primary/10"
-                  : "opacity-60 cursor-not-allowed"
-                  } ${isDraggingVid
+                className={`rounded-xl border-2 border-dashed transition-colors p-6 md:p-8 text-center ${
+                  canAddMoreVideos
+                    ? "cursor-pointer hover:bg-primary/10"
+                    : "opacity-60 cursor-not-allowed"
+                } ${
+                  isDraggingVid
                     ? "border-primary bg-primary/10"
                     : "border-primary/40"
-                  }`}
+                }`}
               >
                 <p className="font-medium">
                   {canAddMoreVideos
