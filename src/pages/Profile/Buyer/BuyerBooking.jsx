@@ -15,9 +15,10 @@ import { useToast } from "@/components/ui/use-toast";
 import { RefreshCcw, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { fmtDateTimeTH } from "@/lib/bookingUtils";
-import StatusBadge from "@/components/booking/StatusBadge";
+
 import SlipButton from "@/components/booking/SlipButton";
 import UploadFinalSlipButton from "@/components/UploadFinalSlipButton";
+import StatusBadge from "@/components/StatusBadge";
 
 
 

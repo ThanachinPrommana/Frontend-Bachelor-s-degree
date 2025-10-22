@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { apiClient } from "@/api/authconfig";
 import { useNavigate } from "react-router";
 import FinalSlipCard from "@/components/FinalSlipCard";
+import { useToast } from "@/components/ui/use-toast";
 
 // Component สำหรับแสดงป้ายสถานะ
 const StatusBadge = ({ status }) => {
@@ -44,6 +45,7 @@ export default function SellerDoc() {
     const [reviewingId, setReviewingId] = useState(null);
     const [confirmingId, setConfirmingId] = useState(null);
     const navigate = useNavigate()
+    const { toast } = useToast();
 
     // useEffect(() => {
     //     if (authUser) {
@@ -201,6 +203,7 @@ export default function SellerDoc() {
                     buyerName: `${doc.User?.First_name || ''} ${doc.User?.Last_name || ''}`,
                     buyerUserId: doc.User?.id,
                     createdAt: doc.createdAt,
+                    depositStatus: doc.unit?.Deposit?.Deposit_Status,
                     documents: [],
                 });
             }
@@ -262,16 +265,15 @@ export default function SellerDoc() {
 
     }, [authUser, searchTerm, activeTab]);
 
-    const handleConfirmFinalSlip = async (bookingId) => {
-        if (status === 'COMPLETED' && !window.confirm("คุณต้องการยืนยันสลิปการชำระเงินส่วนที่เหลือนี้ใช่หรือไม่?")) {
-            return; // ย้าย confirm มาไว้ที่นี่สำหรับ COMPLETED
+    const handleConfirmFinalSlip = async (bookingId, newStatus) => {
+        if (newStatus === 'COMPLETED' && !window.confirm("คุณแน่ใจหรือไม่ว่าต้องการยืนยันสลิปนี้?")) {
+            return;
         }
-
-        setConfirmingId(bookingId); // ใช้ state เดิมสำหรับ loading
+        setConfirmingId(bookingId);
         try {
-            await apiClient.post(`/confirmed-slip/${bookingId}`, { status });
+            await apiClient.post(`/confirmed-slip/${bookingId}`, { bookingStatus: newStatus });
 
-            const actionText = status === 'COMPLETED' ? 'ยืนยัน' : 'ปฏิเสธ';
+            const actionText = newStatus === 'COMPLETED' ? 'ยืนยัน' : 'ปฏิเสธ';
             toast({ title: `${actionText}สลิปสำเร็จ`, description: `สถานะได้รับการอัปเดตแล้ว` });
             await revalidateUser();
         } catch (error) {
