@@ -263,12 +263,16 @@ export default function SellerDoc() {
     }, [authUser, searchTerm, activeTab]);
 
     const handleConfirmFinalSlip = async (bookingId) => {
-        if (!window.confirm("คุณต้องการยืนยันสลิปการชำระเงินส่วนที่เหลือนี้ใช่หรือไม่?")) return;
+        if (status === 'COMPLETED' && !window.confirm("คุณต้องการยืนยันสลิปการชำระเงินส่วนที่เหลือนี้ใช่หรือไม่?")) {
+            return; // ย้าย confirm มาไว้ที่นี่สำหรับ COMPLETED
+        }
 
-        setConfirmingId(bookingId);
+        setConfirmingId(bookingId); // ใช้ state เดิมสำหรับ loading
         try {
-            await apiClient.post(`/confirmed-slip/${bookingId}`);
-            toast({ title: "ยืนยันสลิปสำเร็จ", description: "สถานะการจองและยูนิตได้รับการอัปเดตแล้ว" });
+            await apiClient.post(`/confirmed-slip/${bookingId}`, { status });
+
+            const actionText = status === 'COMPLETED' ? 'ยืนยัน' : 'ปฏิเสธ';
+            toast({ title: `${actionText}สลิปสำเร็จ`, description: `สถานะได้รับการอัปเดตแล้ว` });
             await revalidateUser();
         } catch (error) {
             console.error("Failed to confirm final slip:", error);
@@ -419,7 +423,7 @@ export default function SellerDoc() {
                                                 {app.bookingStatus === 'PENDING_FINAL_VERIFICATION' ? (
                                                     <FinalSlipCard
                                                         booking={app}
-                                                        onConfirm={handleConfirmFinalSlip}
+                                                        onConfirm={handleConfirmFinalSlip} // ส่งฟังก์ชันที่แก้ไขแล้วไป
                                                         isConfirming={confirmingId === app.bookingId}
                                                     />
                                                 ) : (
