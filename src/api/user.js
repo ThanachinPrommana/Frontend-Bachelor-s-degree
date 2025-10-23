@@ -129,11 +129,17 @@ export const getProfile = async () => {
    🗓️ Slots (Seller)
    =========================== */
 // → POST /api/seller/slot  (สร้าง DateTimeSlot)
-export const createSlot = async ({ postId, start, end }) => {
+export const createSlot = async (payload) => {
+  // ตรวจสอบว่า payload มี date และ timeSlots ก่อนส่ง (Optional)
+  if (!payload.date || !Array.isArray(payload.timeSlots) || payload.timeSlots.length === 0) {
+    throw new Error("Invalid payload: Missing date or timeslots array.");
+  }
+
+  // (แก้ไข) ส่ง payload ทั้ง object ไปเป็น request body
   const { data } = await apiClient.post(
     `/seller/slot`,
-    { postId, start, end },
-    { withCredentials: true }
+    payload, // <-- ส่ง payload ที่รับมา
+    { withCredentials: true } // ถ้า session/cookie จำเป็น
   );
   return data;
 };
