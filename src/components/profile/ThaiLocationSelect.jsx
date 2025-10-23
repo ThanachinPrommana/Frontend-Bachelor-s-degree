@@ -1,168 +1,176 @@
-import { useEffect, useMemo, useState } from "react";
+// src/components/profile/ThaiLocationSelect.jsx
+import React, { useEffect, useMemo, useState } from "react";
 
 /**
- * ThaiLocationSelect (updated to latest API)
- * - ใช้ province.json, district.json, sub_district.json (ชุด latest)
- * - props ที่รองรับ (เหมือนเดิม + optional subdistrict):
- *    provinceValue, districtValue, subDistrictValue
- *    onProvinceChange(val), onDistrictChange(val), onSubDistrictChange(val)
- *    showSubDistrict = false   ← ถ้า true จะแสดงช่องตำบล/แขวง
- *
- * หมายเหตุโครงสร้างไฟล์ API:
- * - province:      { id, name_th, name_en, geography_id }
- * - district:      { id, name_th, name_en, province_id }
- * - sub_district:  { id, name_th, name_en, district_id, zipcode }
+ * Props:
+ * - provinceValue, districtValue, subDistrictValue: string (ชื่อภาษาไทย)
+ * - onProvinceChange(v), onDistrictChange(v), onSubDistrictChange(v)
+ * - showSubDistrict: boolean
+ * - disabled: boolean
+ * - provinceWhitelist: string[] (รายชื่อจังหวัดภาษาไทยที่ให้เลือก)
  */
-
-const PROVINCE_URL =
-  "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/province.json";
-const DISTRICT_URL =
-  "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/district.json";
-const SUBDISTRICT_URL =
-  "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/sub_district.json";
-
 export default function ThaiLocationSelect({
-  provinceValue = "",
-  districtValue = "",
-  subDistrictValue = "",
+  provinceValue,
+  districtValue,
+  subDistrictValue,
   onProvinceChange,
   onDistrictChange,
   onSubDistrictChange,
   showSubDistrict = false,
+  disabled = false,
+  provinceWhitelist,
 }) {
-  const [provinces, setProvinces] = useState([]);
-  const [allDistricts, setAllDistricts] = useState([]); // cache ทั้งประเทศ
-  const [allSubDistricts, setAllSubDistricts] = useState([]); // cache ทั้งประเทศ
+  // raw data
+  const [provinces, setProvinces] = useState([]); // [{id, name_th}, ...]
+  const [districts, setDistricts] = useState([]); // [{id, name_th, province_id}, ...]
+  const [subDistricts, setSubDistricts] = useState([]); // [{id, name_th, district_id}, ...]
 
-  const [loadingP, setLoadingP] = useState(true);
-  const [loadingD, setLoadingD] = useState(false);
-  const [loadingS, setLoadingS] = useState(false);
+  // derived options for selects
+  const [districtOptions, setDistrictOptions] = useState([]); // [{id, name_th}]
+  const [subDistrictOptions, setSubDistrictOptions] = useState([]); // [{id, name_th}]
 
-  // โหลดจังหวัดครั้งเดียว
+  const collatorTH = useMemo(() => new Intl.Collator("th"), []);
+
+  // ปรับ whitelist ให้สะอาด: trim + เดดัพ
+  const normalizedWhitelist = useMemo(() => {
+    if (!Array.isArray(provinceWhitelist) || provinceWhitelist.length === 0)
+      return null;
+    const set = new Set(
+      provinceWhitelist
+        .map((s) => String(s ?? "").trim())
+        .filter((s) => s.length > 0)
+    );
+    return Array.from(set);
+  }, [provinceWhitelist]);
+
+  // 1) โหลด provinces/districts/sub_districts (ตาม whitelist)
   useEffect(() => {
-    (async () => {
+    const ac = new AbortController();
+
+    const fetchAll = async () => {
       try {
-        setLoadingP(true);
-        const res = await fetch(PROVINCE_URL);
-        const data = await res.json();
-        setProvinces(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.error("โหลดจังหวัดไม่สำเร็จ:", e);
-        setProvinces([]);
-      } finally {
-        setLoadingP(false);
+        const [pRes, dRes, sRes] = await Promise.all([
+          fetch(
+            "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/province.json",
+            { signal: ac.signal }
+          ),
+          fetch(
+            "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/district.json",
+            { signal: ac.signal }
+          ),
+          fetch(
+            "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/sub_district.json",
+            { signal: ac.signal }
+          ),
+        ]);
+
+        const [p, d, s] = await Promise.all([
+          pRes.json(),
+          dRes.json(),
+          sRes.json(),
+        ]);
+
+        // provinces: กรองด้วย whitelist ถ้ามี
+        const pFiltered =
+          normalizedWhitelist && normalizedWhitelist.length
+            ? p.filter((x) =>
+                normalizedWhitelist.includes(String(x.name_th).trim())
+              )
+            : p;
+
+        setProvinces(pFiltered);
+        setDistricts(d);
+        setSubDistricts(s);
+      } catch (err) {
+        if (err?.name !== "AbortError") {
+          console.error("โหลดข้อมูลจังหวัด/อำเภอ/ตำบลไม่สำเร็จ:", err);
+        }
       }
-    })();
-  }, []);
+    };
 
-  // helper หา province object จากชื่อ
-  const selectedProvince = useMemo(() => {
-    if (!provinceValue || provinces.length === 0) return null;
-    return (
-      provinces.find(
-        (p) =>
-          p.name_th === provinceValue ||
-          p.name_en === provinceValue ||
-          String(p.id) === String(provinceValue) // รองรับเคส dev ส่ง id มาก็ได้
-      ) || null
-    );
-  }, [provinceValue, provinces]);
+    fetchAll();
+    return () => ac.abort();
+  }, [normalizedWhitelist]);
 
-  // โหลด district ทั้งประเทศครั้งเดียวเมื่อจำเป็น
+  // helper: map ชื่อจังหวัด → id (เทียบด้วยชื่อไทยที่ trim แล้ว)
+  const provinceNameToId = useMemo(() => {
+    const m = new Map();
+    provinces.forEach((p) => m.set(String(p.name_th).trim(), p.id));
+    return m;
+  }, [provinces]);
+
+  // helper: map ชื่ออำเภอ → id
+  const districtNameToId = useMemo(() => {
+    const m = new Map();
+    districts.forEach((d) => m.set(String(d.name_th).trim(), d.id));
+    return m;
+  }, [districts]);
+
+  // ถ้า whitelist เปลี่ยนจน provinceValue ปัจจุบัน “หายไป” → เคลียร์ค่า + sync ให้ parent
   useEffect(() => {
-    if (!selectedProvince) return; // ยังไม่เลือกจังหวัด ไม่ต้องรีบโหลด
-    if (allDistricts.length > 0) return; // เคยโหลดแล้ว
+    if (!provinceValue) return;
+    const has = provinceNameToId.has(String(provinceValue).trim());
+    if (!has) {
+      onProvinceChange?.("");
+      onDistrictChange?.("");
+      onSubDistrictChange?.("");
+      setDistrictOptions([]);
+      setSubDistrictOptions([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provinceNameToId]);
 
-    (async () => {
-      try {
-        setLoadingD(true);
-        const res = await fetch(DISTRICT_URL);
-        const data = await res.json();
-        setAllDistricts(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.error("โหลดอำเภอ/เขตไม่สำเร็จ:", e);
-        setAllDistricts([]);
-      } finally {
-        setLoadingD(false);
-      }
-    })();
-  }, [selectedProvince, allDistricts.length]);
-
-  // filter district ตามจังหวัดที่เลือก
-  const districts = useMemo(() => {
-    if (!selectedProvince || allDistricts.length === 0) return [];
-    return allDistricts.filter(
-      (d) => String(d.province_id) === String(selectedProvince.id)
-    );
-  }, [selectedProvince, allDistricts]);
-
-  // โหลด sub_district ทั้งประเทศเมื่อจำเป็น (เฉพาะกรณีให้แสดง)
+  // 2) เมื่อเลือก "จังหวัด" → คำนวณอำเภอที่อยู่ใต้จังหวัดนั้นจาก province_id
   useEffect(() => {
-    if (!showSubDistrict) return;
-    if (!districtValue) return;
-    if (allSubDistricts.length > 0) return;
+    const pid = provinceNameToId.get(String(provinceValue || "").trim());
+    if (!pid) {
+      setDistrictOptions([]);
+      setSubDistrictOptions([]);
+      return;
+    }
+    const ds = districts
+      .filter((d) => d.province_id === pid)
+      .map((d) => ({ id: d.id, name_th: d.name_th }))
+      .sort((a, b) => collatorTH.compare(a.name_th, b.name_th));
+    setDistrictOptions(ds);
+  }, [provinceValue, provinceNameToId, districts, collatorTH]);
 
-    (async () => {
-      try {
-        setLoadingS(true);
-        const res = await fetch(SUBDISTRICT_URL);
-        const data = await res.json();
-        setAllSubDistricts(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.error("โหลดตำบล/แขวงไม่สำเร็จ:", e);
-        setAllSubDistricts([]);
-      } finally {
-        setLoadingS(false);
-      }
-    })();
-  }, [showSubDistrict, districtValue, allSubDistricts.length]);
+  // 3) เมื่อเลือก "อำเภอ" → คำนวณตำบลจาก district_id
+  useEffect(() => {
+    const did = districtNameToId.get(String(districtValue || "").trim());
+    if (!did) {
+      setSubDistrictOptions([]);
+      return;
+    }
+    const subs = subDistricts
+      .filter((s) => s.district_id === did)
+      .map((s) => ({ id: s.id, name_th: s.name_th }))
+      .sort((a, b) => collatorTH.compare(a.name_th, b.name_th));
+    setSubDistrictOptions(subs);
+  }, [districtValue, districtNameToId, subDistricts, collatorTH]);
 
-  // หา district object ที่เลือก (ใช้ตอน filter sub_district)
-  const selectedDistrict = useMemo(() => {
-    if (!districtValue || districts.length === 0) return null;
-    return (
-      districts.find(
-        (d) =>
-          d.name_th === districtValue ||
-          d.name_en === districtValue ||
-          String(d.id) === String(districtValue)
-      ) || null
-    );
-  }, [districtValue, districts]);
-
-  const subDistricts = useMemo(() => {
-    if (!showSubDistrict) return [];
-    if (!selectedDistrict || allSubDistricts.length === 0) return [];
-    return allSubDistricts.filter(
-      (s) => String(s.district_id) === String(selectedDistrict.id)
-    );
-  }, [showSubDistrict, selectedDistrict, allSubDistricts]);
+  // รายการจังหวัด (ชื่อไทย)
+  const provinceOptions = useMemo(() => {
+    // เดดัพชื่อจังหวัด (กันข้อมูลซ้ำ)
+    const set = new Set(provinces.map((p) => String(p.name_th).trim()));
+    return Array.from(set).sort(collatorTH.compare);
+  }, [provinces, collatorTH]);
 
   return (
-    <>
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:col-span-2">
       {/* จังหวัด */}
       <div>
-        <label className="block mb-1 text-sm font-medium text-gray-700">
-          จังหวัดที่ต้องการ
-        </label>
+        <label className="block text-sm text-gray-600 mb-1">จังหวัด</label>
         <select
-          value={provinceValue}
-          onChange={(e) => {
-            const val = e.target.value;
-            onProvinceChange?.(val);
-            // reset child
-            onDistrictChange?.("");
-            if (showSubDistrict) onSubDistrictChange?.("");
-          }}
-          className="w-full border rounded-md p-2 disabled:bg-gray-100"
-          disabled={loadingP}
+          value={provinceValue || ""}
+          onChange={(e) => onProvinceChange?.(e.target.value.trim())}
+          disabled={disabled}
+          className="w-full rounded border px-3 py-2"
         >
-          <option value="">
-            {loadingP ? "กำลังโหลดจังหวัด..." : "เลือกจังหวัด"}
-          </option>
-          {provinces.map((p) => (
-            <option key={p.id} value={p.name_th}>
-              {p.name_th}
+          <option value="">-</option>
+          {provinceOptions.map((name) => (
+            <option key={name} value={name}>
+              {name}
             </option>
           ))}
         </select>
@@ -170,23 +178,15 @@ export default function ThaiLocationSelect({
 
       {/* อำเภอ/เขต */}
       <div>
-        <label className="block mb-1 text-sm font-medium text-gray-700">
-          อำเภอ/เขตที่ต้องการ
-        </label>
+        <label className="block text-sm text-gray-600 mb-1">อำเภอ/เขต</label>
         <select
-          value={districtValue}
-          onChange={(e) => {
-            const val = e.target.value;
-            onDistrictChange?.(val);
-            if (showSubDistrict) onSubDistrictChange?.("");
-          }}
-          className="w-full border rounded-md p-2 disabled:bg-gray-100"
-          disabled={loadingD || !selectedProvince}
+          value={districtValue || ""}
+          onChange={(e) => onDistrictChange?.(e.target.value.trim())}
+          disabled={disabled || !provinceValue || districtOptions.length === 0}
+          className="w-full rounded border px-3 py-2"
         >
-          <option value="">
-            {loadingD ? "กำลังโหลดอำเภอ..." : "เลือกอำเภอ/เขต"}
-          </option>
-          {districts.map((d) => (
+          <option value="">-</option>
+          {districtOptions.map((d) => (
             <option key={d.id} value={d.name_th}>
               {d.name_th}
             </option>
@@ -194,22 +194,20 @@ export default function ThaiLocationSelect({
         </select>
       </div>
 
-      {/* ตำบล/แขวง (optional) */}
+      {/* ตำบล/แขวง */}
       {showSubDistrict && (
-        <div className="col-span-2">
-          <label className="block mb-1 text-sm font-medium text-gray-700">
-            ตำบล/แขวง
-          </label>
+        <div>
+          <label className="block text-sm text-gray-600 mb-1">ตำบล/แขวง</label>
           <select
-            value={subDistrictValue}
-            onChange={(e) => onSubDistrictChange?.(e.target.value)}
-            className="w-full border rounded-md p-2 disabled:bg-gray-100"
-            disabled={loadingS || !selectedDistrict}
+            value={subDistrictValue || ""}
+            onChange={(e) => onSubDistrictChange?.(e.target.value.trim())}
+            disabled={
+              disabled || !districtValue || subDistrictOptions.length === 0
+            }
+            className="w-full rounded border px-3 py-2"
           >
-            <option value="">
-              {loadingS ? "กำลังโหลดตำบล..." : "เลือกตำบล/แขวง"}
-            </option>
-            {subDistricts.map((s) => (
+            <option value="">-</option>
+            {subDistrictOptions.map((s) => (
               <option key={s.id} value={s.name_th}>
                 {s.name_th}
               </option>
@@ -217,6 +215,6 @@ export default function ThaiLocationSelect({
           </select>
         </div>
       )}
-    </>
+    </div>
   );
 }

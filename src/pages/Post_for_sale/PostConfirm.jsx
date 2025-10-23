@@ -95,6 +95,31 @@ function getImageUrl(img) {
   return SAFE_SCHEMES.test(raw) ? raw : null;
 }
 
+/** ดึง URL ของวิดีโอ: logic ใกล้เคียงกับรูป และรองรับ blob/data */
+function getVideoUrl(v) {
+  if (!v) return null;
+
+  if (typeof v === "object" && v.preview) {
+    // draft.videos เก็บ preview (blob/objectURL)
+    return String(v.preview).trim() || null;
+  }
+
+  const raw =
+    typeof v === "string"
+      ? String(v).trim()
+      : v.secure_url || v.url || v.path || v.Location || "";
+
+  if (!raw) return null;
+
+  const SAFE_SCHEMES = /^(https?:|blob:|data:video\/)/i;
+
+  if (/^https?:/i.test(raw)) {
+    const norm = normalizeUrl(raw);
+    return norm || null;
+  }
+  return SAFE_SCHEMES.test(raw) ? raw : null;
+}
+
 /* ================= UI Partials ================= */
 const Row = ({ label, value, right = false }) => (
   <div className="flex justify-between border-b py-2 text-sm">
@@ -229,6 +254,26 @@ const PostConfirm = () => {
 
   const images = backendImages.length > 0 ? backendImages : draftImages;
   const hasImages = images.length > 0;
+
+  /** ============ วิดีโอ ============
+   *  รองรับทั้ง postData.Video / postData.Videos และ draft.videos
+   */
+  const backendVideosRaw = Array.isArray(postData?.Video)
+    ? postData.Video
+    : Array.isArray(postData?.Videos)
+    ? postData.Videos
+    : [];
+
+  const backendVideos = backendVideosRaw
+    .map((it) => getVideoUrl(it))
+    .filter(Boolean);
+
+  const draftVideos = Array.isArray(draft?.videos)
+    ? draft.videos.map((it) => getVideoUrl(it)).filter(Boolean)
+    : [];
+
+  const videos = backendVideos.length > 0 ? backendVideos : draftVideos;
+  const hasVideos = videos.length > 0;
 
   return (
     <PostLayout currentStep={6}>
@@ -485,6 +530,32 @@ const PostConfirm = () => {
                 <div className="text-sm text-muted-foreground flex items-center gap-2">
                   <ImageIcon className="w-4 h-4" /> ไม่มีรูปภาพ
                 </div>
+              )}
+            </Section>
+
+            {/* วิดีโอ */}
+            <Section title="วิดีโอประกาศ">
+              {hasVideos ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {videos.map((url, idx) => (
+                    <div
+                      key={url || idx}
+                      className="relative w-full aspect-video rounded-lg overflow-hidden ring-1 ring-black/5 bg-black"
+                    >
+                      <video
+                        src={url}
+                        controls
+                        className="w-full h-full"
+                        preload="metadata"
+                      />
+                      <div className="absolute left-2 top-2 text-xs px-2 py-0.5 rounded-full bg-black/60 text-white">
+                        {idx + 1}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">ไม่มีวิดีโอ</p>
               )}
             </Section>
 

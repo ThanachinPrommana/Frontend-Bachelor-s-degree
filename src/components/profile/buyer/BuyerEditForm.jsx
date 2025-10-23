@@ -1,14 +1,26 @@
 // src/components/profile/buyer/BuyerEditForm.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import ThaiLocationSelect from "@/components/profile/ThaiLocationSelect";
 
-/* ====== ฟิลด์ ====== */
+/* ====== ปริมณฑล (whitelist) ====== */
+const METRO_PROVINCES = [
+  "กรุงเทพมหานคร",
+  "นนทบุรี",
+  "ปทุมธานี",
+  "สมุทรปราการ",
+  "สมุทรสาคร",
+  "นครปฐม",
+];
+const isMetro = (name) => METRO_PROVINCES.includes(String(name || "").trim());
+
+/* ====== ตัวเลือกที่จอดรถ (เพิ่ม threePlus) ====== */
+const ALLOWED_PARKING = ["oneCar", "twoCars", "threePlus", "Not_required"];
+
+/* ====== ฟิลด์ผู้ซื้อ (ตัด DateofBirth, Occupation ออก) ====== */
 const BUYER_KEYS = [
-  "DateofBirth",
-  "Occupation",
   "Monthly_Income",
   "Family_Size",
   "Preferred_Province",
@@ -20,33 +32,26 @@ const BUYER_KEYS = [
   "Special_Requirements",
 ];
 
-/* yyyy-mm-dd สำหรับ input[type=date] */
-const toISODate = (v) => {
-  if (!v) return "";
-  const d = new Date(v);
-  if (Number.isNaN(d)) return "";
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mm}-${dd}`;
-};
-
+/* ====== defaults: province ต้องอยู่ในปริมณฑลเท่านั้น ====== */
 function buildDefaults(user) {
   const b = user?.Buyer || {};
+  const province = isMetro(b?.Preferred_Province) ? b.Preferred_Province : "";
+
   return {
     First_name: user?.First_name ?? "",
     Last_name: user?.Last_name ?? "",
     Phone: user?.Phone ?? "",
     Buyer: {
-      DateofBirth: toISODate(b?.DateofBirth) ?? "",
-      Occupation: b?.Occupation ?? "",
       Monthly_Income:
         typeof b?.Monthly_Income === "number" ? String(b.Monthly_Income) : "",
       Family_Size:
         typeof b?.Family_Size === "number" ? String(b.Family_Size) : "",
-      Preferred_Province: b?.Preferred_Province ?? "",
-      Preferred_District: b?.Preferred_District ?? "",
-      Preferred_Subdistrict: b?.Preferred_Subdistrict ?? "",
-      Parking_Needs: b?.Parking_Needs ?? "",
+      Preferred_Province: province,
+      Preferred_District: province ? b?.Preferred_District ?? "" : "",
+      Preferred_Subdistrict: province ? b?.Preferred_Subdistrict ?? "" : "",
+      Parking_Needs: ALLOWED_PARKING.includes(b?.Parking_Needs)
+        ? b.Parking_Needs
+        : "",
       Nearby_Facilities: b?.Nearby_Facilities ?? "",
       Lifestyle_Preferences: b?.Lifestyle_Preferences ?? "",
       Special_Requirements: b?.Special_Requirements ?? "",
@@ -54,44 +59,57 @@ function buildDefaults(user) {
   };
 }
 
-/* ====== diff ====== */
+/* ====== diff: ส่งแบบ nested เป็น diff.buyer (เหมือน Seller), บังคับ metro/ตัวเลข/clear เขต-แขวง ====== */
 function makeDiff(values, user) {
   const diff = {};
 
-  // user-level
+  // --- User-level ---
   const putUser = (k, cur, old) => {
     if ((cur ?? "") === (old ?? "")) return;
-    if (cur === "") return; // หลีกเลี่ยงล้างคอลัมน์บังคับโดยไม่ตั้งใจ
+    if (cur === "") return; // ป้องกันล้าง field บังคับโดยไม่ตั้งใจ
     diff[k] = cur;
   };
   putUser("First_name", values.First_name, user?.First_name);
   putUser("Last_name", values.Last_name, user?.Last_name);
   putUser("Phone", values.Phone, user?.Phone);
 
-  // buyer-level
+  // --- Buyer-level ---
   const bOld = user?.Buyer || {};
   const bCur = values.Buyer || {};
-
   const putBuyer = (k, v) => {
-    if (!diff.Buyer) diff.Buyer = {};
-    let val = v;
-    if (val === "") val = null;
+    if (!diff.buyer) diff.buyer = {};
+    if (v === "") v = null;
+
     if (k === "Monthly_Income" || k === "Family_Size") {
-      if (val !== null) {
-        const n = Number(val);
-        val = Number.isNaN(n) ? null : n;
+      if (v !== null) {
+        const n = Number(v);
+        v = Number.isNaN(n) ? null : n;
       }
     }
-    if (k === "DateofBirth" && val) val = new Date(val);
-    diff.Buyer[k] = val;
+
+    // กันจังหวัดนอกปริมณฑล
+    if (k === "Preferred_Province" && v && !isMetro(v)) v = null;
+
+    // ถ้า province ว่าง/นอกลิสต์ → district/subdistrict = null เสมอ
+    if (
+      (k === "Preferred_District" || k === "Preferred_Subdistrict") &&
+      !isMetro(bCur?.Preferred_Province)
+    ) {
+      v = null;
+    }
+
+    // กันค่าที่จอดรถนอกลิสต์
+    if (k === "Parking_Needs" && v !== null) {
+      v = ALLOWED_PARKING.includes(v) ? v : null;
+    }
+
+    diff.buyer[k] = v;
   };
 
   BUYER_KEYS.forEach((k) => {
     const cur = bCur[k] ?? "";
     const old =
-      k === "DateofBirth"
-        ? toISODate(bOld[k])
-        : k === "Monthly_Income" || k === "Family_Size"
+      k === "Monthly_Income" || k === "Family_Size"
         ? typeof bOld[k] === "number"
           ? String(bOld[k])
           : ""
@@ -99,10 +117,28 @@ function makeDiff(values, user) {
     if ((cur ?? "") !== (old ?? "")) putBuyer(k, cur);
   });
 
-  if (diff.Buyer && Object.keys(diff.Buyer).length === 0) delete diff.Buyer;
+  if (diff.buyer && Object.keys(diff.buyer).length === 0) delete diff.buyer;
+
   return diff;
 }
 
+/* ====== number-format helpers (รายได้ต่อเดือน) ====== */
+const nfTH = new Intl.NumberFormat("th-TH");
+const sanitizeDigits = (s) => String(s ?? "").replace(/\D/g, "");
+const formatGrouping = (digits) => (digits ? nfTH.format(Number(digits)) : "");
+function digitsRightCount(str, cursor) {
+  let cnt = 0;
+  for (let i = cursor; i < str.length; i++) if (/\d/.test(str[i])) cnt++;
+  return cnt;
+}
+function caretFromDigitsRight(str, digitsRight) {
+  for (let i = str.length; i >= 0; i--) {
+    if (digitsRightCount(str, i) === digitsRight) return i;
+  }
+  return str.length;
+}
+
+/* ====== Component ====== */
 export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
   const defaults = useMemo(() => buildDefaults(user), [user]);
 
@@ -116,23 +152,51 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
   } = useForm({
     defaultValues: defaults,
     mode: "onChange",
-    shouldUnregister: false, // เก็บค่าแม้ซ่อนหน้า
+    shouldUnregister: false,
   });
 
   useEffect(() => {
     reset(buildDefaults(user));
   }, [user, reset]);
 
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(1); // 1: User, 2: Buyer
   const buyerVals = watch("Buyer");
+
+  // ====== สถานะ/อีเวนต์สำหรับ "รายได้ต่อเดือน" ที่แสดงคอมม่า ======
+  const incomeRef = useRef(null);
+  const [incomeDisplay, setIncomeDisplay] = useState("");
+
+  // sync UI เมื่อค่าฟอร์มเปลี่ยนจากภายนอก
+  useEffect(() => {
+    const digits = sanitizeDigits(buyerVals?.Monthly_Income ?? "");
+    setIncomeDisplay(formatGrouping(digits));
+  }, [buyerVals?.Monthly_Income]);
+
+  // onChange พร้อมรักษา caret
+  const handleIncomeChange = (e) => {
+    const raw = e.target.value;
+    const prevPos = incomeRef.current?.selectionStart ?? raw.length;
+    const rightDigits = digitsRightCount(raw, prevPos);
+
+    const digits = sanitizeDigits(raw); // เก็บในฟอร์มเป็น digits ล้วน
+    setValue("Buyer.Monthly_Income", digits, { shouldDirty: true });
+
+    const display = formatGrouping(digits); // แสดงมีคอมม่า
+    setIncomeDisplay(display);
+
+    requestAnimationFrame(() => {
+      const el = incomeRef.current;
+      if (!el) return;
+      const newPos = caretFromDigitsRight(display, rightDigits);
+      el.setSelectionRange(newPos, newPos);
+    });
+  };
 
   const f = {
     First_name: register("First_name"),
     Last_name: register("Last_name"),
     Phone: register("Phone"),
     Buyer: {
-      DateofBirth: register("Buyer.DateofBirth"),
-      Occupation: register("Buyer.Occupation"),
       Monthly_Income: register("Buyer.Monthly_Income"),
       Family_Size: register("Buyer.Family_Size"),
       Parking_Needs: register("Buyer.Parking_Needs"),
@@ -145,19 +209,15 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
   const onSubmit = handleSubmit(async (vals) => {
     const diff = makeDiff(vals, user);
 
-    // ถ้าไม่มีอะไรเปลี่ยนจริง ๆ
-    const noBuyer = !diff.Buyer || Object.keys(diff.Buyer).length === 0;
+    const noBuyer = !diff.buyer || Object.keys(diff.buyer).length === 0;
     const noUser = !diff.First_name && !diff.Last_name && !diff.Phone;
     if (noBuyer && noUser) {
       alert("ไม่มีการแก้ไขข้อมูล");
       return;
     }
 
-    // ส่งให้ parent (Info) แล้วรอจริง ๆ — ปุ่มจะ disable ตาม isSubmitting
     await onSubmitDiff?.(diff);
-
-    // หลังบันทึกสำเร็จ: reset ตาม user ล่าสุดที่ parent revalidate มาแล้ว
-    // (เมื่อ parent ปิด modal แล้ว การ reset นี้ไม่ flash)
+    // parent จะ revalidate user ให้ -> reset ตาม user ล่าสุด
     reset(buildDefaults(user));
   });
 
@@ -255,37 +315,22 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
         </div>
       </div>
 
-      {/* ---------- หน้า 2: ผู้ซื้อ ---------- */}
+      {/* ---------- หน้า 2: ผู้ซื้อ (ไม่มีวันเกิด/อาชีพ) ---------- */}
       <div className={step === 2 ? "" : "hidden"}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">วันเกิด</label>
-            <input
-              type="date"
-              {...f.Buyer.DateofBirth}
-              className="w-full rounded border px-3 py-2"
-              disabled={isSubmitting}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">อาชีพ</label>
-            <input
-              {...f.Buyer.Occupation}
-              className="w-full rounded border px-3 py-2"
-              disabled={isSubmitting}
-            />
-          </div>
-
+          {/* ✅ รายได้ต่อเดือน: คั่นหลักพันอัตโนมัติ */}
           <div>
             <label className="block text-sm text-gray-600 mb-1">
               รายได้ต่อเดือน (บาท)
             </label>
             <input
-              type="number"
+              ref={incomeRef}
+              type="text"
               inputMode="numeric"
-              {...f.Buyer.Monthly_Income}
+              value={incomeDisplay}
+              onChange={handleIncomeChange}
               className="w-full rounded border px-3 py-2"
+              placeholder="เช่น 50,000"
               disabled={isSubmitting}
             />
           </div>
@@ -303,28 +348,33 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
             />
           </div>
 
+          {/* จำกัดจังหวัดเฉพาะ กทม+ปริมณฑล */}
           <ThaiLocationSelect
+            provinceWhitelist={METRO_PROVINCES}
             provinceValue={buyerVals?.Preferred_Province || ""}
             districtValue={buyerVals?.Preferred_District || ""}
             subDistrictValue={buyerVals?.Preferred_Subdistrict || ""}
             showSubDistrict
             disabled={isSubmitting}
             onProvinceChange={(v) => {
-              setValue("Buyer.Preferred_Province", v, { shouldDirty: true });
+              const next = isMetro(v) ? v : "";
+              setValue("Buyer.Preferred_Province", next, { shouldDirty: true });
               setValue("Buyer.Preferred_District", "", { shouldDirty: true });
               setValue("Buyer.Preferred_Subdistrict", "", {
                 shouldDirty: true,
               });
             }}
             onDistrictChange={(v) => {
+              if (!isMetro(buyerVals?.Preferred_Province)) return;
               setValue("Buyer.Preferred_District", v, { shouldDirty: true });
               setValue("Buyer.Preferred_Subdistrict", "", {
                 shouldDirty: true,
               });
             }}
-            onSubDistrictChange={(v) =>
-              setValue("Buyer.Preferred_Subdistrict", v, { shouldDirty: true })
-            }
+            onSubDistrictChange={(v) => {
+              if (!isMetro(buyerVals?.Preferred_Province)) return;
+              setValue("Buyer.Preferred_Subdistrict", v, { shouldDirty: true });
+            }}
           />
 
           <div>
@@ -339,6 +389,7 @@ export default function BuyerEditForm({ user, onCancel, onSubmitDiff }) {
               <option value="">-</option>
               <option value="oneCar">1 คัน</option>
               <option value="twoCars">2 คัน</option>
+              <option value="threePlus">3 คันขึ้นไป</option>
               <option value="Not_required">ไม่ต้องการ</option>
             </select>
           </div>

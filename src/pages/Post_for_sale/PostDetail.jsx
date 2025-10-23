@@ -45,15 +45,19 @@ const AmenityEnum = z.enum([
   "Pet_Friendly",
 ]);
 
-/* ------------ Year_Built as string(yyyy) ------------ */
-const yearStringOpt = z
-  .string()
-  .trim()
-  .regex(/^\d{4}$/, "กรุณากรอกปี 4 หลัก")
-  .transform((s) => Number(s))
-  .refine((y) => y >= 1800 && y <= currentYear + 1, "ปีที่สร้างไม่สมเหตุสมผล")
-  .transform((y) => String(y))
-  .optional();
+/* ------------ Year_Built: optional แต่ถ้ากรอกต้องถูกต้อง ------------ */
+/* แปลง "" หรือ null/undefined เป็น undefined ก่อน แล้วค่อยตรวจ */
+const yearStringOpt = z.preprocess(
+  (v) => (v === "" || v == null ? undefined : String(v).trim()),
+  z
+    .string()
+    .regex(/^\d{4}$/, "กรุณากรอกปี 4 หลัก")
+    .refine((y) => {
+      const n = Number(y);
+      return n >= 1800 && n <= currentYear + 1;
+    }, "ปีที่สร้างไม่สมเหตุสมผล")
+    .optional()
+);
 
 /* ------------ Schema (Total_Rooms optional + refine) ------------ */
 const baseSchema = z.object({
@@ -259,7 +263,7 @@ export default function PostDetail() {
       "Usable_Area",
       "Land_Size",
       "Total_Rooms", // ไม่บังคับ แต่ validate ถ้ามี
-      "Year_Built",
+      "Year_Built", // ← ใส่กลับ เพื่อให้ตรวจเฉพาะเมื่อกรอก
       "Bedrooms",
       "Bathroom",
       // ไม่ต้อง include 'floor' ก็ได้ เพราะคอนโดถูกล้างค่า/ซ่อนอยู่แล้ว

@@ -1,8 +1,7 @@
 // src/pages/Post_for_sale/PostPrice.jsx
-import React, { useEffect, useMemo } from "react";
-import { useFormContext } from "react-hook-form";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useFormContext, useWatch } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
-import { z } from "zod";
 import {
   FormField,
   FormItem,
@@ -15,10 +14,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Coins, Info } from "lucide-react";
 import { validateStep } from "@/lib/zodRHF";
+import { postPriceSchema } from "@/components/schemas/postSchemas/postPriceSchema";
 
-/* ----------------------------------------------------------------
- * 1) Presets & categoryId → label (+ alias กันสะกด)
- * ---------------------------------------------------------------- */
+/* ---------- presets & mapping ---------- */
 const RECURRING_EXPENSE_PRESETS = {
   บ้านเดี่ยว: [
     "ค่าส่วนกลางหมู่บ้าน",
@@ -51,7 +49,6 @@ const RECURRING_EXPENSE_PRESETS = {
   ],
 };
 
-// ให้ตรงกับหน้า PostDetail ที่ใช้ id ชุดนี้
 const CATEGORY_LABEL_BY_ID = {
   cmegzfhx70007w2bwp63cbc1w: "บ้านเดี่ยว",
   cmegzft08000aw2bwx91l68z9: "ทาวน์เฮาส์",
@@ -59,43 +56,84 @@ const CATEGORY_LABEL_BY_ID = {
   cmegzfov30009w2bwrxjpt7xn: "วิลล่า",
 };
 
-// กันสะกดผิด (เช่น เทาวน์เฮาส์ → ทาวน์เฮาส์)
-const CATEGORY_LABEL_ALIAS = {
-  เทาวน์เฮาส์: "ทาวน์เฮาส์",
+const CATEGORY_LABEL_ALIAS = { เทาวน์เฮาส์: "ทาวน์เฮาส์" };
+
+/* ---------- number-format helpers (TH grouping) ---------- */
+const nfTH = new Intl.NumberFormat("th-TH", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+/** เอาเฉพาะตัวเลขกับจุดทศนิยม (ปล่อยให้มีจุดเดียว) */
+function sanitizeNumericText(s) {
+  if (s == null) return "";
+  // เก็บเฉพาะ [0-9 .]
+  let t = String(s).replace(/[^0-9.]/g, "");
+  // อนุญาตจุดแรก ที่เหลือตัดทิ้ง
+  const firstDot = t.indexOf(".");
+  if (firstDot !== -1) {
+    const head = t.slice(0, firstDot + 1);
+    const tail = t.slice(firstDot + 1).replace(/\./g, ""); // remove extra dots
+    t = head + tail;
+  }
+  return t;
+}
+
+/** แปลง text -> number (ถ้าเป็น "" หรือ "." ให้ undefined) */
+function textToNumber(t) {
+  if (!t || t === ".") return undefined;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/** จัดรูปแบบด้วยคอมม่าแบบไทย (รองรับทศนิยม) */
+function formatWithGrouping(t) {
+  if (t == null || t === "") return "";
+  // แยกส่วนจำนวนเต็ม/ทศนิยมจาก text (ที่ถูก sanitize แล้ว)
+  const [intPart, fracPart] = String(t).split(".");
+  const intNum = intPart === "" ? "" : nfTH.format(Number(intPart));
+  return fracPart != null ? `${intNum}.${fracPart}` : intNum;
+}
+
+/** นับจำนวน "ตัวเลข" ทางขวาของตำแหน่งเคอร์เซอร์ (ไม่นับคอมม่า) */
+function digitsRightCount(str, cursor) {
+  let cnt = 0;
+  for (let i = cursor; i < str.length; i++) {
+    if (/[0-9]/.test(str[i])) cnt++;
+  }
+  return cnt;
+}
+
+/** หาตำแหน่งเคอร์เซอร์ใหม่จากจำนวนตัวเลขทางขวาเท่าเดิม */
+function caretFromDigitsRight(str, digitsRight) {
+  for (let i = str.length; i >= 0; i--) {
+    if (digitsRightCount(str, i) === digitsRight) return i;
+  }
+  return str.length;
+}
+
+/* ---------- logic helpers ---------- */
+const toNum = (v) => (v === "" || v == null ? undefined : Number(v));
+const clamp = (n, min, max) =>
+  Number.isFinite(n) ? Math.min(Math.max(n, min), max) : n;
+
+const round2 = (n) => Math.round(n * 100) / 100;
+const computeDepositAmount = (price, percent) => {
+  const p = Number(price);
+  const pc = Number(percent);
+  if (!Number.isFinite(p) || !Number.isFinite(pc)) return 0;
+  return round2(p * (pc / 100));
 };
 
-/* ----------------------------------------------------------------
- * 2) Dynamic Zod schema: จำกัดให้เลือกได้เฉพาะรายการของหมวดนั้น
- * ---------------------------------------------------------------- */
-const getPriceSchemaFor = (allowedOptions) => {
-  const AllowedEnum = z.enum(
-    allowedOptions.length ? allowedOptions : ["__dummy__"]
-  );
-  return z.object({
-    Price: z.preprocess(
-      (v) => (v === "" || v == null ? undefined : Number(v)),
-      z
-        .number({ required_error: "กรุณากรอกราคา" })
-        .min(0, "กรุณากรอกราคาให้ ≥ 0")
-    ),
-    Deposit_Amount: z.preprocess(
-      (v) => (v === "" || v == null ? undefined : Number(v)),
-      z
-        .number({ required_error: "กรุณากรอกเงินดาวน์" })
-        .min(1, "กรุณากรอกเงินดาวน์ให้ถูกต้อง")
-    ),
-    Other_related_expenses: z.array(AllowedEnum).optional().default([]),
-  });
-};
-
-/* ----------------------------------------------------------------
- * 3) Component (JSX ล้วน)
- * ---------------------------------------------------------------- */
-function PostPrice() {
+export default function PostPrice() {
   const navigate = useNavigate();
   const form = useFormContext();
 
-  // บังคับค่า Sell_Rent เป็น "SALE" เสมอ
+  // ---- local UI state สำหรับช่อง "ราคาขาย" ที่แสดงคอมม่า ----
+  const priceInputRef = useRef(null);
+  const [priceDisplay, setPriceDisplay] = useState(""); // string มีคอมม่า
+
+  // บังคับให้เป็น SALE ครั้งเดียว
   useEffect(() => {
     if (form.getValues("Sell_Rent") !== "SALE") {
       form.setValue("Sell_Rent", "SALE", {
@@ -103,27 +141,22 @@ function PostPrice() {
         shouldValidate: false,
       });
     }
-  }, [form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // อ่าน categoryId จากฟอร์ม (เลือกไว้จากหน้า Detail)
-  const rawCategoryId = form.watch("categoryId");
+  // อ่าน category → label
+  const rawCategoryId = useWatch({ control: form.control, name: "categoryId" });
   let categoryLabel = CATEGORY_LABEL_BY_ID[rawCategoryId] || "";
-  if (CATEGORY_LABEL_ALIAS[categoryLabel]) {
+  if (CATEGORY_LABEL_ALIAS[categoryLabel])
     categoryLabel = CATEGORY_LABEL_ALIAS[categoryLabel];
-  }
 
-  // ตัวเลือกที่อนุญาตตามหมวดนั้น ๆ
-  const allowedOptions = useMemo(() => {
-    return RECURRING_EXPENSE_PRESETS[categoryLabel] || [];
-  }, [categoryLabel]);
-
-  // สร้าง schema ตามตัวเลือกที่อนุญาต
-  const priceSchema = useMemo(
-    () => getPriceSchemaFor(allowedOptions),
-    [allowedOptions]
+  // allowed options ตามหมวด
+  const allowedOptions = useMemo(
+    () => RECURRING_EXPENSE_PRESETS[categoryLabel] || [],
+    [categoryLabel]
   );
 
-  // กรองค่าที่เคยเลือกไว้ให้เหลือเฉพาะของหมวดนั้น เมื่อหมวดเปลี่ยน
+  // ทำความสะอาด options เมื่อหมวดเปลี่ยน
   useEffect(() => {
     const cur = form.getValues("Other_related_expenses") || [];
     if (!Array.isArray(cur)) {
@@ -142,7 +175,42 @@ function PostPrice() {
     }
   }, [allowedOptions, form]);
 
-  // toggle เลือก/ยกเลิกเลือก
+  // ✅ ติดตามค่า Price (เชิงข้อมูล) เพื่อ sync กับ UI string ที่มีคอมม่า
+  const priceVal = useWatch({ control: form.control, name: "Price" });
+  useEffect(() => {
+    // เมื่อค่าจริงใน form เปลี่ยนจากภายนอก → แปลงเป็น string พร้อมคอมม่า
+    if (priceVal == null || priceVal === "") {
+      setPriceDisplay("");
+    } else {
+      const raw = String(priceVal);
+      const [i, f] = raw.split(".");
+      const formatted =
+        nfTH.format(Number(i ?? 0)) + (f != null ? `.${f}` : "");
+      setPriceDisplay(formatted);
+    }
+  }, [priceVal]);
+
+  // ✅ ฝากเปอร์เซ็นต์/จำนวนเงินไว้ตามเดิม
+  const percentVal = useWatch({
+    control: form.control,
+    name: "Deposit_Percent",
+  });
+
+  // คำนวณ Deposit_Amount เมื่อ Price/Percent เปลี่ยน
+  useEffect(() => {
+    const price = toNum(priceVal) ?? 0;
+    const percent = clamp(toNum(percentVal) ?? 0, 0, 100);
+    const nextAmount = computeDepositAmount(price, percent);
+    const curAmount = toNum(form.getValues("Deposit_Amount")) ?? 0;
+
+    if (nextAmount !== curAmount) {
+      form.setValue("Deposit_Amount", nextAmount, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [priceVal, percentVal, form]);
+
   const toggleExpense = (label) => {
     const cur = form.getValues("Other_related_expenses") || [];
     const next = cur.includes(label)
@@ -154,7 +222,6 @@ function PostPrice() {
     });
   };
 
-  // ลัด: เลือกทั้งหมด / ล้างทั้งหมด
   const selectAll = () => {
     if (allowedOptions.length === 0) return;
     form.setValue("Other_related_expenses", [...allowedOptions], {
@@ -169,31 +236,13 @@ function PostPrice() {
     });
   };
 
-  // onSubmit: กรองและเช็คประเภทก่อน validate เสมอ + log ให้เห็นชัด
+  // กดถัดไป
   const onSubmit = () => {
-    const categoryId = form.getValues("categoryId");
-    let label = CATEGORY_LABEL_BY_ID[categoryId] || "";
+    // ทำความสะอาด options อีกรอบก่อน validate
+    let label = CATEGORY_LABEL_BY_ID[form.getValues("categoryId")] || "";
     if (CATEGORY_LABEL_ALIAS[label]) label = CATEGORY_LABEL_ALIAS[label];
     const allowed = RECURRING_EXPENSE_PRESETS[label] || [];
 
-    console.log("[PostPrice] submit", {
-      categoryId,
-      categoryLabel: label,
-      allowedOptions: allowed,
-      currentExpenses: form.getValues("Other_related_expenses"),
-      price: form.getValues("Price"),
-      deposit: form.getValues("Deposit_Amount"),
-    });
-
-    if (!label) {
-      form.setError("categoryId", {
-        type: "manual",
-        message: "กรุณาเลือกประเภททรัพย์สินในหน้า ‘รายละเอียด’ ก่อน",
-      });
-      return;
-    }
-
-    // กรองรายการก่อน validate
     const cur = form.getValues("Other_related_expenses") || [];
     const cleaned = Array.isArray(cur)
       ? cur.filter((x) => allowed.includes(x))
@@ -205,16 +254,70 @@ function PostPrice() {
       });
     }
 
-    // validate ด้วย schema ไดนามิก
-    const schema = getPriceSchemaFor(allowed);
-    const ok = validateStep(form, schema, [
+    // ยืนยัน Deposit_Amount ตามราคา/เปอร์เซ็นต์ล่าสุด
+    const price = toNum(form.getValues("Price")) ?? 0;
+    const percent = clamp(
+      toNum(form.getValues("Deposit_Percent")) ?? 0,
+      0,
+      100
+    );
+    const amount = computeDepositAmount(price, percent);
+    const curAmount = toNum(form.getValues("Deposit_Amount")) ?? 0;
+    if (amount !== curAmount) {
+      form.setValue("Deposit_Amount", amount, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+
+    const ok = validateStep(form, postPriceSchema, [
       "Price",
+      "Deposit_Percent",
       "Deposit_Amount",
       "Other_related_expenses",
     ]);
     if (!ok) return;
 
     navigate("/seller/post-for-sale/inform");
+  };
+
+  const nfBaht = useMemo(
+    () =>
+      new Intl.NumberFormat("th-TH", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+    []
+  );
+  const computedAmount = toNum(form.getValues("Deposit_Amount")) ?? 0;
+
+  /* ========= onChange สำหรับราคาขาย: ใส่ลูกน้ำแบบเรียลไทม์ + รักษา caret ========= */
+  const handlePriceChange = (e, fieldOnChange) => {
+    const inputEl = priceInputRef.current;
+    const rawStr = e.target.value;
+
+    // ตำแหน่งเคอร์เซอร์เดิม + จำนวนตัวเลขทางขวา
+    const prevCursor = inputEl?.selectionStart ?? rawStr.length;
+    const rightDigits = digitsRightCount(rawStr, prevCursor);
+
+    // ทำความสะอาดให้เหลือเลข/จุดเดียว
+    const cleaned = sanitizeNumericText(rawStr);
+
+    // เก็บค่าจริงเข้า form เป็น number (หรือ undefined ถ้ายังว่าง)
+    const asNumber = textToNumber(cleaned);
+    fieldOnChange(asNumber); // แจ้ง RHF
+
+    // แปลงเป็น string ที่มีคอมม่าเพื่อแสดงผล
+    const display = formatWithGrouping(cleaned);
+    setPriceDisplay(display);
+
+    // จัด caret ใหม่ให้เท่าจำนวนตัวเลขด้านขวาเดิม
+    requestAnimationFrame(() => {
+      const el = priceInputRef.current;
+      if (!el) return;
+      const newPos = caretFromDigitsRight(display, rightDigits);
+      el.setSelectionRange(newPos, newPos);
+    });
   };
 
   return (
@@ -229,19 +332,20 @@ function PostPrice() {
               </div>
               <h2 className="text-2xl font-semibold">ตั้งราคา (ขาย)</h2>
               <p className="text-muted-foreground text-sm">
-                กำหนดราคาขาย พร้อมรายละเอียดทางการเงิน
+                ราคาขาย + เงินดาวน์เป็นเปอร์เซ็นต์
+                (ระบบคำนวณจำนวนเงินให้อัตโนมัติ)
               </p>
             </div>
 
-            {/* Helper banner */}
+            {/* Helper */}
             <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground flex items-start gap-3">
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
                 ประเภททรัพย์สิน:{" "}
                 <span className="font-medium">
-                  {categoryLabel || "ยังไม่เลือก"}
+                  {CATEGORY_LABEL_BY_ID[rawCategoryId] || "ยังไม่เลือก"}
                 </span>{" "}
-                — ระบบจะแสดงเฉพาะรายการค่าใช้จ่ายรายเดือน/รายปีของประเภทนั้น
+                — ระบบจะแสดงเฉพาะรายการค่าใช้จ่ายของประเภทนั้น
               </p>
             </div>
 
@@ -251,8 +355,8 @@ function PostPrice() {
               className="space-y-8"
               noValidate
             >
-              {/* ราคา + เงินดาวน์ */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Price (auto-grouping) */}
                 <FormField
                   control={form.control}
                   name="Price"
@@ -264,14 +368,13 @@ function PostPrice() {
                           ฿
                         </span>
                         <Input
-                          type="number"
+                          ref={priceInputRef}
+                          type="text"
                           inputMode="decimal"
                           placeholder="เช่น 2,500,000"
-                          {...field}
-                          value={field.value ?? ""} // ✅ controlled
+                          value={priceDisplay}
+                          onChange={(e) => handlePriceChange(e, field.onChange)}
                           onWheel={(e) => e.currentTarget.blur()}
-                          min={0}
-                          step="0.01"
                           className="pl-7 h-11"
                         />
                       </div>
@@ -279,27 +382,35 @@ function PostPrice() {
                     </FormItem>
                   )}
                 />
+
+                {/* Percent */}
                 <FormField
                   control={form.control}
-                  name="Deposit_Amount"
+                  name="Deposit_Percent"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>เงินดาวน์ (บาท)</FormLabel>
+                      <FormLabel>เงินดาวน์ (% ของราคาขาย)</FormLabel>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                          ฿
-                        </span>
                         <Input
                           type="number"
                           inputMode="decimal"
-                          placeholder="เช่น 250,000"
+                          placeholder="เช่น 10"
                           {...field}
-                          value={field.value ?? ""} // ✅ controlled
+                          value={field.value ?? ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            const n = v === "" ? "" : clamp(Number(v), 0, 100);
+                            field.onChange(n);
+                          }}
                           onWheel={(e) => e.currentTarget.blur()}
                           min={0}
-                          step="0.01"
-                          className="pl-7 h-11"
+                          max={100}
+                          step="0.1"
+                          className="h-11 pr-10"
                         />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                          %
+                        </span>
                       </div>
                       <FormMessage />
                     </FormItem>
@@ -307,7 +418,25 @@ function PostPrice() {
                 />
               </div>
 
-              {/* รายจ่ายอื่น ๆ: เลือกจากพรีเซ็ตตามประเภท (หลายรายการได้) */}
+              {/* Calculated result (read-only) */}
+              <div className="rounded-lg border px-4 py-3 bg-muted/20">
+                <div className="text-sm text-muted-foreground">
+                  ผลลัพธ์เงินดาวน์ที่คำนวณได้
+                </div>
+                <div className="mt-1 text-xl font-semibold">
+                  ฿{" "}
+                  {new Intl.NumberFormat("th-TH", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  }).format(Number(computedAmount || 0))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  ระบบจะบันทึกจำนวนนี้ลงฟิลด์ <code>Deposit_Amount</code>{" "}
+                  ให้โดยอัตโนมัติ
+                </p>
+              </div>
+
+              {/* รายจ่ายอื่น ๆ */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <FormLabel>รายจ่ายอื่น ๆ (เลือกหลายรายการได้)</FormLabel>
@@ -364,13 +493,12 @@ function PostPrice() {
                     }}
                   />
                 )}
-
                 <p className="text-xs text-muted-foreground">
                   ระบบจะบันทึกเฉพาะตัวเลือกที่คุณกดเลือกเท่านั้น
                 </p>
               </div>
 
-              {/* Footer actions */}
+              {/* Footer */}
               <div className="flex items-center justify-between pt-2">
                 <Button
                   type="button"
@@ -390,5 +518,3 @@ function PostPrice() {
     </PostLayout>
   );
 }
-
-export default PostPrice;
