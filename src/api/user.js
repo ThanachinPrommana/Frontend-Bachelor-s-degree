@@ -165,3 +165,14 @@ export const confirmSlip = async (bookingId, body = { approve: true }) => {
   );
   return data;
 };
+
+export const removeSlot = async (timeSlotId) => {
+  if (!timeSlotId) {
+    throw new Error("ต้องระบุ ID ของช่วงเวลาที่จะลบ");
+  }
+  // ตรวจสอบว่า endpoint ตรงกับที่กำหนดใน router
+  const { data } = await apiClient.delete(`/seller/remove/${timeSlotId}`, {
+    withCredentials: true, // ถ้าจำเป็นสำหรับการยืนยันตัวตน
+  });
+  return data;
+};
