@@ -196,14 +196,16 @@ const PostLocation = () => {
               </p>
             </div>
 
-            {/* Helper banner */}
+            {/* Helper banner (เวอร์ชัน A) */}
             <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground flex items-start gap-3">
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
-                เมื่อเปลี่ยน <span className="font-medium">จังหวัด</span>{" "}
-                ระบบจะรีเซ็ตอำเภอและตำบลอัตโนมัติ หากย้อนกลับมา
-                หน้าจะเติมอำเภอ/ตำบลเดิมให้โดยอัตโนมัติ
-                (ถ้าสอดคล้องกับจังหวัดที่เลือก)
+                ระบบรองรับเฉพาะ{" "}
+                <span className="font-medium">กรุงเทพฯ และปริมณฑล</span>
+                รายการ <span className="font-medium">อำเภอ</span> และ{" "}
+                <span className="font-medium">ตำบล</span>
+                จะถูกกรองตามจังหวัดที่เลือกโดยอัตโนมัติ และเมื่อเปลี่ยนจังหวัด
+                ระบบจะล้างค่าอำเภอ/ตำบลเพื่อป้องกันข้อมูลผิดพื้นที่
               </p>
             </div>
 

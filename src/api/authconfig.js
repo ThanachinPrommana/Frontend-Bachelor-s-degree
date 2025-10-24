@@ -9,20 +9,38 @@ const API_URL =
 // ✅ instance กลาง ใช้ทุกที่ใน frontend
 export const apiClient = axios.create({
   baseURL: API_URL,
-  withCredentials: true, // ✅ สำคัญมาก: ให้ browser แนบ cookie (เช่น connect.sid)
-  headers: {
-    "Content-Type": "application/json",
-  },
+  withCredentials: true, // แนบ cookie (เช่น connect.sid)
+});
+
+// ✅ ถ้า payload เป็น FormData ให้ลบ Content-Type ออก เพื่อให้เบราว์เซอร์ตั้ง boundary ให้เอง
+apiClient.interceptors.request.use((config) => {
+  const isFormData =
+    typeof FormData !== "undefined" && config.data instanceof FormData;
+
+  if (isFormData) {
+    // ลบ header ที่อาจเคยถูกตั้งมา (รวมถึงของ axios เอง)
+    if (config.headers) {
+      delete config.headers["Content-Type"];
+      delete config.headers["content-type"];
+    }
+    // ปล่อยให้เบราว์เซอร์ตั้งให้เอง
+    return config;
+  }
+
+  // สำหรับ request ปกติที่เป็น JSON ค่อยตั้ง JSON header แบบเฉพาะ request
+  if (config.headers && !config.headers["Content-Type"]) {
+    config.headers["Content-Type"] = "application/json";
+  }
+  return config;
 });
 
 // (Option) Interceptor สำหรับ response error
 apiClient.interceptors.response.use(
   (res) => res,
   (err) => {
-    // ถ้า session หมดอายุ (401) สามารถ handle ที่นี่ได้เลย
     if (err?.response?.status === 401) {
       console.warn("Session expired or unauthorized");
-      // ตัวเลือก: clear local state, redirect, etc.
+      // ตัวเลือก: redirect ไป login ก็ได้
       // window.location.href = "/login";
     }
     return Promise.reject(err);

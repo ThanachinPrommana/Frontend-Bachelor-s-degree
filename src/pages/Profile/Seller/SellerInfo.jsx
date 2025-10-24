@@ -12,11 +12,23 @@ import {
 } from "lucide-react";
 import React, { useMemo, useState, useCallback } from "react";
 import Formuploadimage from "@/components/form/Formuploadimage";
-import { updateSeller, updateImage } from "@/api/user"; // ✅ เพิ่ม updateImage
+import { updateSeller, updateImage } from "@/api/user";
 import { useAuth } from "@/context/AuthContext";
 import ModalShell from "@/components/profile/ModalShell";
 import SellerEditForm from "@/components/profile/seller/SellerEditForm";
 import DetailRow from "@/components/profile/DetailRow";
+
+/* ========== Metro provinces whitelist (ปริมณฑล) ========== */
+const METRO_PROVINCES = [
+  "กรุงเทพมหานคร",
+  "นนทบุรี",
+  "ปทุมธานี",
+  "สมุทรปราการ",
+  "สมุทรสาคร",
+  "นครปฐม",
+];
+const isMetroProvince = (name) =>
+  METRO_PROVINCES.includes(String(name || "").trim());
 
 /* ========== utils (safe) ========== */
 const formatDateThai = (dateString) => {
@@ -79,7 +91,12 @@ const absolutize = (maybeUrl) => {
 
 // enum → label
 const parkingLabel = (v) =>
-  ({ oneCar: "1 คัน", twoCars: "2 คัน", Not_required: "ไม่ต้องการ" }[v] || "-");
+  ({
+    oneCar: "1 คัน",
+    twoCars: "2 คัน",
+    threePlus: "3 คันขึ้นไป",
+    Not_required: "ไม่ต้องการ",
+  }[v] || "-");
 
 const nearbyLabel = (v) =>
   ({
@@ -191,21 +208,29 @@ export default function SellerInfo() {
   const [showImageModal, setShowImageModal] = useState(false);
   const [avatarBust, setAvatarBust] = useState(0);
   const [localAvatar, setLocalAvatar] = useState(null);
-  const [uploading, setUploading] = useState(false); // ✅ ใหม่: กันปิด modal ระหว่างอัปโหลด
+  const [uploading, setUploading] = useState(false);
 
   const detailRows = useMemo(() => {
     const b = user?.Buyer || {};
     const s = user?.Seller || {};
+
+    // จำกัดการแสดงจังหวัดเฉพาะปริมณฑล (ถ้าไม่ใช่ แสดง "-")
+    const provinceDisplay = isMetroProvince(b?.Preferred_Province)
+      ? b.Preferred_Province
+      : "-";
+
     return [
       { label: "เบอร์โทร", value: user?.Phone || "-" },
-      { label: "วันเกิด", value: formatDateThai(b?.DateofBirth) },
-      { label: "อาชีพ", value: b?.Occupation || "-" },
+      // ⬇️ ตัดออกตามคำขอ
+      // { label: "วันเกิด", value: formatDateThai(b?.DateofBirth) },
+      // { label: "อาชีพ", value: b?.Occupation || "-" },
+
       { label: "รายได้ต่อเดือน", value: formatBaht(b?.Monthly_Income) },
       {
         label: "ขนาดครอบครัว",
         value: Number.isFinite(b?.Family_Size) ? b.Family_Size : "-",
       },
-      { label: "จังหวัดที่สนใจ", value: b?.Preferred_Province || "-" },
+      { label: "จังหวัดที่สนใจ", value: provinceDisplay },
       { label: "ตำบล/แขวง", value: b?.Preferred_Subdistrict || "-" },
       { label: "เขต/อำเภอที่สนใจ", value: b?.Preferred_District || "-" },
       { label: "ที่จอดรถ", value: parkingLabel(b?.Parking_Needs) },
@@ -321,17 +346,58 @@ export default function SellerInfo() {
 
           {/* รายละเอียด */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-1 gap-x-6 text-sm">
-            {detailRows.slice(0, 12).map((row) => (
-              <DetailRow key={row.label} label={row.label} value={row.value} />
-            ))}
+            {(() => {
+              // หา index แถวแรกของ "ข้อมูลผู้ขาย" (เริ่มที่ 'เลขบัตรประชาชน')
+              const cut = detailRows.findIndex(
+                (r) => r.label === "เลขบัตรประชาชน"
+              );
+              const buyerRows =
+                cut > -1 ? detailRows.slice(0, cut) : detailRows;
+              const sellerRows = cut > -1 ? detailRows.slice(cut) : [];
 
-            <div className="col-span-1 sm:col-span-2 my-2">
-              <div className="h-px bg-gray-200" />
-            </div>
+              return (
+                <>
+                  {/* หัวข้อฝั่งผู้ซื้อ */}
+                  <div className="col-span-1 sm:col-span-2 mb-1">
+                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      ข้อมูลผู้ซื้อ
+                    </div>
+                  </div>
 
-            {detailRows.slice(12).map((row) => (
-              <DetailRow key={row.label} label={row.label} value={row.value} />
-            ))}
+                  {/* รายการผู้ซื้อ */}
+                  {buyerRows.map((row) => (
+                    <DetailRow
+                      key={row.label}
+                      label={row.label}
+                      value={row.value}
+                    />
+                  ))}
+
+                  {/* เส้นคั่น + หัวข้อฝั่งผู้ขาย */}
+                  {sellerRows.length > 0 && (
+                    <>
+                      <div className="col-span-1 sm:col-span-2 my-3">
+                        <div className="h-px bg-gray-200" />
+                      </div>
+                      <div className="col-span-1 sm:col-span-2 mb-1">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          ข้อมูลผู้ขาย
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* รายการผู้ขาย: บัตรประชาชน / บริษัท / ใบอนุญาตนายหน้า / สถานะ */}
+                  {sellerRows.map((row) => (
+                    <DetailRow
+                      key={row.label}
+                      label={row.label}
+                      value={row.value}
+                    />
+                  ))}
+                </>
+              );
+            })()}
           </div>
 
           {/* โมดัลอัปโหลดรูป */}
@@ -342,7 +408,6 @@ export default function SellerInfo() {
               icon={<ImageIcon className="w-5 h-5" />}
               onClose={() => {
                 if (!uploading) {
-                  // ✅ กันปิดระหว่างอัปโหลด
                   setShowImageModal(false);
                   setLocalAvatar(null);
                 }
@@ -370,20 +435,17 @@ export default function SellerInfo() {
                 </div>
               </div>
 
-              {/* ✅ ปรับให้ยิง updateImage ที่นี่เหมือน BuyerInfo */}
               <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 mb-4 bg-gray-50">
                 <Formuploadimage
                   onUploadSuccess={async (data) => {
                     try {
                       setUploading(true);
-                      // รองรับทั้งรูปแบบที่ component ส่ง FormData มาโดยตรง
-                      // หรือ object ที่มี { formData, preview }
                       const formData = data?.formData ?? data;
                       if (data?.preview) setLocalAvatar(data.preview);
 
-                      await updateImage(formData); // 🔑 ยิง API อัปเดตรูป
-                      await revalidateUser(); // ดึง user ใหม่
-                      setAvatarBust(Date.now()); // bust cache
+                      await updateImage(formData);
+                      await revalidateUser();
+                      setAvatarBust(Date.now());
                       setLocalAvatar(null);
                       setShowImageModal(false);
                     } catch (err) {
