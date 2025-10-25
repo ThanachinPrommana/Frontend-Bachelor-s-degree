@@ -15,19 +15,22 @@ export const verifyEmailSchema = z.object({
   Preferred_Subdistrict: z.string().trim().min(1, "กรุณาเลือกตำบล/แขวง"),
 
   // Dropdown ต่าง ๆ (บังคับใน UI)
-  Parking_Needs: z.enum(["oneCar", "twoCars", "threePlus", "Not_required"], {
-    errorMap: () => ({ message: "กรุณาเลือกความต้องการที่จอดรถ" }),
-  }),
+  Parking_Needs: z
+    .string()
+    .trim()
+    .min(1, "กรุณาเลือกความต้องการที่จอดรถ"),
 
-  Nearby_Facilities: z.enum(
-    ["School", "Hospital", "Mall_Market", "Park_Nature"],
-    { errorMap: () => ({ message: "กรุณาเลือกสิ่งอำนวยความสะดวกใกล้เคียง" }) }
-  ),
+  // 🔻 แก้ไขตรงนี้
+  Nearby_Facilities: z
+    .string()
+    .trim()
+    .min(1, "กรุณาเลือกสิ่งอำนวยความสะดวกใกล้เคียง"),
 
-  Lifestyle_Preferences: z.enum(
-    ["Work_from_Home", "Have_Pets", "Need_a_Home_Office", "Like_Gardening"],
-    { errorMap: () => ({ message: "กรุณาเลือกรูปแบบการใช้ชีวิต" }) }
-  ),
+  // 🔻 แก้ไขตรงนี้
+  Lifestyle_Preferences: z
+    .string()
+    .trim()
+    .min(1, "กรุณาเลือกรูปแบบการใช้ชีวิต"),
 
   // ข้อความอิสระ (ไม่บังคับ)
   Special_Requirements: z
