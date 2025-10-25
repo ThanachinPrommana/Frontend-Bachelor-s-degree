@@ -26,8 +26,9 @@ import { postPriceSchema } from "../schemas/postSchemas/postPriceSchema";
 import { postInformSchema } from "../schemas/postSchemas/postInformSchema";
 
 // ✅ ขยาย schema ราคา (เวอร์ชันย่อที่ใช้ใน Dialog นี้)
-const postPriceExtended = postPriceSchema.extend({
+const postPriceExtended = postPriceSchema.safeExtend({
   Sell_Rent: z.enum(["SALE", "RENT"]).optional(),
+// ... (fields อื่นๆ) ...
   Deposit_Amount: z
     .union([z.number().min(0), z.string()])
     .optional()

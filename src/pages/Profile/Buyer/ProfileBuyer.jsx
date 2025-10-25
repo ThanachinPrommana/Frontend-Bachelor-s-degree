@@ -14,7 +14,7 @@ const BuyerInfo = lazy(() => import("./BuyerInfo"));
 const BuyerNoti = lazy(() => import("./BuyerNoti"));
 const BuyerDoc = lazy(() => import("./BuyerDoc"));
 const BuyerBooking = lazy(() => import("./BuyerBooking"));
-const BuyerSchedule = lazy(() => import("./BuyerSchedule"));
+// const BuyerSchedule = lazy(() => import("./BuyerSchedule"));
 
 // สเกเลตันระหว่างโหลดแท็บ
 const LoadingPane = () => (
@@ -56,11 +56,11 @@ const ProfileBuyer = () => {
         key: "booking",
         icon: <FaClipboardList className="mr-2" />,
       },
-      {
-        label: "ตารางเวลา",
-        key: "schedule",
-        icon: <FaCalendarAlt className="mr-2" />,
-      },
+      // {
+      //   label: "ตารางเวลา",
+      //   key: "schedule",
+      //   icon: <FaCalendarAlt className="mr-2" />,
+      // },
       { label: "การแจ้งเตือน", key: "noti", icon: <FaBell className="mr-2" /> },
       { label: "เอกสาร", key: "doc", icon: <FaFileAlt className="mr-2" /> },
     ],
@@ -193,7 +193,7 @@ const ProfileBuyer = () => {
             <Suspense fallback={<LoadingPane />}>
               {selectedTab === "info" && <BuyerInfo user={authUser} />}
               {selectedTab === "booking" && <BuyerBooking />}
-              {selectedTab === "schedule" && <BuyerSchedule />}
+              {/* {selectedTab === "schedule" && <BuyerSchedule />} */}
               {selectedTab === "noti" && <BuyerNoti />}
               {selectedTab === "doc" && <BuyerDoc />}
             </Suspense>

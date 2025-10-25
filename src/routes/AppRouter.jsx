@@ -71,7 +71,7 @@ import DepositPaymentPage from "@/pages/Profile/Payment/DepositPaymentPage";
 import PaymentStatusPage from "@/pages/Profile/Payment/PaymentStatusPage";
 import { Elements } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import BookingScheduler from "@/pages/ฺBooking/BookingScheduler ";
+import BookingScheduler from "@/pages/Booking/BookingScheduler ";
 
 const stripePromise = loadStripe(
   "pk_test_51R6USEEHWiwlX27ITAS8FPSrge8gvKXeRe12WMaZl79xFCVeea2cpExdBdNgrD8IbaX7ZnGCtiXCFBmsuEjYwlrY00E1uHNRCr"

@@ -19,6 +19,7 @@ import { fmtDateTimeTH } from "@/lib/bookingUtils";
 import SlipButton from "@/components/booking/SlipButton";
 import UploadFinalSlipButton from "@/components/UploadFinalSlipButton";
 import StatusBadge from "@/components/StatusBadge";
+import { useNavigate } from "react-router";
 
 
 
@@ -28,6 +29,7 @@ export default function BuyerBooking() {
 
   const [bookings, setBookings] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const navigate = useNavigate()
 
   // Search (debounce)
   const [rawQ, setRawQ] = useState("");
@@ -181,14 +183,14 @@ export default function BuyerBooking() {
                   // ==========================================================
                   // (สำคัญ) เพิ่ม CONSOLE.LOG ตรงนี้
                   // ==========================================================
-                  console.log(`
-    ----- DEBUGGING ROW -----
-    Booking ID: ${b.id}
-    Unit ID to find: ${relevantUnitId}
-    All Payments Received by Frontend:`, allUserPayments);
-                  console.log(`Found Payment for this unit:`, thisBookingPayment);
-                  console.log(`Final Slip URL: ${slipForThisBooking}`);
-                  console.log(`-------------------------`);
+    //               console.log(`
+    // ----- DEBUGGING ROW -----
+    // Booking ID: ${b.id}
+    // Unit ID to find: ${relevantUnitId}
+    // All Payments Received by Frontend:`, allUserPayments);
+    //               console.log(`Found Payment for this unit:`, thisBookingPayment);
+    //               console.log(`Final Slip URL: ${slipForThisBooking}`);
+    //               console.log(`-------------------------`);
                   // ==========================================================
                   // --- สิ้นสุดส่วนที่เพิ่ม ---
 
@@ -197,12 +199,16 @@ export default function BuyerBooking() {
                       {/* 1. แสดงชื่อประกาศ */}
                       <td className="px-4 py-2">
                         {b.propertyUnit?.propertyPost?.Property_Name ? (
-                          <a
-                            href={`/deposit/${b.propertyUnit.propertyPost.id}`}
-                            className="underline"
+                          <Button
+                            variant="link"
+                            // (สำคัญ) p-0 h-auto เพื่อให้ปุ่มไม่ดัน layout ของตาราง
+                            className="p-0 h-auto font-normal text-left cursor-pointer text-blue-500 "
+                            onClick={() => {
+                              navigate(`/deposit/${b.propertyUnit.propertyPost.id}`)
+                            }}
                           >
                             {b.propertyUnit.propertyPost.Property_Name}
-                          </a>
+                          </Button>
                         ) : (
                           "-"
                         )}
