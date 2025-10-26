@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, RefreshCcw, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, RefreshCcw, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 
 import {
   getProfile as apiGetProfile,
@@ -24,13 +24,25 @@ import SlipButton from "@/components/booking/SlipButton";
 import { useAuth } from "@/context/AuthContext";
 import UploadFinalSlipButton from "@/components/UploadFinalSlipButton";
 import StatusBadge from "@/components/StatusBadge";
-
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useNavigate } from "react-router";
+import { apiClient } from "@/api/authconfig";
 
 
 export default function SellerBooking() {
   const { toast } = useToast();
   const { authUser, revalidateUser, loading: authLoading } = useAuth();
-
+  const navigate = useNavigate();
   // ใช้ State เหมือน BuyerBooking
   const [bookings, setBookings] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -42,6 +54,8 @@ export default function SellerBooking() {
     const t = setTimeout(() => setQ(rawQ), 300);
     return () => clearTimeout(t);
   }, [rawQ]);
+
+  const [deletingId, setDeletingId] = useState(null);
 
   // Pagination - เหมือน BuyerBooking
   const [page, setPage] = useState(1);
@@ -107,6 +121,28 @@ export default function SellerBooking() {
     }
   }
 
+  async function handleDelete(bookingId) {
+    setDeletingId(bookingId);
+    try {
+      const res = await apiClient.delete(`/user/remove/${bookingId}`);
+      const data = res.data;
+      toast({
+        title: "ยกเลิกการจองสำเร็จ",
+        description: data.message,
+      });
+      await revalidateUser(); // รีเฟรชข้อมูล
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: "ยกเลิกการจองไม่สำเร็จ",
+        description: e?.response?.data?.message || e.message || "โปรดลองอีกครั้ง",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   // useEffect รีเซ็ต page - เหมือน BuyerBooking
   useEffect(() => {
     setPage(1);
@@ -126,7 +162,7 @@ export default function SellerBooking() {
       </td>
     </tr>
   );
-  
+
 
 
   return (
@@ -194,19 +230,30 @@ export default function SellerBooking() {
                     ? allUserPayments.find(p => p.unitId === relevantUnitId)
                     : null;
                   const slipForThisBooking = thisBookingPayment?.Payment_Slip;
-
+                  // (ใหม่) Logic ตรวจสอบเวลา
+                  const appointmentStartTime = b?.dateTimeSlot?.startTime;
+                  const now = new Date();
+                  const startTime = new Date(appointmentStartTime);
+                  const canDelete = appointmentStartTime && startTime > now;
+                  const showDeleteButton = canDelete || b.bookingStatus === 'COMPLETED';
                   return (
                     <tr key={b.id} className="border-t">
                       {/* 1. แสดงชื่อประกาศ - เหมือน BuyerBooking */}
                       <td className="px-4 py-2">
                         {b.propertyUnit?.propertyPost?.Property_Name ? (
-                          <a
-                            href={`/deposit/${b.propertyUnit.propertyPost.id}`} // อาจจะต้องแก้ path
-                            className="underline hover:text-blue-600"
+                          <Button
+                            variant="link"
+                            // (สำคัญ) p-0 h-auto เพื่อให้ปุ่มไม่ดัน layout ของตาราง
+                            className="p-0 h-auto font-normal text-left cursor-pointer text-blue-500 "
+                            onClick={() => {
+                              navigate(`/deposit/${b.propertyUnit.propertyPost.id}`)
+                            }}
                           >
                             {b.propertyUnit.propertyPost.Property_Name}
-                          </a>
-                        ) : ("-")}
+                          </Button>
+                        ) : (
+                          "-"
+                        )}
                       </td>
 
                       {/* 2. แสดงชื่อผู้ขาย (Seller) - เหมือน BuyerBooking */}
@@ -232,11 +279,57 @@ export default function SellerBooking() {
                       </td>
 
                       {/* 6. แสดงการดำเนินการ (ปุ่ม Upload Final Slip) - เหมือน BuyerBooking */}
+
                       <td className="px-4 py-2">
-                        <UploadFinalSlipButton
-                          booking={b}s
-                          onUploadSuccess={revalidateUser}
-                        />
+                        <div className="flex items-center gap-1 justify-center">
+
+                          {/* แสดงปุ่มลบ ถ้า showDeleteButton */}
+                          {showDeleteButton && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-red-600 hover:text-red-700"
+                                  disabled={deletingId === b.id}
+                                >
+                                  {deletingId === b.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="w-4 h-4" />
+                                  )}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>ยืนยันการยกเลิกการจอง?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    การดำเนินการนี้จะไม่สามารถย้อนกลับได้ ระบบจะคืนช่องเวลานี้ให้เป็น "ว่าง" และส่งแจ้งเตือนไปยังผู้ซื้อ.
+                                    {b.bookingStatus === 'COMPLETED' && <span className="font-semibold block mt-2 text-orange-600">หมายเหตุ: การจองนี้เสร็จสมบูรณ์แล้ว การลบจะลบเฉพาะประวัติการจอง ไม่ส่งผลต่อสถานะเอกสาร.</span>}
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDelete(b.id)}
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    ยืนยัน
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+
+                          {/* แสดงปุ่ม Upload ถ้า !showDeleteButton */}
+                          {!showDeleteButton && (
+                            <UploadFinalSlipButton
+                              booking={b}
+                              onUploadSuccess={revalidateUser}
+                            />
+                          )}
+
+                        </div>
                       </td>
                     </tr>
                   );

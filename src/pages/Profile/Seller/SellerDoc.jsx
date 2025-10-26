@@ -25,10 +25,10 @@ const StatusBadge = ({ status }) => {
             colorClasses = 'bg-red-100 text-red-800';
             statusText = 'ถูกปฏิเสธ';
             break;
-        case 'HIDDEN':
-            colorClasses = 'bg-gray-100 text-gray-800';
-            statusText = "สำเร็จ"
-            break;
+        // case 'HIDDEN':
+        //     colorClasses = 'bg-gray-100 text-gray-800';
+        //     statusText = "สำเร็จ"
+        //     break;
     }
     return (
         <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${colorClasses}`}>
@@ -53,6 +53,7 @@ export default function SellerDoc() {
     //         console.log(JSON.stringify(authUser, null, 2));
     //     }
     // }, [authUser]);
+
 
     useEffect(() => {
         // ตั้งเวลาให้ revalidateUser ทำงานทุกๆ 15 วินาที
@@ -238,16 +239,33 @@ export default function SellerDoc() {
             .map(app => {
                 let groupStatus;
                 // จัดลำดับความสำคัญ: สลิปสุดท้าย > สถานะเอกสาร
-                if (app.bookingStatus === 'PENDING_FINAL_VERIFICATION') {
+                if (app.bookingStatus === 'COMPLETED') { // เพิ่ม check COMPLETED ก่อน
+                    groupStatus = 'COMPLETED'; // ใช้สถานะ COMPLETED โดยตรง
+                } else if (app.bookingStatus === 'PENDING_FINAL_VERIFICATION') {
                     groupStatus = 'PENDING_FINAL_VERIFICATION';
                 } else if (app.documents.length > 0) {
                     const statuses = app.documents.map(d => d.Review_Status);
-                    if (statuses.some(s => s === 'REJECTED')) groupStatus = 'REJECTED';
-                    else if (statuses.every(s => s === 'APPROVED' || s === 'HIDDEN')) groupStatus = 'APPROVED'; // (แก้ไข) นับ HIDDEN เป็น APPROVED ด้วย
-                    else groupStatus = 'PENDING';
+                    // 1. ถ้าทุกเอกสารเป็น HIDDEN -> groupStatus = HIDDEN
+                    if (statuses.every(s => s === 'HIDDEN')) {
+                        groupStatus = 'HIDDEN';
+                    }
+                    // 2. ถ้ามี REJECTED -> groupStatus = REJECTED
+                    else if (statuses.some(s => s === 'REJECTED')) {
+                        groupStatus = 'REJECTED';
+                    }
+                    // 3. ถ้าทุกอันที่เหลือ (ไม่ HIDDEN, ไม่ REJECTED) เป็น APPROVED -> groupStatus = APPROVED
+                    else if (statuses.filter(s => s !== 'HIDDEN' && s !== 'REJECTED').every(s => s === 'APPROVED')) {
+                        groupStatus = 'APPROVED';
+                    }
+                    // 4. ถ้าไม่ใช่กรณีข้างบน แสดงว่ามี PENDING อยู่
+                    else {
+                        groupStatus = 'PENDING';
+                    }
                 } else {
-                    groupStatus = app.bookingStatus || 'UNKNOWN'; // กรณีไม่มีเอกสารเลย
+                    // ถ้าไม่มีเอกสารเลย ให้ใช้ bookingStatus (ถ้ามี) หรือ UNKNOWN
+                    groupStatus = app.bookingStatus || 'UNKNOWN';
                 }
+                // --- สิ้นสุดการแก้ไข Logic ---
                 return { ...app, groupStatus };
             })
             .filter(app => { // กรองเอาเฉพาะที่มีกิจกรรมจริงๆ
@@ -257,6 +275,9 @@ export default function SellerDoc() {
                 const key = searchTerm.trim().toLowerCase();
                 if (!key) return true;
                 return (app.buyerName.toLowerCase().includes(key) || app.propertyName.toLowerCase().includes(key));
+            })
+            .filter(app => {
+                return app.groupStatus !== 'HIDDEN' && app.groupStatus !== 'COMPLETED'; // กรองทั้ง HIDDEN และ COMPLETED ออก
             })
             .filter(app => { // กรองตาม Tab
                 if (activeTab === "ALL") return true;
@@ -287,6 +308,7 @@ export default function SellerDoc() {
             setConfirmingId(null);
         }
     };
+
 
     // 3. ฟังก์ชันสำหรับอนุมัติ/ปฏิเสธ
     const handleReview = async (application, newStatus) => {
@@ -349,14 +371,10 @@ export default function SellerDoc() {
                 ) : (
                     groupedApplications.map((app) => {
                         const isMyOwnDocument = authUser.id === app.buyerUserId;
-                        const isReadyForPayment = isMyOwnDocument && app.groupStatus === 'APPROVED' && !app.depositStatus;
 
-                        const cardClassName = `bg-white p-4 rounded-lg shadow-sm border flex flex-col gap-4 relative ${isReadyForPayment ? 'cursor-pointer hover:border-blue-500 hover:shadow-md transition-all' : ''
-                            }`;
 
-                        const handleCardClick = isReadyForPayment
-                            ? () => navigate('/seller/deposit-payment', { state: { documentData: app.documents[0] } })
-                            : undefined;
+                        const cardClassName = `bg-white p-4 rounded-lg shadow-sm border flex flex-col gap-4 relative`;
+
 
                         // ถ้าเป็นสถานะรอตรวจสอบสลิป ให้แสดง FinalSlipCard เท่านั้น
                         if (app.groupStatus === 'PENDING_FINAL_VERIFICATION') {
@@ -373,7 +391,7 @@ export default function SellerDoc() {
 
                         // สำหรับสถานะอื่นๆ ให้แสดง Card แบบเดิม
                         return (
-                            <div key={app.unitId} className={cardClassName} onClick={handleCardClick}>
+                            <div key={app.unitId} className={cardClassName} >
                                 <div className="flex justify-between items-start flex-wrap gap-3">
                                     <div className="flex-grow">
                                         <h3 className="font-bold text-gray-800 text-lg">โครงการ: {app.propertyName}</h3>
@@ -415,7 +433,15 @@ export default function SellerDoc() {
                                     {app.groupStatus === 'APPROVED' && (
                                         isMyOwnDocument ? (
                                             <>
-                                                {app.depositStatus !== 'CONFIRMED' && <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">ชำระเงินมัดจำ</Button>}
+                                                {/* (แก้ไข) ย้าย onClick มาที่นี่ */}
+                                                {app.depositStatus !== 'CONFIRMED' && (
+                                                    <Button
+                                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                                        onClick={() => navigate('/seller/deposit-payment', { state: { documentData: app.documents[0] } })}
+                                                    >
+                                                        ชำระเงินมัดจำ
+                                                    </Button>
+                                                )}
                                                 {app.depositStatus === 'CONFIRMED' && !app.bookingStatus && <Button onClick={() => navigate(`/booking/${app.documents[0].postId}/${app.unitId}`)} className="w-full bg-green-600 hover:bg-green-700 text-white">นัดวันเจรจา</Button>}
                                                 {app.bookingStatus && <div className="text-center text-sm text-gray-700 font-semibold p-2.5 bg-gray-100 rounded-md">✅ ดำเนินการเสร็จสิ้น</div>}
 

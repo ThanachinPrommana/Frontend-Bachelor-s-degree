@@ -10,9 +10,10 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { RefreshCcw, ChevronLeft, ChevronRight } from "lucide-react";
+import { RefreshCcw, ChevronLeft, ChevronRight, Trash2, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { fmtDateTimeTH } from "@/lib/bookingUtils";
 
@@ -20,6 +21,18 @@ import SlipButton from "@/components/booking/SlipButton";
 import UploadFinalSlipButton from "@/components/UploadFinalSlipButton";
 import StatusBadge from "@/components/StatusBadge";
 import { useNavigate } from "react-router";
+import { apiClient } from "@/api/authconfig";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 
 
@@ -30,6 +43,7 @@ export default function BuyerBooking() {
   const [bookings, setBookings] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const navigate = useNavigate()
+
 
   // Search (debounce)
   const [rawQ, setRawQ] = useState("");
@@ -46,6 +60,8 @@ export default function BuyerBooking() {
   // Slip preview
   const [slipOpen, setSlipOpen] = useState(false);
   const [slipUrl, setSlipUrl] = useState("");
+
+  const [deletingId, setDeletingId] = useState(null);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -95,6 +111,35 @@ export default function BuyerBooking() {
       });
     } finally {
       setIsRefreshing(false);
+    }
+  }
+  async function handleDelete(bookingId) {
+    setDeletingId(bookingId);
+    try {
+      // ใช้ apiClient.delete และ path ไม่ต้องมี /api/ 
+      // เพราะ baseURL ใน apiClient จัดการให้แล้ว
+      const res = await apiClient.delete(`/user/remove/${bookingId}`);
+
+      // Axios response ที่สำเร็จจะอยู่ใน res.data
+      const data = res.data;
+
+      toast({
+        title: "ยกเลิกการจองสำเร็จ",
+        description: data.message,
+      });
+
+      await revalidateUser(); // รีเฟรชข้อมูลในตาราง
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: "ยกเลิกการจองไม่สำเร็จ",
+        // (สำคัญ) Axios error message ที่มาจาก server จะอยู่ใน
+        // e.response.data.message
+        description: e?.response?.data?.message || e.message || "โปรดลองอีกครั้ง",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingId(null); // ลบเสร็จสิ้น (ไม่ว่าจะสำเร็จหรือล้มเหลว)
     }
   }
 
@@ -180,17 +225,25 @@ export default function BuyerBooking() {
 
                   const slipForThisBooking = thisBookingPayment?.Payment_Slip;
 
+                  // (ใหม่) ตรวจสอบเวลาเพื่อกำหนดว่าสามารถลบได้หรือไม่
+                  const appointmentStartTime = b?.dateTimeSlot?.startTime;
+                  const now = new Date();
+                  const startTime = new Date(appointmentStartTime);
+                  // (ใหม่) canDelete จะเป็น true ถ้า startTime มีค่า และ startTime อยู่ในอนาคต (มากกว่าเวลาปัจจุบัน)
+                  const canDelete = appointmentStartTime && startTime > now;
+
+                  const showDeleteButton = canDelete || b.bookingStatus === 'COMPLETED';
                   // ==========================================================
                   // (สำคัญ) เพิ่ม CONSOLE.LOG ตรงนี้
                   // ==========================================================
-    //               console.log(`
-    // ----- DEBUGGING ROW -----
-    // Booking ID: ${b.id}
-    // Unit ID to find: ${relevantUnitId}
-    // All Payments Received by Frontend:`, allUserPayments);
-    //               console.log(`Found Payment for this unit:`, thisBookingPayment);
-    //               console.log(`Final Slip URL: ${slipForThisBooking}`);
-    //               console.log(`-------------------------`);
+                  //               console.log(`
+                  // ----- DEBUGGING ROW -----
+                  // Booking ID: ${b.id}
+                  // Unit ID to find: ${relevantUnitId}
+                  // All Payments Received by Frontend:`, allUserPayments);
+                  //               console.log(`Found Payment for this unit:`, thisBookingPayment);
+                  //               console.log(`Final Slip URL: ${slipForThisBooking}`);
+                  //               console.log(`-------------------------`);
                   // ==========================================================
                   // --- สิ้นสุดส่วนที่เพิ่ม ---
 
@@ -240,12 +293,58 @@ export default function BuyerBooking() {
                         <SlipButton url={slipForThisBooking} />
                       </td>
 
-                      {/* 6. แสดงการดำเนินการ */}
+
+                      {/* 6. (สำคัญ) แก้ไขการดำเนินการ ใช้ logic สลับปุ่ม */}
                       <td className="px-4 py-2">
-                        <UploadFinalSlipButton
-                          booking={b}
-                          onUploadSuccess={revalidateUser}
-                        />
+                        <div className="flex items-center gap-1 justify-center">
+
+                          {/* Show Delete Button if canDeleteBasedOnTime OR status is COMPLETED */}
+                          {showDeleteButton && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-red-600 hover:text-red-700"
+                                  disabled={deletingId === b.id}
+                                >
+                                  {deletingId === b.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="w-4 h-4" />
+                                  )}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>ยืนยันการยกเลิกการจอง?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    การดำเนินการนี้จะไม่สามารถย้อนกลับได้ ระบบจะคืนช่องเวลานี้ให้เป็น "ว่าง" และส่งแจ้งเตือนไปยังผู้ขาย.
+                                    {b.bookingStatus === 'COMPLETED' && <span className="font-semibold block mt-2 text-orange-600">หมายเหตุ: การจองนี้เสร็จสมบูรณ์แล้ว การลบจะลบเฉพาะประวัติการจอง ไม่ส่งผลต่อสถานะเอกสาร.</span>}
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDelete(b.id)}
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    ยืนยัน
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+
+                          {/* Show Upload Button ONLY if Delete Button is NOT shown */}
+                          {!showDeleteButton && (
+                            <UploadFinalSlipButton
+                              booking={b}
+                              onUploadSuccess={revalidateUser}
+                            />
+                          )}
+
+                        </div>
                       </td>
                     </tr>
                   );

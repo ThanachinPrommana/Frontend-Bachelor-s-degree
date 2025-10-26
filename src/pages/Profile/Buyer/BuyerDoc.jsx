@@ -23,11 +23,12 @@ const StatusBadge = ({ status }) => {
       colorClasses = 'bg-red-100 text-red-800';
       statusText = 'ถูกปฏิเสธ';
       break;
-    case 'HIDDEN':
-      colorClasses = 'bg-gray-100 text-gray-800';
-      statusText = "สำเร็จ"
-      break;
+    // case 'HIDDEN':
+    //   colorClasses = 'bg-gray-100 text-gray-800';
+    //   statusText = "สำเร็จ"
+    //   break;
   }
+  if (status === 'HIDDEN') return null;
   return (
     <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${colorClasses}`}>
       {statusText}
@@ -90,22 +91,31 @@ const BuyerDoc = () => {
 
     return Object.values(grouped)
       .map(app => {
+        // --- (แก้ไข) ปรับปรุง Logic การกำหนด groupStatus ---
         const statuses = app.documents.map(d => d.Review_Status);
         let groupStatus;
 
-        if (statuses.every(s => s === 'APPROVED')) {
-          groupStatus = 'APPROVED';
-        } else if (statuses.every(s => s === 'PENDING')) {
-          groupStatus = 'PENDING';
-        } else if (statuses.every(s => s === 'REJECTED')) {
-          groupStatus = 'REJECTED';
-        } else if (statuses.every(s => s === 'HIDDEN')) {
+        // 1. ถ้าทุกเอกสารเป็น HIDDEN -> groupStatus = HIDDEN
+        if (statuses.every(s => s === 'HIDDEN')) {
           groupStatus = 'HIDDEN';
-        } else if (statuses.some(s => s === 'REJECTED')) {
-          groupStatus = 'REJECTED';
-        } else {
-          groupStatus = 'MIXED_STATUS'; // กรณีอื่นๆ ที่มีสถานะผสมกัน
         }
+        // 2. ถ้ามี REJECTED -> groupStatus = REJECTED
+        else if (statuses.some(s => s === 'REJECTED')) {
+          groupStatus = 'REJECTED';
+        }
+        // 3. ถ้าทุกอันที่เหลือ (ไม่ HIDDEN, ไม่ REJECTED) เป็น APPROVED -> groupStatus = APPROVED
+        else if (statuses.filter(s => s !== 'HIDDEN' && s !== 'REJECTED').every(s => s === 'APPROVED')) {
+          groupStatus = 'APPROVED';
+        }
+        // 4. ถ้าไม่ใช่กรณีข้างบน แสดงว่ามี PENDING อยู่
+        else if (statuses.some(s => s === 'PENDING')) {
+          groupStatus = 'PENDING'; // เปลี่ยนจาก MIXED เป็น PENDING ถ้ามี PENDING อยู่
+        }
+        // 5. กรณีอื่นๆ ที่อาจเกิดขึ้นได้น้อยมาก (เช่น มีแค่ APPROVED กับ PENDING) ให้เป็น PENDING
+        else {
+          groupStatus = 'PENDING';
+        }
+        // --- สิ้นสุดการแก้ไข Logic ---
 
         return { ...app, groupStatus };
       })
@@ -115,6 +125,9 @@ const BuyerDoc = () => {
         const propertyMatch = app.propertyName.toLowerCase().includes(key);
         const docNameMatch = app.documents.some(d => (d.DocumentName || "").toLowerCase().includes(key));
         return propertyMatch || docNameMatch;
+      })
+      .filter(app => {
+        return app.groupStatus !== 'HIDDEN'; // กรอง HIDDEN ออกเสมอ
       })
       .filter(app => {
         if (statusFilter === "ALL") return true;
@@ -168,7 +181,7 @@ const BuyerDoc = () => {
           <option value="PENDING">รอตรวจสอบ</option>
           <option value="APPROVED">อนุมัติแล้ว</option>
           <option value="REJECTED">ถูกปฏิเสธ</option>
-          <option value="HIDDEN">สำเร็จ</option>
+          {/* <option value="HIDDEN">สำเร็จ</option> */}
           {/* (ตัวเลือก Filter อื่นๆ สามารถเพิ่มได้ตามต้องการ) */}
         </select>
       </div>

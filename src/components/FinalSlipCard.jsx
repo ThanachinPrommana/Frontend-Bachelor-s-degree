@@ -69,7 +69,7 @@ export default function FinalSlipCard({ booking, onConfirm, isConfirming }) {
             ) : (
               <Check className="w-4 h-4 mr-2" />
             )}
-            ยืนยันการชำระเงิน
+            ยืนยันสลิปสุดท้าย
           </Button>
         </div>
       </CardContent>
