@@ -32,18 +32,9 @@ const statusUnit = [
 const categorythai = [
   { id: "cmegzfdya0006w2bwq5d8alc7", label: "คอนโดมิเนียม" },
   { id: "cmegzfhx70007w2bwp63cbc1w", label: "บ้านเดี่ยว" },
-  { id: "cmegzfls20008w2bwf0arh8jq", label: "ที่ดิน" },
   { id: "cmegzfov30009w2bwrxjpt7xn", label: "วิลล่า" },
   { id: "cmegzft08000aw2bwx91l68z9", label: "ทาวน์เฮาส์" },
-  { id: "cmegzg3t1000cw2bw8shu6whw", label: "ตึกแถว/ช้อปเฮาส์" },
-  { id: "cmegzg9ez000dw2bwgkdliy1a", label: "อพาร์ตเมนต์" },
-  { id: "cmegzgcmy000ew2bw72nen7zo", label: "เพนท์เฮาส์" },
-  { id: "cmegzgfvz000fw2bwgppl0ci5", label: "รีสอร์ท" },
-  { id: "cmegzgif1000gw2bw1z7xda7u", label: "โรงแรม" },
-  { id: "cmegzgky4000hw2bwe83xrvrg", label: "ออฟฟิศ" },
-  { id: "cmegzgq6g000iw2bwl51st9pg", label: "อาคารพาณิชย์" },
-  { id: "cmegzgu1s000jw2bwdhco4e1r", label: "โรงงาน" },
-  { id: "cmegzgxsj000kw2bwebelhpmm", label: "โกดัง" },
+ 
 ]
 
 const statusSellerThai = [
@@ -312,7 +303,7 @@ const Deposit = () => {
                   <Video className="text-blue-600" />
                   วิดีโอแนะนำ
                 </h3>
-                <div className="rounded-lg overflow-hidden space-y-2">
+                <div className="rounded-lg overflow-hidden space-y-2 ">
                   {post.Video.map((video, index) => {
                     return (
                       <video
@@ -320,7 +311,7 @@ const Deposit = () => {
                         src={video.secure_url}
                         controls
                         width="100%"
-                        className="rounded-lg"
+                        className="rounded-lg w-full h-[500px]"
                       />
                     )
                   })}

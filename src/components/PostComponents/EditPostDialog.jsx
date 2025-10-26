@@ -20,6 +20,7 @@ import { postLocationSchema } from "@/components/schemas/postSchemas/postLocatio
 import { postDetailSchema } from "@/components/schemas/postSchemas/postDetailSchema";
 import { postPriceSchema } from "@/components/schemas/postSchemas/postPriceSchema";
 import { postInformSchema } from "@/components/schemas/postSchemas/postInformSchema";
+import TitleStep from "./steps/TitleStep";
 
 // ✅ ขยาย schema ราคา (เวอร์ชันย่อที่ใช้ใน Dialog นี้)
 const postPriceExtended = postPriceSchema.safeExtend({

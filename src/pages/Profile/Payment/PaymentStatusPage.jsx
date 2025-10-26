@@ -1,7 +1,7 @@
 // PaymentStatusPage.js
 import { useState, useEffect } from 'react';
 import { useStripe } from '@stripe/react-stripe-js';
-import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, House } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export default function PaymentStatusPage() {
@@ -18,7 +18,7 @@ export default function PaymentStatusPage() {
     useEffect(() => {
         if (!stripe || !clientSecret) {
             setStatus('failed');
-            setMessage('ข้อมูลการชำระเงินไม่ถูกต้อง');
+            setMessage('ข้อมูลการชำระเงิน');
             return;
         }
 
@@ -37,7 +37,7 @@ export default function PaymentStatusPage() {
                     setStatus('loading');
                     break;
                 default:
-                    setMessage("การชำระเงินล้มเหลว");
+                    setMessage("กลับไปหน้าเว็บไซต์");
                     setStatus('failed');
                     break;
             }
@@ -49,7 +49,7 @@ export default function PaymentStatusPage() {
             return <CheckCircle className="mx-auto size-16 text-green-500 mb-4" />;
         }
         if (status === 'failed') {
-            return <XCircle className="mx-auto size-16 text-red-500 mb-4" />;
+            return <House className="mx-auto size-16 text-blue-500 mb-4" />;
         }
         return <Loader2 className="mx-auto size-16 text-gray-500 mb-4 animate-spin" />;
     };
