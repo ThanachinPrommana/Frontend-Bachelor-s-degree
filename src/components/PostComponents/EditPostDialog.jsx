@@ -59,7 +59,7 @@ const editPostSchema = postTitleSchema
       Name: true,
       Phone: true,
       Link_line: true,
-      Link_facbook: true, // <-- ไม่มี e
+      Link_facbook: true, // << ใช้คีย์นี้
     })
   );
 
@@ -73,7 +73,6 @@ export const formatBaht = (n) =>
 
 // map API -> form (ใช้ Link_facbook เท่านั้น)
 function mapApiToForm(d = {}) {
-  // ดึงลิงก์ fb จากคีย์ที่ถูกต้องเท่านั้น
   const fbLinkRaw = d?.Link_facbook;
   const fbLink =
     typeof fbLinkRaw === "string"
@@ -141,11 +140,11 @@ function mapApiToForm(d = {}) {
       ? d.Other_related_expenses.map(String)
       : [],
 
-    // inform (ชื่อจากโพสต์ก่อน → fallback user)
+    // inform
     Name: (d?.Name ?? sellerNameFromUser ?? "").trim(),
     Phone: d?.Phone ?? "",
     Link_line: typeof d?.Link_line === "string" ? d.Link_line.trim() : "",
-    Link_facbook: fbLink, // <-- ใช้คีย์นี้
+    Link_facbook: fbLink,
   };
 }
 
@@ -161,8 +160,15 @@ export default function EditPostDialog({
   const [activeTab, setActiveTab] = useState("title");
   const [serverData, setServerData] = useState(null);
   const [categories, setCategories] = useState([]);
+
+  // ไฟล์ใหม่
   const [newImages, setNewImages] = useState([]);
   const [newVideos, setNewVideos] = useState([]);
+
+  // รหัสสื่อเดิมที่ติ๊กว่าจะลบ (รับมาจาก MediaStep)
+  const [removedOldImages, setRemovedOldImages] = useState([]);
+  const [removedOldVideos, setRemovedOldVideos] = useState([]);
+
   const [resetKey, setResetKey] = useState(0);
 
   const methods = useForm({
@@ -204,6 +210,7 @@ export default function EditPostDialog({
   useEffect(() => {
     if (!open) return;
 
+    // เปิดจาก initialPost (ไม่มี postId)
     if (!postId) {
       if (initialPost) {
         setServerData(initialPost);
@@ -248,6 +255,11 @@ export default function EditPostDialog({
         if (!alive) return;
         setLoadingData(false);
         setResetKey((k) => k + 1);
+        // reset ตัวแปรสื่อทุกครั้งที่โหลดโพสต์ใหม่
+        setNewImages([]);
+        setNewVideos([]);
+        setRemovedOldImages([]);
+        setRemovedOldVideos([]);
       }
     })();
 
@@ -282,7 +294,7 @@ export default function EditPostDialog({
       "Other_related_expenses",
       "Interest",
     ],
-    inform: ["Name", "Phone", "Link_line", "Link_facbook"], // <-- ไม่มี e
+    inform: ["Name", "Phone", "Link_line", "Link_facbook"],
     media: [],
     confirm: [],
   };
@@ -326,20 +338,26 @@ export default function EditPostDialog({
         Nearby_Landmarks: values.Nearby_Landmarks || [],
         Additional_Amenities: values.Additional_Amenities || [],
         Other_related_expenses: values.Other_related_expenses || [],
-        // contact — ใช้ Link_facbook เท่านั้น
+        // contact (ใช้ Link_facbook)
         Name: values.Name ?? "",
         Link_line: values.Link_line ?? "",
         Link_facbook: values.Link_facbook ?? "",
+
+        // ⬇️ ใหม่: id ของสื่อเดิมที่ติ๊กว่าจะลบ
+        removedOldImages: removedOldImages || [],
+        removedOldVideos: removedOldVideos || [],
       };
 
       if (hasFiles) {
         const fd = new FormData();
         Object.entries(payload).forEach(([k, v]) => {
+          // ส่ง array เป็น JSON string (รวมถึง removedOld* ด้วย)
           if (Array.isArray(v)) fd.append(k, JSON.stringify(v));
           else if (v !== undefined && v !== null) fd.append(k, v);
         });
         newImages.forEach((f) => fd.append("images", f));
         newVideos.forEach((f) => fd.append("videos", f));
+
         await apiClient.patch(`/propertypost/${postId}`, fd, {
           headers: { "Content-Type": "multipart/form-data" },
         });
@@ -358,7 +376,8 @@ export default function EditPostDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl p-0 md:h-[85vh] flex flex-col overflow-hidden">
+      {/* กรอบนอก: กว้าง/สูงแบบที่ชอบ + ภายในจัดให้พอดีจอ */}
+      <DialogContent className="p-0 max-w-[95vw] md:max-w-[1280px] md:h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-3 flex-shrink-0">
           <DialogTitle className="text-2xl">แก้ไขประกาศ</DialogTitle>
           <DialogDescription className="text-gray-600">
@@ -369,108 +388,152 @@ export default function EditPostDialog({
         <FormProvider {...methods}>
           <form
             onSubmit={handleSubmit(onSubmit)}
-            className="flex-1 min-h-0 flex flex-col"
+            className="grid grid-rows-[auto,1fr,auto] h-[calc(90vh-96px)]"
           >
-            {/* Tabs bar */}
-            <div className="sticky top-0 z-10 -mx-6 px-6 py-2 bg-white/80 backdrop-blur border-b">
-              <Tabs
-                value={activeTab}
-                onValueChange={setActiveTab}
-                className="w-full"
-              >
-                <TabsList className="grid grid-cols-7 gap-2 w-full bg-[#2c3e50]/10">
-                  <TabsTrigger value="title">หัวข้อ</TabsTrigger>
-                  <TabsTrigger value="location">ที่ตั้ง</TabsTrigger>
-                  <TabsTrigger value="detail">รายละเอียด</TabsTrigger>
-                  <TabsTrigger value="price">ราคา</TabsTrigger>
-                  <TabsTrigger value="inform">ผู้ขาย</TabsTrigger>
-                  <TabsTrigger value="media">รูป/วิดีโอ</TabsTrigger>
-                  <TabsTrigger value="confirm">ยืนยัน</TabsTrigger>
-                </TabsList>
-              </Tabs>
+            {/* Tabs bar (sticky + scrollable) */}
+            <div className="px-6 pb-2 sticky top-0 z-10 bg-white/90 backdrop-blur border-y">
+              <div className="max-w-[1100px] mx-auto">
+                <Tabs
+                  value={activeTab}
+                  onValueChange={setActiveTab}
+                  className="w-full"
+                >
+                  <TabsList className="w-full overflow-x-auto flex gap-2 bg-muted/50 rounded-xl p-1">
+                    <TabsTrigger value="title" className="whitespace-nowrap">
+                      หัวข้อ
+                    </TabsTrigger>
+                    <TabsTrigger value="location" className="whitespace-nowrap">
+                      ที่ตั้ง
+                    </TabsTrigger>
+                    <TabsTrigger value="detail" className="whitespace-nowrap">
+                      รายละเอียด
+                    </TabsTrigger>
+                    <TabsTrigger value="price" className="whitespace-nowrap">
+                      ราคา
+                    </TabsTrigger>
+                    <TabsTrigger value="inform" className="whitespace-nowrap">
+                      ผู้ขาย
+                    </TabsTrigger>
+                    <TabsTrigger value="media" className="whitespace-nowrap">
+                      รูป/วิดีโอ
+                    </TabsTrigger>
+                    <TabsTrigger value="confirm" className="whitespace-nowrap">
+                      ยืนยัน
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
             </div>
 
-            {/* Content area */}
-            <div className="flex-1 min-h-0 overflow-y-auto pr-1 pt-4">
-              {loadingData ? (
-                <div className="flex items-center justify-center py-12 text-gray-500">
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  กำลังโหลดข้อมูล...
-                </div>
-              ) : (
-                <>
-                  {activeTab === "title" && (
-                    <TitleStep errors={errors} resetKey={resetKey} />
-                  )}
-                  {activeTab === "location" && (
-                    <LocationStep errors={errors} resetKey={resetKey} />
-                  )}
-                  {activeTab === "detail" && (
-                    <DetailStep
-                      errors={errors}
-                      categories={categories}
-                      resetKey={resetKey}
-                    />
-                  )}
-                  {activeTab === "price" && (
-                    <PriceStep
-                      errors={errors}
-                      sellRentLocked={watch("Sell_Rent") || "SALE"}
-                      formatBaht={formatBaht}
-                      resetKey={resetKey}
-                    />
-                  )}
-                  {activeTab === "inform" && (
-                    <InformStep errors={errors} resetKey={resetKey} />
-                  )}
-                  {activeTab === "media" && (
-                    <MediaStep
-                      serverData={serverData}
-                      newImages={newImages}
-                      setNewImages={setNewImages}
-                      newVideos={newVideos}
-                      setNewVideos={setNewVideos}
-                      resetKey={resetKey}
-                    />
-                  )}
-                  {activeTab === "confirm" && (
-                    <ConfirmStep
-                      categories={categories}
-                      formatBaht={formatBaht}
-                      watch={watch}
-                      resetKey={resetKey}
-                    />
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* Footer actions */}
-            <div className="sticky bottom-0 z-10 -mx-6 px-6 py-3 bg-white/80 backdrop-blur border-t flex justify-between items-center">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                ยกเลิก
-              </Button>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={goPrev}>
-                  ย้อนกลับ
-                </Button>
-                <Button type="button" variant="outline" onClick={goNext}>
-                  ถัดไป
-                </Button>
-                <Button type="submit" disabled={loading}>
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      กำลังบันทึก...
-                    </>
+            {/* Scrollable content */}
+            <div className="overflow-y-auto">
+              <div className="px-6 py-4">
+                <div className="max-w-[1100px] mx-auto">
+                  {loadingData ? (
+                    <div className="flex items-center justify-center py-14 text-gray-500">
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      กำลังโหลดข้อมูล...
+                    </div>
                   ) : (
-                    "บันทึกการเปลี่ยนแปลง"
+                    <>
+                      {activeTab === "title" && (
+                        <div className="space-y-6">
+                          <TitleStep errors={errors} resetKey={resetKey} />
+                        </div>
+                      )}
+                      {activeTab === "location" && (
+                        <div className="space-y-6">
+                          <LocationStep errors={errors} resetKey={resetKey} />
+                        </div>
+                      )}
+                      {activeTab === "detail" && (
+                        <div className="space-y-6">
+                          <DetailStep
+                            errors={errors}
+                            categories={categories}
+                            resetKey={resetKey}
+                          />
+                        </div>
+                      )}
+                      {activeTab === "price" && (
+                        <div className="space-y-6">
+                          <PriceStep
+                            errors={errors}
+                            sellRentLocked={watch("Sell_Rent") || "SALE"}
+                            formatBaht={formatBaht}
+                            resetKey={resetKey}
+                          />
+                        </div>
+                      )}
+                      {activeTab === "inform" && (
+                        <div className="space-y-6">
+                          <InformStep errors={errors} resetKey={resetKey} />
+                        </div>
+                      )}
+                      {activeTab === "media" && (
+                        <div className="space-y-6">
+                          <MediaStep
+                            serverData={serverData}
+                            newImages={newImages}
+                            setNewImages={setNewImages}
+                            newVideos={newVideos}
+                            setNewVideos={setNewVideos}
+                            resetKey={resetKey}
+                            removedOldImages={removedOldImages}
+                            setRemovedOldImages={setRemovedOldImages}
+                            removedOldVideos={removedOldVideos}
+                            setRemovedOldVideos={setRemovedOldVideos}
+                          />
+                        </div>
+                      )}
+                      {activeTab === "confirm" && (
+                        <div className="space-y-6">
+                          <ConfirmStep
+                            categories={categories}
+                            formatBaht={formatBaht}
+                            watch={watch}
+                            resetKey={resetKey}
+                          />
+                        </div>
+                      )}
+                    </>
                   )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 bg-white/90 backdrop-blur border-t">
+              <div className="max-w-[1100px] mx-auto flex justify-between">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  ยกเลิก
                 </Button>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={goPrev}>
+                    ย้อนกลับ
+                  </Button>
+                  <Button type="button" variant="outline" onClick={goNext}>
+                    ถัดไป
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="min-w-[168px]"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        กำลังบันทึก...
+                      </>
+                    ) : (
+                      "บันทึกการเปลี่ยนแปลง"
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           </form>

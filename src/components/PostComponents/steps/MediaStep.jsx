@@ -136,7 +136,6 @@ export default function MediaStep({
 
   // เมื่อ newImages เปลี่ยน -> สร้าง preview ใหม่
   useEffect(() => {
-    // เคลียร์ของเก่า
     imagePreviews.forEach((p) => {
       if (p.preview) {
         try {
@@ -218,7 +217,6 @@ export default function MediaStep({
   const handleAddImages = (files) => {
     const arr = Array.from(files || []);
     if (!arr.length) return;
-    // validate
     for (const f of arr) {
       if (!isAllowedImage(f)) {
         setError(`"${f.name}" ไม่ใช่ชนิดรูปที่รองรับ (jpeg/png/webp)`);
@@ -277,9 +275,16 @@ export default function MediaStep({
     <div className="grid md:grid-cols-2 gap-6">
       {/* ====== สื่อเดิม ====== */}
       <Card className="shadow-sm">
-        <CardHeader className="py-4">
-          <CardTitle className="text-lg">สื่อเดิม (รูป & วิดีโอ)</CardTitle>
+        <CardHeader className="py-6">
+          <div className="flex flex-col items-center gap-2">
+            <div className="text-2xl">🖼️🎬</div>
+            <CardTitle className="text-xl">สื่อเดิม (รูป & วิดีโอ)</CardTitle>
+            <p className="text-xs text-muted-foreground text-center">
+              ดูไฟล์เดิมและเลือก “ลบ” เฉพาะรายการที่ไม่ต้องการเก็บไว้
+            </p>
+          </div>
         </CardHeader>
+
         <CardContent className="space-y-4">
           {/* รูปเดิม */}
           <div className="space-y-2">
@@ -409,9 +414,19 @@ export default function MediaStep({
 
       {/* ====== อัปโหลดไฟล์ใหม่ ====== */}
       <Card className="shadow-sm">
-        <CardHeader className="py-4">
-          <CardTitle className="text-lg">อัปโหลดไฟล์ใหม่ (ไม่บังคับ)</CardTitle>
+        <CardHeader className="py-6">
+          <div className="flex flex-col items-center gap-2">
+            <div className="text-2xl">⬆️</div>
+            <CardTitle className="text-xl">
+              อัปโหลดไฟล์ใหม่ (ไม่บังคับ)
+            </CardTitle>
+            <p className="text-xs text-muted-foreground text-center">
+              รองรับรูป {MAX_IMAGES} รูป และวิดีโอ {MAX_VIDEOS} ไฟล์
+              ขนาดสูงสุดตามที่กำหนด
+            </p>
+          </div>
         </CardHeader>
+
         <CardContent className="space-y-5">
           {/* รูปภาพใหม่ */}
           <div className="space-y-2">
@@ -430,9 +445,9 @@ export default function MediaStep({
               multiple
               onChange={(e) => {
                 handleAddImages(e.target.files);
-                // เคลียร์ค่า เพื่อเลือกไฟล์ซ้ำชื่อเดิมได้
                 e.target.value = "";
               }}
+              disabled={!canAddMoreImages}
             />
 
             {!!imagePreviews.length && (
@@ -487,6 +502,7 @@ export default function MediaStep({
                 await handleAddVideos(e.target.files);
                 e.target.value = "";
               }}
+              disabled={!canAddMoreVideos}
             />
 
             {!!videoPreviews.length && (

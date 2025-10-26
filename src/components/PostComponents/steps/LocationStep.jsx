@@ -117,7 +117,7 @@ export default function LocationStep({ errors, resetKey }) {
   const currentProvince = form.watch("Province");
   const currentDistrict = form.watch("District");
 
-  // ถ้า province จากข้อมูลเดิมไม่อยู่ใน allowed จะถือว่าไม่ได้เลือก (ป้องกัน dropdown ค้างค่า)
+  // ถ้า province จากข้อมูลเดิมไม่อยู่ใน allowed จะถือว่าไม่ได้เลือก
   const effectiveProvince = isAllowedProvince(currentProvince)
     ? currentProvince
     : "";
@@ -156,125 +156,138 @@ export default function LocationStep({ errors, resetKey }) {
 
   return (
     <Card className="shadow-sm">
-      <CardHeader className="py-4">
-        <CardTitle className="text-lg">ที่ตั้งทรัพย์</CardTitle>
+      {/* Header แบบมีไอคอนและคำอธิบาย ให้โทนเดียวกับ TitleStep */}
+      <CardHeader className="py-6">
+        <div className="flex flex-col items-center gap-2">
+          <span className="text-3xl" role="img" aria-label="pin">
+            📍
+          </span>
+          <CardTitle className="text-xl">ที่ตั้งทรัพย์สิน</CardTitle>
+          <p className="text-xs text-muted-foreground text-center">
+            ระบุจังหวัด อำเภอ ตำบล และที่อยู่ให้ครบถ้วน
+            เพื่อให้ผู้ซื้อหาเจอง่ายและนัดดูสะดวก
+          </p>
+        </div>
       </CardHeader>
 
-      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Province */}
-        <div className="md:col-span-2">
-          <label className="block mb-1">จังหวัด</label>
-          <Select
-            key={`prov-sel-${resetKey}`}
-            value={effectiveProvince || ""}
-            onValueChange={handleProvinceChange}
-            disabled={loading}
-          >
-            <SelectTrigger className="h-11 cursor-pointer">
-              <SelectValue
-                placeholder={loading ? "กำลังโหลด..." : "เลือกจังหวัด"}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {allowedProvinceList.map((prov) => (
-                <SelectItem
-                  key={prov.id}
-                  value={prov.name_th}
-                  className="cursor-pointer"
-                >
-                  {prov.name_th}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {errors?.Province && (
-            <p className="text-red-500 text-sm mt-1">
-              {errors.Province.message}
-            </p>
-          )}
+      {/* ====== ปรับเป็น 3 คอลัมน์บน md ขึ้นไป ====== */}
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Province */}
+          <div className="min-w-0">
+            <label className="block mb-1">จังหวัด</label>
+            <Select
+              key={`prov-sel-${resetKey}`}
+              value={effectiveProvince || ""}
+              onValueChange={handleProvinceChange}
+              disabled={loading}
+            >
+              <SelectTrigger className="h-11 w-full cursor-pointer">
+                <SelectValue
+                  placeholder={loading ? "กำลังโหลด..." : "เลือกจังหวัด"}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {allowedProvinceList.map((prov) => (
+                  <SelectItem
+                    key={prov.id}
+                    value={prov.name_th}
+                    className="cursor-pointer"
+                  >
+                    {prov.name_th}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors?.Province && (
+              <p className="text-red-500 text-sm mt-1">
+                {errors.Province.message}
+              </p>
+            )}
+          </div>
+
+          {/* District */}
+          <div className="min-w-0">
+            <label className="block mb-1">อำเภอ/เขต</label>
+            <Select
+              key={`dist-sel-${resetKey}-${effectiveProvince}`}
+              value={currentDistrict || ""}
+              onValueChange={handleDistrictChange}
+              disabled={loading || derivedDistricts.length === 0}
+            >
+              <SelectTrigger className="h-11 w-full cursor-pointer">
+                <SelectValue
+                  placeholder={
+                    derivedDistricts.length
+                      ? "เลือกอำเภอ/เขต"
+                      : "เลือกจังหวัดก่อน"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {derivedDistricts.map((d) => (
+                  <SelectItem
+                    key={d.id}
+                    value={d.name_th}
+                    className="cursor-pointer"
+                  >
+                    {d.name_th}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors?.District && (
+              <p className="text-red-500 text-sm mt-1">
+                {errors.District.message}
+              </p>
+            )}
+          </div>
+
+          {/* Subdistrict */}
+          <div className="min-w-0">
+            <label className="block mb-1">ตำบล/แขวง</label>
+            <Select
+              key={`subdist-sel-${resetKey}-${currentDistrict}`}
+              value={form.watch("Subdistrict") || ""}
+              onValueChange={(v) =>
+                form.setValue("Subdistrict", v, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                })
+              }
+              disabled={loading || derivedSubDistricts.length === 0}
+            >
+              <SelectTrigger className="h-11 w-full cursor-pointer">
+                <SelectValue
+                  placeholder={
+                    derivedSubDistricts.length
+                      ? "เลือกตำบล/แขวง"
+                      : "เลือกอำเภอก่อน"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {derivedSubDistricts.map((sd) => (
+                  <SelectItem
+                    key={sd.id}
+                    value={sd.name_th}
+                    className="cursor-pointer"
+                  >
+                    {sd.name_th}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors?.Subdistrict && (
+              <p className="text-red-500 text-sm mt-1">
+                {errors.Subdistrict.message}
+              </p>
+            )}
+          </div>
         </div>
 
-        {/* District */}
+        {/* Address */}
         <div>
-          <label className="block mb-1">อำเภอ/เขต</label>
-          <Select
-            key={`dist-sel-${resetKey}-${effectiveProvince}`}
-            value={currentDistrict || ""}
-            onValueChange={handleDistrictChange}
-            disabled={loading || derivedDistricts.length === 0}
-          >
-            <SelectTrigger className="h-11 cursor-pointer">
-              <SelectValue
-                placeholder={
-                  derivedDistricts.length
-                    ? "เลือกอำเภอ/เขต"
-                    : "เลือกจังหวัดก่อน"
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {derivedDistricts.map((d) => (
-                <SelectItem
-                  key={d.id}
-                  value={d.name_th}
-                  className="cursor-pointer"
-                >
-                  {d.name_th}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {errors?.District && (
-            <p className="text-red-500 text-sm mt-1">
-              {errors.District.message}
-            </p>
-          )}
-        </div>
-
-        {/* Subdistrict */}
-        <div>
-          <label className="block mb-1">ตำบล/แขวง</label>
-          <Select
-            key={`subdist-sel-${resetKey}-${currentDistrict}`}
-            value={form.watch("Subdistrict") || ""}
-            onValueChange={(v) =>
-              form.setValue("Subdistrict", v, {
-                shouldDirty: true,
-                shouldValidate: true,
-              })
-            }
-            disabled={loading || derivedSubDistricts.length === 0}
-          >
-            <SelectTrigger className="h-11 cursor-pointer">
-              <SelectValue
-                placeholder={
-                  derivedSubDistricts.length
-                    ? "เลือกตำบล/แขวง"
-                    : "เลือกอำเภอก่อน"
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {derivedSubDistricts.map((sd) => (
-                <SelectItem
-                  key={sd.id}
-                  value={sd.name_th}
-                  className="cursor-pointer"
-                >
-                  {sd.name_th}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {errors?.Subdistrict && (
-            <p className="text-red-500 text-sm mt-1">
-              {errors.Subdistrict.message}
-            </p>
-          )}
-        </div>
-
-        {/* Address (ตาม postLocation ใช้ input ธรรมดา) */}
-        <div className="md:col-span-2">
           <label className="block mb-1">ที่อยู่</label>
           <Controller
             name="Address"
@@ -305,7 +318,7 @@ export default function LocationStep({ errors, resetKey }) {
         </div>
 
         {/* LinkMap */}
-        <div className="md:col-span-2">
+        <div>
           <label className="block mb-1">ลิงก์แผนที่ (Google Maps/ฯลฯ)</label>
           <Controller
             name="LinkMap"
