@@ -55,8 +55,8 @@ export default function NotificationFilters({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">ทั้งหมด</SelectItem>
-            <SelectItem value="UNREAD">ยังไม่อ่าน</SelectItem>
-            <SelectItem value="READ">อ่านแล้ว</SelectItem>
+            {/* <SelectItem value="UNREAD">ยังไม่อ่าน</SelectItem>
+            <SelectItem value="READ">อ่านแล้ว</SelectItem> */}
           </SelectContent>
         </Select>
       </div>
