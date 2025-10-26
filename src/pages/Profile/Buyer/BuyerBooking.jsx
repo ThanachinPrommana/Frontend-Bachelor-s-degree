@@ -10,24 +10,42 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { RefreshCcw, ChevronLeft, ChevronRight } from "lucide-react";
+import { RefreshCcw, ChevronLeft, ChevronRight, Trash2, Loader2 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { fmtDateTimeTH } from "@/lib/bookingUtils";
 
-import { getProfile as apiGetProfile } from "@/api/user";
-
-// ✅ ส่วนกลาง
-import { fmtDateTimeTH, maskEmail } from "@/lib/bookingUtils";
-import StatusBadge from "@/components/booking/StatusBadge";
 import SlipButton from "@/components/booking/SlipButton";
+import UploadFinalSlipButton from "@/components/UploadFinalSlipButton";
+import StatusBadge from "@/components/StatusBadge";
+import { useNavigate } from "react-router";
+import { apiClient } from "@/api/authconfig";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
+
 
 export default function BuyerBooking() {
   const { toast } = useToast();
+  const { authUser, revalidateUser, loading: authLoading } = useAuth();
 
-  const [bookings, setBookings] = useState([]); // ฉันเป็นผู้จอง (buyer)
-  const [loading, setLoading] = useState(false);
+  const [bookings, setBookings] = useState([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const navigate = useNavigate()
 
-  // search (debounce)
+
+  // Search (debounce)
   const [rawQ, setRawQ] = useState("");
   const [q, setQ] = useState("");
   useEffect(() => {
@@ -35,13 +53,15 @@ export default function BuyerBooking() {
     return () => clearTimeout(t);
   }, [rawQ]);
 
-  // pagination
+  // Pagination
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  // slip preview
+  // Slip preview
   const [slipOpen, setSlipOpen] = useState(false);
   const [slipUrl, setSlipUrl] = useState("");
+
+  const [deletingId, setDeletingId] = useState(null);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -49,13 +69,12 @@ export default function BuyerBooking() {
 
     return bookings.filter((b) =>
       [
-        b?.post?.title,
-        b?.status,
-        b?.slot?.start,
-        b?.slot?.end,
-        // ฝั่ง Buyer แสดงข้อมูลของ "ผู้ขาย"
-        b?.seller?.name,
-        b?.seller?.email,
+        b?.propertyUnit?.propertyPost?.Property_Name,
+        b?.bookingStatus,
+        b?.dateTimeSlot?.startTime,
+        b?.dateTimeSlot?.endTime,
+        b?.Buyer?.user?.First_name, // ค้นหาจากชื่อตัวเอง
+        b?.Buyer?.user?.Last_name,
       ]
         .filter(Boolean)
         .some((x) => String(x).toLowerCase().includes(term))
@@ -69,30 +88,60 @@ export default function BuyerBooking() {
     return filtered.slice(start, start + pageSize);
   }, [filtered, currentPage]);
 
-  async function load() {
+  useEffect(() => {
+    if (authUser?.Buyer?.Booking) {
+      const userBookings = authUser.Buyer.Booking;
+      setBookings(Array.isArray(userBookings) ? userBookings : []);
+    } else {
+      setBookings([]);
+    }
+  }, [authUser]);
+
+  async function handleRefresh() {
+    setIsRefreshing(true);
     try {
-      setLoading(true);
-      const res = await apiGetProfile();
-      const byMe =
-        res?.bookings || res?.bookingsByMe || res?.buyerBookings || [];
-      setBookings(Array.isArray(byMe) ? byMe : []);
-      setPage(1);
+      await revalidateUser();
+      toast({ title: "ข้อมูลล่าสุดแล้ว" });
     } catch (e) {
       console.error(e);
       toast({
-        title: "โหลดข้อมูลไม่สำเร็จ",
+        title: "รีเฟรชข้อมูลไม่สำเร็จ",
         description: e?.response?.data?.message || "โปรดลองอีกครั้ง",
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      setIsRefreshing(false);
     }
   }
+  async function handleDelete(bookingId) {
+    setDeletingId(bookingId);
+    try {
+      // ใช้ apiClient.delete และ path ไม่ต้องมี /api/ 
+      // เพราะ baseURL ใน apiClient จัดการให้แล้ว
+      const res = await apiClient.delete(`/user/remove/${bookingId}`);
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      // Axios response ที่สำเร็จจะอยู่ใน res.data
+      const data = res.data;
+
+      toast({
+        title: "ยกเลิกการจองสำเร็จ",
+        description: data.message,
+      });
+
+      await revalidateUser(); // รีเฟรชข้อมูลในตาราง
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: "ยกเลิกการจองไม่สำเร็จ",
+        // (สำคัญ) Axios error message ที่มาจาก server จะอยู่ใน
+        // e.response.data.message
+        description: e?.response?.data?.message || e.message || "โปรดลองอีกครั้ง",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingId(null); // ลบเสร็จสิ้น (ไม่ว่าจะสำเร็จหรือล้มเหลว)
+    }
+  }
 
   useEffect(() => {
     setPage(1);
@@ -111,6 +160,7 @@ export default function BuyerBooking() {
     </tr>
   );
 
+
   return (
     <div className="space-y-4">
       {/* Header + search */}
@@ -118,13 +168,20 @@ export default function BuyerBooking() {
         <CardContent className="p-4 flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
           <h3 className="font-semibold flex-1">การจองของฉัน</h3>
           <Input
-            placeholder="ค้นหา (ประกาศ/ผู้ขาย/สถานะ/เวลา)"
+            placeholder="ค้นหา (ประกาศ/สถานะ/เวลา)"
             className="md:max-w-xs"
             value={rawQ}
             onChange={(e) => setRawQ(e.target.value)}
           />
-          <Button variant="outline" onClick={load}>
-            <RefreshCcw className="w-4 h-4 mr-2" /> รีเฟรช
+          <Button
+            variant="outline"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+          >
+            <RefreshCcw
+              className={`w-4 h-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
+            />{" "}
+            รีเฟรช
           </Button>
         </CardContent>
       </Card>
@@ -136,7 +193,7 @@ export default function BuyerBooking() {
             <thead className="bg-muted">
               <tr>
                 <th className="text-left px-4 py-2">ประกาศ</th>
-                <th className="text-left px-4 py-2">ผู้ขาย</th>
+                <th className="text-left px-4 py-2">ผู้ขาย (เจ้าของโพสต์)</th>
                 <th className="text-left px-4 py-2">ช่วงเวลา</th>
                 <th className="text-left px-4 py-2">สถานะ</th>
                 <th className="text-left px-4 py-2">สลิป</th>
@@ -144,7 +201,7 @@ export default function BuyerBooking() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {authLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={`sk-${i}`} className="border-t">
                     {[...Array(6)].map((__, j) => (
@@ -157,53 +214,141 @@ export default function BuyerBooking() {
               ) : paged.length === 0 ? (
                 <EmptyMessage />
               ) : (
-                paged.map((b) => (
-                  <tr key={b.id} className="border-t">
-                    {/* ประกาศ (ลิงก์) */}
-                    <td className="px-4 py-2">
-                      {b.post?.title ? (
-                        <a href={`/post/${b.postId}`} className="underline">
-                          {b.post.title}
-                        </a>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
+                paged.map((b) => {
+                  // --- (เพิ่ม) Logic สำหรับค้นหาสลิปที่ถูกต้อง ---
+                  const relevantUnitId = b.propertyUnitId;
+                  const allUserPayments = authUser?.Payment || [];
 
-                    {/* ผู้ขาย */}
-                    <td className="px-4 py-2">
-                      {b.seller?.name
-                        ? b.seller.name
-                        : b.seller?.email
-                        ? maskEmail(b.seller.email)
-                        : "-"}
-                    </td>
+                  const thisBookingPayment = relevantUnitId
+                    ? allUserPayments.find(p => p.unitId === relevantUnitId)
+                    : null;
 
-                    {/* ช่วงเวลา */}
-                    <td className="px-4 py-2">
-                      {b.slot
-                        ? `${fmtDateTimeTH(b.slot.start)} – ${fmtDateTimeTH(
-                            b.slot.end
-                          )}`
-                        : "-"}
-                    </td>
+                  const slipForThisBooking = thisBookingPayment?.Payment_Slip;
 
-                    {/* สถานะ */}
-                    <td className="px-4 py-2">
-                      <StatusBadge status={b.status} />
-                    </td>
+                  // (ใหม่) ตรวจสอบเวลาเพื่อกำหนดว่าสามารถลบได้หรือไม่
+                  const appointmentStartTime = b?.dateTimeSlot?.startTime;
+                  const now = new Date();
+                  const startTime = new Date(appointmentStartTime);
+                  // (ใหม่) canDelete จะเป็น true ถ้า startTime มีค่า และ startTime อยู่ในอนาคต (มากกว่าเวลาปัจจุบัน)
+                  const canDelete = appointmentStartTime && startTime > now;
 
-                    {/* สลิป */}
-                    <td className="px-4 py-2">
-                      <SlipButton url={b.slipUrl} onOpen={openSlip} />
-                    </td>
+                  const showDeleteButton = canDelete || b.bookingStatus === 'COMPLETED';
+                  // ==========================================================
+                  // (สำคัญ) เพิ่ม CONSOLE.LOG ตรงนี้
+                  // ==========================================================
+                  //               console.log(`
+                  // ----- DEBUGGING ROW -----
+                  // Booking ID: ${b.id}
+                  // Unit ID to find: ${relevantUnitId}
+                  // All Payments Received by Frontend:`, allUserPayments);
+                  //               console.log(`Found Payment for this unit:`, thisBookingPayment);
+                  //               console.log(`Final Slip URL: ${slipForThisBooking}`);
+                  //               console.log(`-------------------------`);
+                  // ==========================================================
+                  // --- สิ้นสุดส่วนที่เพิ่ม ---
 
-                    {/* การดำเนินการ */}
-                    <td className="px-4 py-2 space-x-2">
-                      <span className="text-muted-foreground">—</span>
-                    </td>
-                  </tr>
-                ))
+                  return (
+                    <tr key={b.id} className="border-t">
+                      {/* 1. แสดงชื่อประกาศ */}
+                      <td className="px-4 py-2">
+                        {b.propertyUnit?.propertyPost?.Property_Name ? (
+                          <Button
+                            variant="link"
+                            // (สำคัญ) p-0 h-auto เพื่อให้ปุ่มไม่ดัน layout ของตาราง
+                            className="p-0 h-auto font-normal text-left cursor-pointer text-blue-500 "
+                            onClick={() => {
+                              navigate(`/deposit/${b.propertyUnit.propertyPost.id}`)
+                            }}
+                          >
+                            {b.propertyUnit.propertyPost.Property_Name}
+                          </Button>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+
+                      {/* 2. แสดงชื่อผู้ขาย (Seller) */}
+                      <td className="px-4 py-2">
+                        {`${b.Seller?.user?.First_name || ""} ${b.Seller?.user?.Last_name || ""
+                          }`.trim() || "-"}
+                      </td>
+
+                      {/* 3. แสดงช่วงเวลา */}
+                      <td className="px-4 py-2">
+                        {b.dateTimeSlot
+                          ? `${fmtDateTimeTH(
+                            b.dateTimeSlot.startTime
+                          )} – ${fmtDateTimeTH(b.dateTimeSlot.endTime)}`
+                          : "-"}
+                      </td>
+
+                      {/* 4. แสดงสถานะ */}
+                      <td className="px-4 py-2">
+                        <StatusBadge status={b.bookingStatus} />
+                      </td>
+
+                      {/* 5. (สำคัญ) แก้ไขการแสดงสลิป */}
+                      <td className="px-4 py-2">
+                        {/* (สำคัญ) SlipButton จะทำงานได้ทันที */}
+                        <SlipButton url={slipForThisBooking} />
+                      </td>
+
+
+                      {/* 6. (สำคัญ) แก้ไขการดำเนินการ ใช้ logic สลับปุ่ม */}
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-1 justify-center">
+
+                          {/* Show Delete Button if canDeleteBasedOnTime OR status is COMPLETED */}
+                          {showDeleteButton && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-red-600 hover:text-red-700"
+                                  disabled={deletingId === b.id}
+                                >
+                                  {deletingId === b.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="w-4 h-4" />
+                                  )}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>ยืนยันการยกเลิกการจอง?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    การดำเนินการนี้จะไม่สามารถย้อนกลับได้ ระบบจะคืนช่องเวลานี้ให้เป็น "ว่าง" และส่งแจ้งเตือนไปยังผู้ขาย.
+                                    {b.bookingStatus === 'COMPLETED' && <span className="font-semibold block mt-2 text-orange-600">หมายเหตุ: การจองนี้เสร็จสมบูรณ์แล้ว การลบจะลบเฉพาะประวัติการจอง ไม่ส่งผลต่อสถานะเอกสาร.</span>}
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDelete(b.id)}
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    ยืนยัน
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+
+                          {/* Show Upload Button ONLY if Delete Button is NOT shown */}
+                          {!showDeleteButton && (
+                            <UploadFinalSlipButton
+                              booking={b}
+                              onUploadSuccess={revalidateUser}
+                            />
+                          )}
+
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -238,21 +383,25 @@ export default function BuyerBooking() {
       </div>
 
       {/* Slip Preview Dialog */}
+      {/* Slip Preview Dialog */}
       <Dialog open={slipOpen} onOpenChange={setSlipOpen}>
-        <DialogContent className="sm:max-w-xl">
+        {/* (แนะนำ) เพิ่มความสูงให้ Dialog เพื่อให้ iframe แสดงผลได้เต็มที่ */}
+        <DialogContent className="sm:max-w-2xl h-[85vh]">
           <DialogHeader>
             <DialogTitle>สลิปการชำระเงิน</DialogTitle>
           </DialogHeader>
-          <div className="w-full">
+
+          {/* (สำคัญ) แก้ไขส่วนนี้ทั้งหมด */}
+          <div className="w-full h-full border rounded-md overflow-hidden">
             {slipUrl ? (
-              <img
+              <iframe
                 src={slipUrl}
-                alt="Slip Preview"
-                className="w-full h-auto rounded-md"
+                title="Stripe Receipt"
+                className="w-full h-full border-0"
               />
             ) : (
-              <div className="text-center text-muted-foreground py-8">
-                ไม่พบสลิป
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                ไม่พบ URL ของสลิป
               </div>
             )}
           </div>

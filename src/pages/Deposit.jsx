@@ -4,7 +4,9 @@ import {
   BedSingle, Bath, Grid2x2, Calendar, Car, Home,
   Building, Phone, MapPin, Tag, CheckCircle, Info, Video,
   Loader2,
-  UserRound
+  UserRound,
+  MessageSquare,
+  Facebook
 } from "lucide-react";
 
 import { apiClient } from "@/api/authconfig";
@@ -30,18 +32,9 @@ const statusUnit = [
 const categorythai = [
   { id: "cmegzfdya0006w2bwq5d8alc7", label: "คอนโดมิเนียม" },
   { id: "cmegzfhx70007w2bwp63cbc1w", label: "บ้านเดี่ยว" },
-  { id: "cmegzfls20008w2bwf0arh8jq", label: "ที่ดิน" },
   { id: "cmegzfov30009w2bwrxjpt7xn", label: "วิลล่า" },
   { id: "cmegzft08000aw2bwx91l68z9", label: "ทาวน์เฮาส์" },
-  { id: "cmegzg3t1000cw2bw8shu6whw", label: "ตึกแถว/ช้อปเฮาส์" },
-  { id: "cmegzg9ez000dw2bwgkdliy1a", label: "อพาร์ตเมนต์" },
-  { id: "cmegzgcmy000ew2bw72nen7zo", label: "เพนท์เฮาส์" },
-  { id: "cmegzgfvz000fw2bwgppl0ci5", label: "รีสอร์ท" },
-  { id: "cmegzgif1000gw2bw1z7xda7u", label: "โรงแรม" },
-  { id: "cmegzgky4000hw2bwe83xrvrg", label: "ออฟฟิศ" },
-  { id: "cmegzgq6g000iw2bwl51st9pg", label: "อาคารพาณิชย์" },
-  { id: "cmegzgu1s000jw2bwdhco4e1r", label: "โรงงาน" },
-  { id: "cmegzgxsj000kw2bwebelhpmm", label: "โกดัง" },
+ 
 ]
 
 const statusSellerThai = [
@@ -210,7 +203,7 @@ const Deposit = () => {
                 <img
                   src={img.secure_url}
                   alt={`${post.Property_Name} thumbnail ${index + 1}`}
-                  className={`rounded-2xl w-full h-full object-cover shadow-md transition-all duration-200 ${mainImage === img.secure_url ? "ring-4 ring-blue-500" : "hover:opacity-80"
+                  className={`rounded-2xl w-[250px] h-[240px] object-cover shadow-md transition-all duration-200 ${mainImage === img.secure_url ? "ring-4 ring-blue-500" : "hover:opacity-80"
                     }`}
                 />
               </div>
@@ -236,7 +229,7 @@ const Deposit = () => {
                 <DetailItem icon={<Home className="size-7 text-blue-600" />} label="จำนวนชั้น" value={post.floor} />
                 <DetailItem icon={<Car className="size-7 text-blue-600" />} label="ที่จอดรถ" value={post.Parking_Space} />
                 <DetailItem icon={<Calendar className="size-7 text-blue-600" />} label="สร้างเมื่อปี" value={post.Year_Built} />
-                <DetailItem icon={<Tag className="size-7 text-blue-600" />} label="สถานะ" value={post.Status_post === "CONFIRMED" ? "พร้อมขาย/เช่า" : post.Status_post} />
+                <DetailItem icon={<Tag className="size-7 text-blue-600" />} label="สถานะ" value={post.Status_post === "CONFIRMED" ? "พร้อมขาย" : post.Status_post} />
               </div>
             </div>
 
@@ -310,7 +303,7 @@ const Deposit = () => {
                   <Video className="text-blue-600" />
                   วิดีโอแนะนำ
                 </h3>
-                <div className="rounded-lg overflow-hidden space-y-2">
+                <div className="rounded-lg overflow-hidden space-y-2 ">
                   {post.Video.map((video, index) => {
                     return (
                       <video
@@ -318,7 +311,7 @@ const Deposit = () => {
                         src={video.secure_url}
                         controls
                         width="100%"
-                        className="rounded-lg"
+                        className="rounded-lg w-full h-[500px]"
                       />
                     )
                   })}
@@ -410,10 +403,44 @@ const Deposit = () => {
                 )}
                 <div className="flex flex-col">
                   <p className="font-semibold text-lg text-gray-900">{`${post.user?.First_name || ""} ${post.user?.Last_name || ""}`}</p>
-                  <div className="flex items-center gap-2 text-gray-600 mt-1">
-                    <Phone size={16} />
-                    <span>{post.Phone || "ไม่มีข้อมูลติดต่อ"}</span>
+                 <div className="flex items-center gap-x-3 text-gray-600 mt-1"> {/* Use one flex container */}
+                    {/* Phone */}
+                    <div className="flex items-center gap-1"> {/* Sub-flex for phone icon+number */}
+                      <Phone size={16} />
+                      <span>{post.Phone || "ไม่มีข้อมูลติดต่อ"}</span>
+                    </div>
+
+                    {/* Line Icon/Link (Conditional) */}
+                    {post?.Link_line && (
+                      <a
+                        href={`https://line.me/ti/p/~${post.Link_line}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`Line ID: ${post.Link_line}`}
+                        className="text-green-600 hover:text-green-800 transition-colors"
+                        aria-label="ติดต่อทาง Line"
+                      >
+                        <MessageSquare size={20} />
+                      </a>
+                    )}
+
+                    {/* Facebook Icon/Link (Conditional) */}
+                    {post?.Link_facbook && (
+                      <a
+                        href={post.Link_facbook}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="ไปที่ Facebook"
+                        className="text-blue-700 hover:text-blue-900 transition-colors"
+                        aria-label="ไปที่ Facebook"
+                      >
+                        <Facebook size={20} />
+                      </a>
+                    )}
                   </div>
+                  {/* ========================================== */}
+
+               
                   {post.seller?.Status ? (
                     <div className="flex items-center space-x-2 mt-2">
                       <p className="text-gray-600">สถานะผู้ประกาศ:</p>
@@ -422,6 +449,7 @@ const Deposit = () => {
                       </span>
                     </div>
                   ) : null}
+
 
                 </div>
 

@@ -18,18 +18,9 @@ import { HeartCrack, Loader2 } from 'lucide-react';
 const categories = [
   { id: "cmegzfdya0006w2bwq5d8alc7", name: "คอนโด" },
   { id: "cmegzfhx70007w2bwp63cbc1w", name: "บ้านเดี่ยว" },
-  { id: "cmegzfls20008w2bwf0arh8jq", name: "ที่ดิน" },
   { id: "cmegzfov30009w2bwrxjpt7xn", name: "วิลล่า" },
   { id: "cmegzft08000aw2bwx91l68z9", name: "ทาวน์เฮ้าส์" },
-  { id: "cmegzg3t1000cw2bw8shu6whw", name: "อาคารพาณิชย์" },
-  { id: "cmegzg9ez000dw2bwgkdliy1a", name: "อพาร์ตเมนต์" },
-  { id: "cmegzgcmy000ew2bw72nen7zo", name: "เพนท์เฮ้าส์" },
-  { id: "cmegzgfvz000fw2bwgppl0ci5", name: "รีสอร์ท" },
-  { id: "cmegzgif1000gw2bw1z7xda7u", name: "โรงแรม" },
-  { id: "cmegzgky4000hw2bwe83xrvrg", name: "ออฟฟิศ" },
-  { id: "cmegzgq6g000iw2bwl51st9pg", name: "อาคารสำนักงาน" },
-  { id: "cmegzgu1s000jw2bwdhco4e1r", name: "โรงงาน" },
-  { id: "cmegzgxsj000kw2bwebelhpmm", name: "โกดัง" }
+
 ];
 
 const PROVINCE_URL = "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/province.json";
@@ -37,6 +28,14 @@ const DISTRICT_URL = "https://raw.githubusercontent.com/kongvut/thai-province-da
 const SUBDISTRICT_URL = "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/sub_district.json";
 
 // --- Helper Functions ---
+const METRO_PROVINCES = [
+  "กรุงเทพมหานคร",
+  "นนทบุรี",
+  "ปทุมธานี",
+  "สมุทรปราการ",
+  "สมุทรสาคร",
+  "นครปฐม",
+];
 
 const formatPosts = (posts) => {
   if (!Array.isArray(posts)) return [];
@@ -97,9 +96,17 @@ const Home = () => {
           axios.get(DISTRICT_URL),
           axios.get(SUBDISTRICT_URL)
         ]);
-        setAllProvinces(provincesRes.data);
-        setAllDistricts(districtsRes.data);
-        setAllSubDistricts(subDistrictsRes.data);
+        const provRes = provincesRes.data;
+        const distRes = districtsRes.data;
+        const subDistRes = subDistrictsRes.data;
+
+        const metroProvinces = METRO_PROVINCES.map((name) =>
+          provRes.find((p) => p.name_th === name)
+        ).filter(Boolean);
+
+        setAllProvinces(metroProvinces); // 👈 ใช้ข้อมูลที่กรองแล้ว
+        setAllDistricts(distRes);
+        setAllSubDistricts(subDistRes);
       } catch (error) {
         console.error("Failed to fetch address data:", error);
       } finally {
@@ -208,7 +215,7 @@ const Home = () => {
               ค้นหาอสังหาริมทรัพย์ที่คุณต้องการ
             </h2>
             <p className="text-center text-blue-100 mt-2">
-              ค้นหาบ้าน คอนโด หรือที่ดินในฝันของคุณได้ง่ายๆ
+              ค้นหาบ้าน คอนโด ในฝันของคุณได้ง่ายๆ
             </p>
           </div>
 
@@ -263,7 +270,7 @@ const Home = () => {
                         setValue('subdistrict', '');
                       }}
                     >
-                      <option value="">{isAddressLoading ? "กำลังโหลด..." : "ทุกจังหวัด"}</option>
+                      <option value="">{isAddressLoading ? "กำลังโหลด..." : "เลือกจังหวัด (กทม./ปริมณฑล)"}</option>
                       {allProvinces.map(p => (
                         <option key={p.id} value={p.name_th}>{p.name_th}</option>
                       ))}

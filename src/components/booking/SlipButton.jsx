@@ -1,14 +1,24 @@
-// src/components/booking/SlipButton.jsx
-import { Button } from "@/components/ui/button";
-import { Image as ImageIcon } from "lucide-react";
+// File: src/components/booking/SlipButton.jsx
 
-export default function SlipButton({ url, onOpen }) {
-  return url ? (
-    <Button variant="outline" size="sm" onClick={() => onOpen(url)}>
-      <ImageIcon className="w-4 h-4 mr-2" />
-      ดูสลิป
+import { Button } from "@/components/ui/button";
+
+export default function SlipButton({ url }) {
+  // ถ้าไม่มี URL ให้แสดงเป็นขีด
+  if (!url || typeof url !== 'string' || !url.startsWith('http')) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  
+  // ถ้ามี URL ให้แสดงเป็นปุ่มที่กดแล้วเปลี่ยนหน้าไปยัง URL นั้น
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      asChild
+    >
+      {/* (สำคัญ) ลบ target="_blank" และ rel="..." ออก */}
+      <a href={url}> 
+        ดูสลิป
+      </a>
     </Button>
-  ) : (
-    <span className="text-muted-foreground">ไม่มี</span>
   );
 }

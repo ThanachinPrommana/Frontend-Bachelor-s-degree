@@ -75,14 +75,14 @@ export default function NotificationList({
                   <div className="flex items-center justify-between mt-0.5 text-[11px] text-slate-400">
                     <span>{new Date(n.createdAt).toLocaleString("th-TH")}</span>
                     <div className="flex items-center gap-2">
-                      {onMarkRead && (
+                      {/* {onMarkRead && (
                         <button
                           onClick={() => onMarkRead(n.id)}
                           className="text-slate-400 hover:text-green-600"
                         >
                           <CheckCheck className="w-3.5 h-3.5" />
                         </button>
-                      )}
+                      )} */}
                       {onRemove && (
                         <button
                           onClick={() => onRemove(n.id)}

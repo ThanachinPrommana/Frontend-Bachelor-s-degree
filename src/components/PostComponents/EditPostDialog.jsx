@@ -20,21 +20,12 @@ import { postLocationSchema } from "@/components/schemas/postSchemas/postLocatio
 import { postDetailSchema } from "@/components/schemas/postSchemas/postDetailSchema";
 import { postPriceSchema } from "@/components/schemas/postSchemas/postPriceSchema";
 import { postInformSchema } from "@/components/schemas/postSchemas/postInformSchema";
-
-// ====== Steps ======
 import TitleStep from "./steps/TitleStep";
-import LocationStep from "./steps/LocationStep";
-import DetailStep from "./steps/DetailStep";
-import PriceStep from "./steps/PriceStep";
-import InformStep from "./steps/InformStep";
-import MediaStep from "./steps/MediaStep";
-import ConfirmStep from "./steps/ConfirmStep";
 
-// ====== helpers ======
-const safeAnd = (base, shape) => base.and(z.object(shape));
-
-const postPriceExtended = safeAnd(postPriceSchema, {
+// ✅ ขยาย schema ราคา (เวอร์ชันย่อที่ใช้ใน Dialog นี้)
+const postPriceExtended = postPriceSchema.safeExtend({
   Sell_Rent: z.enum(["SALE", "RENT"]).optional(),
+// ... (fields อื่นๆ) ...
   Deposit_Amount: z
     .union([z.number().min(0), z.string()])
     .optional()

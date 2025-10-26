@@ -203,7 +203,7 @@ const VerifyEmail = () => {
               <input
                 type="number"
                 inputMode="numeric"
-                {...register("Monthly_Income", { valueAsNumber: true })}
+                {...register("Monthly_Income")}
                 placeholder="เช่น 30000"
                 className="w-full border border-gray-300 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 rounded-md p-2"
               />
@@ -222,7 +222,7 @@ const VerifyEmail = () => {
               <input
                 type="number"
                 inputMode="numeric"
-                {...register("Family_Size", { valueAsNumber: true })}
+                {...register("Family_Size")}
                 placeholder="เช่น 3"
                 className="w-full border border-gray-300 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 rounded-md p-2"
               />
