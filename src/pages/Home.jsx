@@ -1,17 +1,14 @@
 import { useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { Link } from "react-router-dom";
 import axios from "axios";
-import { AnimatePresence, motion } from "framer-motion";
-import { FaBalanceScale, FaMoneyBillWave, FaSearch } from "react-icons/fa";
+import { FaMoneyBillWave, FaSearch } from "react-icons/fa";
 
 import { apiClient } from "@/api/authconfig";
 import Searchbar from "@/components/form/Searchbar";
-import Buttons from "@/components/Buttons";
 import Cards from "@/components/Cards";
 import Credit from "@/components/Credit";
-import LoanCalculator from "@/components/form/LoanCalculator";
-import { HeartCrack, Loader2 } from 'lucide-react';
+import LoanCalculatorModal from "@/components/form/LoanCalculatorModal";
+import { HeartCrack, Loader2 } from "lucide-react";
 
 // --- Data and Constants ---
 
@@ -20,12 +17,14 @@ const categories = [
   { id: "cmegzfhx70007w2bwp63cbc1w", name: "บ้านเดี่ยว" },
   { id: "cmegzfov30009w2bwrxjpt7xn", name: "วิลล่า" },
   { id: "cmegzft08000aw2bwx91l68z9", name: "ทาวน์เฮ้าส์" },
-
 ];
 
-const PROVINCE_URL = "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/province.json";
-const DISTRICT_URL = "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/district.json";
-const SUBDISTRICT_URL = "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/sub_district.json";
+const PROVINCE_URL =
+  "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/province.json";
+const DISTRICT_URL =
+  "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/district.json";
+const SUBDISTRICT_URL =
+  "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/sub_district.json";
 
 // --- Helper Functions ---
 const METRO_PROVINCES = [
@@ -39,19 +38,26 @@ const METRO_PROVINCES = [
 
 const formatPosts = (posts) => {
   if (!Array.isArray(posts)) return [];
-  return posts.map(post => ({
+  return posts.map((post) => ({
     id: post.id,
     name: post.Property_Name,
     price: post.Price,
-    image: post.Image && post.Image.length > 0 ? post.Image[0].secure_url || post.Image[0].url : 'default-image-url.jpg'
+    image:
+      post.Image && post.Image.length > 0
+        ? post.Image[0].secure_url || post.Image[0].url
+        : "default-image-url.jpg",
   }));
 };
 
 const useDebounce = (value, delay) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
   useEffect(() => {
-    const handler = setTimeout(() => { setDebouncedValue(value); }, delay);
-    return () => { clearTimeout(handler); };
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    return () => {
+      clearTimeout(handler);
+    };
   }, [value, delay]);
   return debouncedValue;
 };
@@ -75,9 +81,14 @@ const Home = () => {
   // --- Form Management ---
   const { register, handleSubmit, watch, control, setValue } = useForm({
     defaultValues: {
-      searchQuery: "", province: "", district: "", subdistrict: "",
-      minPrice: "", maxPrice: "", categoryId: ""
-    }
+      searchQuery: "",
+      province: "",
+      district: "",
+      subdistrict: "",
+      minPrice: "",
+      maxPrice: "",
+      categoryId: "",
+    },
   });
 
   const selectedProvinceName = watch("province");
@@ -91,11 +102,13 @@ const Home = () => {
     const fetchAddressData = async () => {
       setIsAddressLoading(true);
       try {
-        const [provincesRes, districtsRes, subDistrictsRes] = await Promise.all([
-          axios.get(PROVINCE_URL),
-          axios.get(DISTRICT_URL),
-          axios.get(SUBDISTRICT_URL)
-        ]);
+        const [provincesRes, districtsRes, subDistrictsRes] = await Promise.all(
+          [
+            axios.get(PROVINCE_URL),
+            axios.get(DISTRICT_URL),
+            axios.get(SUBDISTRICT_URL),
+          ]
+        );
         const provRes = provincesRes.data;
         const distRes = districtsRes.data;
         const subDistRes = subDistrictsRes.data;
@@ -117,10 +130,18 @@ const Home = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedProvinceName && allProvinces.length > 0 && allDistricts.length > 0) {
-      const selectedProvince = allProvinces.find(p => p.name_th === selectedProvinceName);
+    if (
+      selectedProvinceName &&
+      allProvinces.length > 0 &&
+      allDistricts.length > 0
+    ) {
+      const selectedProvince = allProvinces.find(
+        (p) => p.name_th === selectedProvinceName
+      );
       if (selectedProvince) {
-        const districtsInProvince = allDistricts.filter(d => d.province_id === selectedProvince.id);
+        const districtsInProvince = allDistricts.filter(
+          (d) => d.province_id === selectedProvince.id
+        );
         setFilteredDistricts(districtsInProvince);
       }
     } else {
@@ -150,9 +171,7 @@ const Home = () => {
       if (selectedDistrict) {
         const subDistrictsInDistrict = allSubDistricts.filter(
           (sd) => String(sd.district_id) === String(selectedDistrict.id)
-
         );
-        console.log(subDistrictsInDistrict)
         setFilteredSubDistricts(subDistrictsInDistrict);
       }
     }
@@ -174,16 +193,17 @@ const Home = () => {
         if (filters.categoryId) activeFilters.categoryId = filters.categoryId;
         if (filters.province) activeFilters.province = filters.province;
         if (filters.district) activeFilters.district = filters.district;
-        if (filters.subdistrict) activeFilters.subdistrict = filters.subdistrict;
+        if (filters.subdistrict)
+          activeFilters.subdistrict = filters.subdistrict;
         if (filters.minPrice) activeFilters.minPrice = filters.minPrice;
         if (filters.maxPrice) activeFilters.maxPrice = filters.maxPrice;
 
         let response;
-        if (Object.values(filters).every(val => val === "")) {
-          response = await apiClient.get('/homepage/posts');
+        if (Object.values(filters).every((val) => val === "")) {
+          response = await apiClient.get("/homepage/posts");
           setDisplayedPosts(formatPosts(response.data));
         } else {
-          response = await apiClient.post('/search/filters', activeFilters);
+          response = await apiClient.post("/search/filters", activeFilters);
           setDisplayedPosts(formatPosts(response.data.posts));
         }
       } catch (error) {
@@ -220,7 +240,7 @@ const Home = () => {
           </div>
 
           {/* Search Form */}
-          <form onSubmit={handleSubmit(() => { })} className="p-6">
+          <form onSubmit={handleSubmit(() => {})} className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
               {/* Main Search */}
               <div className="md:col-span-2 lg:col-span-3">
@@ -246,8 +266,10 @@ const Home = () => {
                       className="p-3 border border-gray-300 rounded-lg w-full bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none pl-10"
                     >
                       <option value="">ทุกประเภทอสังหาริมทรัพย์</option>
-                      {categories.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -266,13 +288,19 @@ const Home = () => {
                       className="p-3 border border-gray-300 rounded-lg w-full bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none pl-10"
                       onChange={(e) => {
                         field.onChange(e);
-                        setValue('district', '');
-                        setValue('subdistrict', '');
+                        setValue("district", "");
+                        setValue("subdistrict", "");
                       }}
                     >
-                      <option value="">{isAddressLoading ? "กำลังโหลด..." : "เลือกจังหวัด (กทม./ปริมณฑล)"}</option>
-                      {allProvinces.map(p => (
-                        <option key={p.id} value={p.name_th}>{p.name_th}</option>
+                      <option value="">
+                        {isAddressLoading
+                          ? "กำลังโหลด..."
+                          : "เลือกจังหวัด (กทม./ปริมณฑล)"}
+                      </option>
+                      {allProvinces.map((p) => (
+                        <option key={p.id} value={p.name_th}>
+                          {p.name_th}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -288,15 +316,21 @@ const Home = () => {
                     <select
                       {...field}
                       className="p-3 border border-gray-300 rounded-lg w-full bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none pl-10"
-                      disabled={isAddressLoading || filteredDistricts.length === 0}
+                      disabled={
+                        isAddressLoading || filteredDistricts.length === 0
+                      }
                       onChange={(e) => {
                         field.onChange(e);
-                        setValue('subdistrict', '');
+                        setValue("subdistrict", "");
                       }}
                     >
-                      <option value="">{selectedProvinceName ? "ทุกอำเภอ" : "เลือกจังหวัดก่อน"}</option>
-                      {filteredDistricts.map(d => (
-                        <option key={d.id} value={d.name_th}>{d.name_th}</option>
+                      <option value="">
+                        {selectedProvinceName ? "ทุกอำเภอ" : "เลือกจังหวัดก่อน"}
+                      </option>
+                      {filteredDistricts.map((d) => (
+                        <option key={d.id} value={d.name_th}>
+                          {d.name_th}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -312,11 +346,17 @@ const Home = () => {
                     <select
                       {...field}
                       className="p-3 border border-gray-300 rounded-lg w-full bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none pl-10"
-                      disabled={isAddressLoading || filteredSubDistricts.length === 0}
+                      disabled={
+                        isAddressLoading || filteredSubDistricts.length === 0
+                      }
                     >
-                      <option value="">{selectedDistrictName ? "ทุกตำบล" : "เลือกอำเภอก่อน"}</option>
-                      {filteredSubDistricts.map(s => (
-                        <option key={s.id} value={s.name_th}>{s.name_th}</option>
+                      <option value="">
+                        {selectedDistrictName ? "ทุกตำบล" : "เลือกอำเภอก่อน"}
+                      </option>
+                      {filteredSubDistricts.map((s) => (
+                        <option key={s.id} value={s.name_th}>
+                          {s.name_th}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -377,7 +417,7 @@ const Home = () => {
         ) : (
           <div className="text-center py-16 bg-white rounded-xl shadow-md">
             <div className="text-6xl mb-4 ">
-              <HeartCrack className="mx-auto text-gray-300 w-32 h-32" /> {/* เพิ่ม w-32 h-32 */}
+              <HeartCrack className="mx-auto text-gray-300 w-32 h-32" />
             </div>
             <h3 className="text-xl font-semibold text-gray-700 mb-2">
               ไม่พบอสังหาริมทรัพย์ที่ตรงกับการค้นหาของคุณ
@@ -391,6 +431,7 @@ const Home = () => {
 
       <Credit />
 
+      {/* Floating Action Button */}
       <button
         onClick={() => setShowLoanPopup((prev) => !prev)}
         className="fixed bottom-6 right-6 z-40 bg-[#2c3e50] text-white border-0 shadow-lg rounded-full p-4 hover:bg-[#1a252f] transition-all duration-300 hover:scale-110"
@@ -399,33 +440,11 @@ const Home = () => {
         <FaMoneyBillWave size={24} />
       </button>
 
-      <AnimatePresence>
-        {showLoanPopup && (
-          <motion.div
-            key="loan-popup"
-            initial={{ opacity: 0, scale: 0.9, y: 30 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 30 }}
-            transition={{ duration: 0.3 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-          >
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <div className="bg-[#2c3e50] text-white p-4 rounded-t-xl flex justify-between items-center">
-                <h3 className="text-xl font-bold">คำนวณสินเชื่อบ้าน</h3>
-                <button
-                  className="text-white hover:text-gray-300 text-2xl"
-                  onClick={() => setShowLoanPopup(false)}
-                >
-                  &times;
-                </button>
-              </div>
-              <div className="p-6">
-                <LoanCalculator />
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Loan Calculator Modal */}
+      <LoanCalculatorModal
+        open={showLoanPopup}
+        onOpenChange={setShowLoanPopup}
+      />
     </div>
   );
 };

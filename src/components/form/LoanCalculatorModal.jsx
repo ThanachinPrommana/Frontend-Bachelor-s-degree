@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
-const LoanCalculator = () => {
+/* ========= ฟอร์มคำนวณ ========= */
+function LoanCalculatorForm() {
   const [formData, setFormData] = useState({
     occupation: "",
     houseType: "",
@@ -19,6 +20,7 @@ const LoanCalculator = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     console.log("คำนวณด้วยข้อมูล:", formData);
+    // TODO: ใส่สูตรคำนวณ/เรียก API ที่นี่
   };
 
   return (
@@ -26,6 +28,7 @@ const LoanCalculator = () => {
       <h2 className="text-center text-2xl font-semibold mb-6">
         ทดลองคำนวณวงเงินกู้สินเชื่อบ้าน เบื้องต้น
       </h2>
+
       <form
         onSubmit={handleSubmit}
         className="grid grid-cols-1 md:grid-cols-2 gap-6"
@@ -111,7 +114,7 @@ const LoanCalculator = () => {
           />
         </div>
 
-        {/* Monthly Income (ซ้ำกับ Net Income แต่แยกไว้ตามแบบ) */}
+        {/* Monthly Income */}
         <div>
           <label className="block mb-1 font-medium">Monthly income</label>
           <input
@@ -153,6 +156,62 @@ const LoanCalculator = () => {
       </form>
     </div>
   );
-};
+}
 
-export default LoanCalculator;
+/* ========= Modal (ควบคุมจากภายนอก) ========= */
+export default function LoanCalculatorModal({ open, onOpenChange }) {
+  // ปิดด้วย ESC + ล็อกสกอร์ลตอนเปิด
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => e.key === "Escape" && onOpenChange(false);
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onOpenChange]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      aria-modal="true"
+      role="dialog"
+      aria-labelledby="loan-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    >
+      {/* Backdrop โปร่งใส (ไม่ดำทึบ) */}
+      <div
+        className="absolute inset-0 bg-black/40"
+        onClick={() => onOpenChange(false)}
+      />
+
+      {/* กล่อง Modal */}
+      <div
+        className="relative z-10 w-[92vw] max-w-3xl rounded-lg bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between rounded-t-lg bg-gray-800 px-5 py-3 text-white">
+          <h3 id="loan-modal-title" className="text-lg font-semibold">
+            คำนวณสินเชื่อบ้าน
+          </h3>
+          <button
+            onClick={() => onOpenChange(false)}
+            aria-label="Close"
+            className="text-gray-300 hover:text-white text-2xl leading-none"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
+          <LoanCalculatorForm />
+        </div>
+      </div>
+    </div>
+  );
+}
