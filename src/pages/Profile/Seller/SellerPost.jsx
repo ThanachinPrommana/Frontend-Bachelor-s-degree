@@ -5,6 +5,7 @@ import React, {
   useDeferredValue,
   useCallback,
   useEffect,
+  useRef,
 } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
@@ -60,9 +61,17 @@ const isSafeHttpUrl = (u) => {
 
 const safeImgUrl = (maybe) => (isSafeHttpUrl(maybe) ? maybe : "");
 
-/** ตรงตาม Prisma: CONFIRMED | REJECTED | SOLD | HIDDEN | PENDING (อื่น ๆ) */
+/* ========= normalize status ========= */
+const normalizeStatus = (raw) => {
+  const up = String(raw || "").toUpperCase();
+  if (!up) return "PENDING";
+  if (up === "APPROVED") return "CONFIRMED";
+  return up;
+};
+
+/** ใช้: PENDING | CONFIRMED | SOLD | HIDDEN | REJECTED */
 const StatusBadge = ({ status }) => {
-  const s = (status || "").toUpperCase();
+  const s = normalizeStatus(status);
   if (s === "CONFIRMED") {
     return (
       <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
@@ -87,7 +96,7 @@ const StatusBadge = ({ status }) => {
   if (s === "HIDDEN") {
     return (
       <Badge className="bg-gray-200 text-gray-700 hover:bg-gray-200">
-        ซ่อนอยู่
+        ซ่อนโดยแอดมิน
       </Badge>
     );
   }
@@ -105,9 +114,8 @@ const spec = (icon, text) => (
   </div>
 );
 
-/* ===================== PostCard (ใช้ useMemo ต่อใบ) ===================== */
+/* ===================== PostCard ===================== */
 function PostCard({ post, onEdit, onAskDelete }) {
-  // memo ค่าที่คำนวณซ้ำ
   const cover = useMemo(() => {
     const firstImg = post?.Image?.[0];
     return safeImgUrl(firstImg?.secure_url) || safeImgUrl(firstImg?.url) || "";
@@ -128,10 +136,12 @@ function PostCard({ post, onEdit, onAskDelete }) {
   const title = post?.Property_Name || "-";
   const province = post?.Province || "-";
   const priceBaht = fmtBaht(post?.Price);
+  const normalizedStatus = normalizeStatus(post?.Status_post);
+  const isConfirmed = normalizedStatus === "CONFIRMED"; // ✅ ปิดแก้ไขถ้าอนุมัติแล้ว
 
   return (
     <Card className="overflow-hidden border-gray-200" key={post.id}>
-      {/* Cover (คลิกได้) */}
+      {/* Cover */}
       {cover ? (
         <Link to={`/post/${post.id}`} aria-label={`เปิดประกาศ ${title}`}>
           <img
@@ -139,10 +149,6 @@ function PostCard({ post, onEdit, onAskDelete }) {
             alt={title}
             className="w-full h-40 object-cover"
             loading="lazy"
-            fetchpriority="low"
-            decoding="async"
-            referrerPolicy="no-referrer"
-            crossOrigin="anonymous"
             onError={(e) => {
               e.currentTarget.src = "";
               e.currentTarget.alt = "no-image";
@@ -167,11 +173,7 @@ function PostCard({ post, onEdit, onAskDelete }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="text-lg font-semibold truncate">
-              <Link
-                to={`/post/${post.id}`}
-                className="hover:underline"
-                aria-label={`เปิดประกาศ ${title}`}
-              >
+              <Link to={`/post/${post.id}`} className="hover:underline">
                 {title}
               </Link>
             </h3>
@@ -184,7 +186,7 @@ function PostCard({ post, onEdit, onAskDelete }) {
             </div>
           </div>
           <div className="text-right shrink-0">
-            <StatusBadge status={(post.Status_post || "").toUpperCase()} />
+            <StatusBadge status={normalizedStatus} />
             <div className="text-[#117A2D] font-bold text-lg leading-tight mt-1">
               ฿ {priceBaht}
             </div>
@@ -222,16 +224,32 @@ function PostCard({ post, onEdit, onAskDelete }) {
               : "-"}
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onEdit(post)}
-              aria-label={`แก้ไขประกาศ ${title}`}
-              className="border-[#34495E] text-[#34495E] hover:bg-[#34495E] hover:text-white"
+            {/* แก้ไขปิดถ้าอนุมัติแล้ว */}
+            <div
+              title={
+                isConfirmed
+                  ? "โพสต์ที่อนุมัติแล้วไม่สามารถแก้ไขได้"
+                  : "แก้ไขประกาศ"
+              }
             >
-              <Pencil className="w-4 h-4 mr-1" />
-              แก้ไข
-            </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => !isConfirmed && onEdit(post)}
+                aria-label={`แก้ไขประกาศ ${title}`}
+                className={`border-[#34495E] text-[#34495E] hover:bg-[#34495E] hover:text-white ${
+                  isConfirmed
+                    ? "opacity-50 cursor-not-allowed hover:bg-transparent hover:text-[#34495E]"
+                    : ""
+                }`}
+                disabled={isConfirmed}
+              >
+                <Pencil className="w-4 h-4 mr-1" />
+                แก้ไข
+              </Button>
+            </div>
+
+            {/* ลบยังคงใช้งานได้ */}
             <Button
               variant="outline"
               size="sm"
@@ -248,7 +266,6 @@ function PostCard({ post, onEdit, onAskDelete }) {
     </Card>
   );
 }
-
 /* ======================= หน้าหลัก ======================= */
 export default function SellerPost() {
   const { authUser, loading, revalidateUser } = useAuth();
@@ -272,9 +289,85 @@ export default function SellerPost() {
   const [deletingId, setDeletingId] = useState(null);
   const [busyDelete, setBusyDelete] = useState(false);
 
-  const posts = authUser?.PropertyPost ?? [];
+  // รายการที่ดึงรายละเอียดด้วย getPost
+  const [detailedPosts, setDetailedPosts] = useState([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const fetchedRef = useRef(false);
 
-  // collator สำหรับ sort ชื่อภาษาไทยให้ไวกว่า localeCompare ตรง ๆ
+  // ==== ดึงรายละเอียดด้วย getPost ตาม id ทั้งหมดของผู้ใช้ ====
+  useEffect(() => {
+    const base = authUser?.PropertyPost || [];
+    if (!base.length) {
+      setDetailedPosts([]);
+      fetchedRef.current = true;
+      return;
+    }
+
+    let cancelled = false;
+    const fetchAll = async () => {
+      setLoadingDetails(true);
+      try {
+        const results = await Promise.allSettled(
+          base.map((p) => apiClient.get(`/propertypost/${p.id}`))
+        );
+
+        const merged = results.map((r, idx) => {
+          const fallback = base[idx] || {};
+          if (r.status === "fulfilled") {
+            const data = r.value?.data || {};
+            // รวมข้อมูลเดิมไว้เป็น fallback และ normalize สถานะ
+            return {
+              ...fallback,
+              ...data,
+              Status_post: normalizeStatus(
+                data?.Status_post || fallback?.Status_post
+              ),
+            };
+          }
+          // ถ้าดึงไม่ได้ ใช้ข้อมูลเดิมพร้อม normalize สถานะ
+          return {
+            ...fallback,
+            Status_post: normalizeStatus(fallback?.Status_post),
+          };
+        });
+
+        if (!cancelled) {
+          setDetailedPosts(merged);
+          fetchedRef.current = true;
+        }
+      } finally {
+        if (!cancelled) setLoadingDetails(false);
+      }
+    };
+
+    fetchAll();
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser?.PropertyPost]);
+
+  // รีเฟรชเมื่อโฟกัสแท็บ
+  useEffect(() => {
+    const onFocus = () => {
+      revalidateUser().catch(() => {});
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") onFocus();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [revalidateUser]);
+
+  // ใช้รายการที่ดึงมาจริงเป็นหลัก ถ้ายังไม่ดึงเสร็จตกกลับของเดิมชั่วคราว
+  const posts = fetchedRef.current
+    ? detailedPosts
+    : authUser?.PropertyPost || [];
+
+  // collator สำหรับ sort ชื่อภาษาไทย
   const thCollator = useMemo(
     () => new Intl.Collator("th", { sensitivity: "base" }),
     []
@@ -292,25 +385,30 @@ export default function SellerPost() {
     [thCollator]
   );
 
-  // ---- Derived: stats (ใช้ CONFIRMED ตาม Prisma)
+  /* ---- Stats: ไม่นับ HIDDEN ในทุกกรณี, SOLD นับรวมใน total ได้ */
   const stats = useMemo(() => {
-    const total = posts.length;
-    const confirmed = posts.filter(
-      (p) => (p.Status_post || "").toUpperCase() === "CONFIRMED"
+    const visible = posts.filter(
+      (p) => normalizeStatus(p?.Status_post) !== "HIDDEN"
+    );
+    const total = visible.length;
+    const confirmed = visible.filter(
+      (p) => normalizeStatus(p?.Status_post) === "CONFIRMED"
     ).length;
-    const pending = posts.filter(
-      (p) => (p.Status_post || "").toUpperCase() === "PENDING"
+    const pending = visible.filter(
+      (p) => normalizeStatus(p?.Status_post) === "PENDING"
     ).length;
-    const rejected = posts.filter(
-      (p) => (p.Status_post || "").toUpperCase() === "REJECTED"
+    const rejected = visible.filter(
+      (p) => normalizeStatus(p?.Status_post) === "REJECTED"
     ).length;
     return { total, confirmed, pending, rejected };
   }, [posts]);
 
   // ---- Search + Filter + Sort
   const filteredSorted = useMemo(() => {
-    let arr = [...posts];
+    // เริ่มจากตัด HIDDEN ออกเสมอ
+    let arr = posts.filter((p) => normalizeStatus(p?.Status_post) !== "HIDDEN");
 
+    // ค้นหาข้อความ
     const key = qDeferred.trim().toLowerCase();
     if (key) {
       arr = arr.filter((p) => {
@@ -321,12 +419,15 @@ export default function SellerPost() {
       });
     }
 
+    // ตัวกรองสถานะ
     if (statusFilter !== "ALL") {
-      arr = arr.filter(
-        (p) => (p.Status_post || "").toUpperCase() === statusFilter
-      );
+      arr = arr.filter((p) => normalizeStatus(p?.Status_post) === statusFilter);
+    } else {
+      // ALL: ไม่แสดง SOLD
+      arr = arr.filter((p) => normalizeStatus(p?.Status_post) !== "SOLD");
     }
 
+    // เรียง
     const sorter = sorters[sortBy] || sorters.newest;
     arr.sort(sorter);
 
@@ -351,14 +452,12 @@ export default function SellerPost() {
     if (!deletingId) return;
     try {
       setBusyDelete(true);
-      await apiClient.delete(`/propertypost/${deletingId}`); // base /api อยู่ใน apiClient
+      await apiClient.delete(`/propertypost/${deletingId}`);
       await revalidateUser();
-      // ถ้าลบแล้วหน้าไม่มีรายการ ให้ถอยกลับ 1 หน้า
+      // ตัดหน้าให้พอดีหลังลบ
       const afterCount = filteredSorted.length - 1;
       const afterTotalPages = Math.max(1, Math.ceil(afterCount / pageSize));
-      if (currentPage > afterTotalPages) {
-        setPage(afterTotalPages);
-      }
+      if (currentPage > afterTotalPages) setPage(afterTotalPages);
       toast({
         title: "ลบประกาศสำเร็จ",
         description: "ข้อมูลถูกลบออกจากระบบแล้ว",
@@ -383,7 +482,8 @@ export default function SellerPost() {
     pageSize,
   ]);
 
-  if (loading) {
+  /* ===== Loading skeleton ===== */
+  if (loading || (!fetchedRef.current && loadingDetails)) {
     return (
       <div className="p-6 max-w-6xl mx-auto">
         <div className="animate-pulse h-8 w-48 bg-gray-200 rounded mb-6" />
@@ -473,7 +573,7 @@ export default function SellerPost() {
               <option value="PENDING">รอดำเนินการ</option>
               <option value="REJECTED">ถูกปฏิเสธ</option>
               <option value="SOLD">ขายแล้ว</option>
-              <option value="HIDDEN">ซ่อนอยู่</option>
+              {/* ไม่มี HIDDEN ให้เลือก */}
             </select>
 
             <div className="relative">
@@ -538,7 +638,7 @@ export default function SellerPost() {
           </div>
         </div>
 
-        {/* Empty state */}
+        {/* Empty state / Grid */}
         {filteredSorted.length === 0 ? (
           <div className="text-center text-gray-600 py-12">
             <p className="mb-4">
@@ -556,7 +656,6 @@ export default function SellerPost() {
           </div>
         ) : (
           <>
-            {/* Grid of posts (paged) */}
             <div className="h-[calc(100vh-200px)] overflow-y-auto pr-1">
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {paged.map((post) => (
@@ -573,7 +672,6 @@ export default function SellerPost() {
               </div>
             </div>
 
-            {/* Pagination controls (bottom) */}
             <div className="flex items-center justify-end gap-3 mt-4">
               <span className="text-sm text-muted-foreground">
                 หน้า {currentPage} / {totalPages}
@@ -616,6 +714,7 @@ export default function SellerPost() {
         initialPost={editingPost}
         onSaved={async () => {
           await revalidateUser();
+          // ดึงรายละเอียดใหม่อัตโนมัติจาก useEffect เมื่อ authUser เปลี่ยน
           toast({
             title: "บันทึกการแก้ไขแล้ว",
             description: "ประกาศถูกอัปเดตเรียบร้อย",
