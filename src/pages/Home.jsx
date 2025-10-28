@@ -26,7 +26,7 @@ const categories = [
 const PROVINCE_URL = "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/province.json";
 const DISTRICT_URL = "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/district.json";
 const SUBDISTRICT_URL = "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/sub_district.json";
-
+const POSTS_PER_PAGE = 10;
 // --- Helper Functions ---
 const METRO_PROVINCES = [
   "กรุงเทพมหานคร",
@@ -72,6 +72,7 @@ const Home = () => {
   const [filteredDistricts, setFilteredDistricts] = useState([]);
   const [filteredSubDistricts, setFilteredSubDistricts] = useState([]);
 
+  const [currentPage, setCurrentPage] = useState(1);
   // --- Form Management ---
   const { register, handleSubmit, watch, control, setValue } = useForm({
     defaultValues: {
@@ -86,6 +87,46 @@ const Home = () => {
   const debouncedJSONFilters = useDebounce(JSON.stringify(formValues), 500);
 
   // --- Effects ---
+
+  const getPaginationRange = (currentPage, totalPages, siblings = 1) => {
+    const totalPageNumbersToShow = siblings * 2 + 3; // (siblings * 2) + first + current + last
+    const totalFixedPages = 3 + 2 * siblings; // first + last + current + (2 * siblings)
+
+    // Case 1: ถ้าน้อยกว่าจำนวนที่จะแสดง (เช่น 7) ก็แสดงทั้งหมด
+    if (totalPages <= totalFixedPages + 2) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const leftSiblingIndex = Math.max(currentPage - siblings, 1);
+    const rightSiblingIndex = Math.min(currentPage + siblings, totalPages);
+
+    const showLeftEllipsis = leftSiblingIndex > 2;
+    const showRightEllipsis = rightSiblingIndex < totalPages - 1;
+
+    // Case 2: ไม่มี ... ด้านซ้าย (อยู่ใกล้ตอนต้น)
+    if (!showLeftEllipsis && showRightEllipsis) {
+      let leftItemCount = totalFixedPages;
+      const leftRange = Array.from({ length: leftItemCount }, (_, i) => i + 1);
+      return [...leftRange, '...', totalPages];
+    }
+
+    // Case 3: ไม่มี ... ด้านขวา (อยู่ใกล้ตอนจบ)
+    if (showLeftEllipsis && !showRightEllipsis) {
+      let rightItemCount = totalFixedPages;
+      const rightRange = Array.from({ length: rightItemCount }, (_, i) => totalPages - rightItemCount + i + 1);
+      return [1, '...', ...rightRange];
+    }
+
+    // Case 4: มี ... ทั้งสองด้าน (อยู่ตรงกลาง)
+    if (showLeftEllipsis && showRightEllipsis) {
+      let middleRangeCount = totalPageNumbersToShow - 2; // - first and last
+      let middleRange = Array.from({ length: middleRangeCount }, (_, i) => leftSiblingIndex + i);
+      return [1, '...', ...middleRange, '...', totalPages];
+    }
+
+    // Default (shouldn't be reached, but for safety)
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  };
 
   useEffect(() => {
     const fetchAddressData = async () => {
@@ -166,6 +207,7 @@ const Home = () => {
 
   useEffect(() => {
     const runSearch = async () => {
+      setCurrentPage(1);
       const filters = JSON.parse(debouncedJSONFilters);
       setIsLoading(true);
       try {
@@ -195,6 +237,13 @@ const Home = () => {
     };
     runSearch();
   }, [debouncedJSONFilters]);
+
+
+  const indexOfLastPost = currentPage * POSTS_PER_PAGE;
+  const indexOfFirstPost = indexOfLastPost - POSTS_PER_PAGE;
+  const currentPosts = displayedPosts.slice(indexOfFirstPost, indexOfLastPost);
+  const totalPages = Math.ceil(displayedPosts.length / POSTS_PER_PAGE);
+  const pageNumbers = getPaginationRange(currentPage, totalPages);
 
   // --- Render ---
   return (
@@ -373,7 +422,57 @@ const Home = () => {
             <Loader2 className="w-20 h-20 animate-spin" />
           </div>
         ) : displayedPosts.length > 0 ? (
-          <Cards data={displayedPosts} />
+          // --- MODIFIED: Wrapper for Cards + Pagination ---
+          <>
+            <Cards data={currentPosts} /> {/* 👈 MODIFIED: Use currentPosts */}
+
+            {/* --- ADDED: Pagination Controls --- */}
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center mt-10 gap-2">
+                {/* Previous Button */}
+                <Buttons
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  text="< ก่อนหน้า"
+                  color={currentPage === 1 ? "bg-gray-400 cursor-not-allowed" : "bg-[#2c3e50] hover:bg-[#1a252f]"}
+                  className="px-4 py-2 rounded-lg"
+                />
+
+                {/* Page Numbers */}
+                {pageNumbers.map((page, index) => {
+                  if (page === '...') {
+                    return <span key={`ellipsis-${index}`} className="px-2 py-2 text-gray-500">...</span>;
+                  }
+
+                  const isActive = currentPage === page;
+                  return (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      disabled={isActive}
+                      className={`px-4 py-2 rounded-lg border font-medium transition-colors ${isActive
+                          ? 'bg-[#2c3e50] text-white border-[#2c3e50] cursor-default'
+                          : 'bg-white text-gray-700 hover:bg-gray-100 border-gray-300'
+                        }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+
+                {/* Next Button */}
+                <Buttons
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  text="ถัดไป >"
+                  color={currentPage === totalPages ? "bg-gray-400 cursor-not-allowed" : "bg-[#2c3e50] hover:bg-[#1a252f]"}
+                  className="px-4 py-2 rounded-lg"
+                />
+              </div>
+            )}
+            {/* --- END: Pagination Controls --- */}
+          </>
+          // --- END: MODIFIED Wrapper ---
         ) : (
           <div className="text-center py-16 bg-white rounded-xl shadow-md">
             <div className="text-6xl mb-4 ">
