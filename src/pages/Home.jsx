@@ -1,17 +1,17 @@
+// src/pages/Home.jsx
 import { useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import axios from "axios";
 import { FaMoneyBillWave, FaSearch } from "react-icons/fa";
+import { HeartCrack, Loader2 } from "lucide-react";
 
 import { apiClient } from "@/api/authconfig";
 import Searchbar from "@/components/form/Searchbar";
 import Cards from "@/components/Cards";
 import Credit from "@/components/Credit";
 import LoanCalculatorModal from "@/components/form/LoanCalculatorModal";
-import { HeartCrack, Loader2 } from "lucide-react";
 
 // --- Data and Constants ---
-
 const categories = [
   { id: "cmegzfdya0006w2bwq5d8alc7", name: "คอนโด" },
   { id: "cmegzfhx70007w2bwp63cbc1w", name: "บ้านเดี่ยว" },
@@ -26,7 +26,6 @@ const DISTRICT_URL =
 const SUBDISTRICT_URL =
   "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/sub_district.json";
 
-// --- Helper Functions ---
 const METRO_PROVINCES = [
   "กรุงเทพมหานคร",
   "นนทบุรี",
@@ -36,6 +35,9 @@ const METRO_PROVINCES = [
   "นครปฐม",
 ];
 
+const POSTS_PER_PAGE = 10;
+
+// --- Helpers ---
 const formatPosts = (posts) => {
   if (!Array.isArray(posts)) return [];
   return posts.map((post) => ({
@@ -50,36 +52,68 @@ const formatPosts = (posts) => {
 };
 
 const useDebounce = (value, delay) => {
-  const [debouncedValue, setDebouncedValue] = useState(value);
+  const [debounced, setDebounced] = useState(value);
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-    return () => {
-      clearTimeout(handler);
-    };
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
   }, [value, delay]);
-  return debouncedValue;
+  return debounced;
+};
+
+const getPaginationRange = (currentPage, totalPages, siblings = 1) => {
+  const totalPageNumbersToShow = siblings * 2 + 3; // middle + first + last
+  const totalFixedPages = 3 + 2 * siblings;
+
+  if (totalPages <= totalFixedPages + 2) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  const left = Math.max(currentPage - siblings, 1);
+  const right = Math.min(currentPage + siblings, totalPages);
+
+  const showLeftEllipsis = left > 2;
+  const showRightEllipsis = right < totalPages - 1;
+
+  if (!showLeftEllipsis && showRightEllipsis) {
+    const leftRange = Array.from({ length: totalFixedPages }, (_, i) => i + 1);
+    return [...leftRange, "...", totalPages];
+  }
+  if (showLeftEllipsis && !showRightEllipsis) {
+    const rightRange = Array.from(
+      { length: totalFixedPages },
+      (_, i) => totalPages - totalFixedPages + i + 1
+    );
+    return [1, "...", ...rightRange];
+  }
+  if (showLeftEllipsis && showRightEllipsis) {
+    const middleCount = totalPageNumbersToShow - 2; // exclude first & last
+    const middle = Array.from({ length: middleCount }, (_, i) => left + i);
+    return [1, "...", ...middle, "...", totalPages];
+  }
+  return Array.from({ length: totalPages }, (_, i) => i + 1);
 };
 
 // --- Main Component ---
-
-const Home = () => {
-  // --- States ---
+export default function Home() {
+  // UI / modal
   const [showLoanPopup, setShowLoanPopup] = useState(false);
+
+  // data
   const [displayedPosts, setDisplayedPosts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isAddressLoading, setIsAddressLoading] = useState(true);
 
+  // address data
+  const [isAddressLoading, setIsAddressLoading] = useState(true);
   const [allProvinces, setAllProvinces] = useState([]);
   const [allDistricts, setAllDistricts] = useState([]);
   const [allSubDistricts, setAllSubDistricts] = useState([]);
-
   const [filteredDistricts, setFilteredDistricts] = useState([]);
   const [filteredSubDistricts, setFilteredSubDistricts] = useState([]);
 
+  // pagination
   const [currentPage, setCurrentPage] = useState(1);
-  // --- Form Management ---
+
+  // form
   const { register, handleSubmit, watch, control, setValue } = useForm({
     defaultValues: {
       searchQuery: "",
@@ -97,78 +131,29 @@ const Home = () => {
   const formValues = watch();
   const debouncedJSONFilters = useDebounce(JSON.stringify(formValues), 500);
 
-  // --- Effects ---
-
-  const getPaginationRange = (currentPage, totalPages, siblings = 1) => {
-    const totalPageNumbersToShow = siblings * 2 + 3; // (siblings * 2) + first + current + last
-    const totalFixedPages = 3 + 2 * siblings; // first + last + current + (2 * siblings)
-
-    // Case 1: ถ้าน้อยกว่าจำนวนที่จะแสดง (เช่น 7) ก็แสดงทั้งหมด
-    if (totalPages <= totalFixedPages + 2) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-
-    const leftSiblingIndex = Math.max(currentPage - siblings, 1);
-    const rightSiblingIndex = Math.min(currentPage + siblings, totalPages);
-
-    const showLeftEllipsis = leftSiblingIndex > 2;
-    const showRightEllipsis = rightSiblingIndex < totalPages - 1;
-
-    // Case 2: ไม่มี ... ด้านซ้าย (อยู่ใกล้ตอนต้น)
-    if (!showLeftEllipsis && showRightEllipsis) {
-      let leftItemCount = totalFixedPages;
-      const leftRange = Array.from({ length: leftItemCount }, (_, i) => i + 1);
-      return [...leftRange, "...", totalPages];
-    }
-
-    // Case 3: ไม่มี ... ด้านขวา (อยู่ใกล้ตอนจบ)
-    if (showLeftEllipsis && !showRightEllipsis) {
-      let rightItemCount = totalFixedPages;
-      const rightRange = Array.from(
-        { length: rightItemCount },
-        (_, i) => totalPages - rightItemCount + i + 1
-      );
-      return [1, "...", ...rightRange];
-    }
-
-    // Case 4: มี ... ทั้งสองด้าน (อยู่ตรงกลาง)
-    if (showLeftEllipsis && showRightEllipsis) {
-      let middleRangeCount = totalPageNumbersToShow - 2; // - first and last
-      let middleRange = Array.from(
-        { length: middleRangeCount },
-        (_, i) => leftSiblingIndex + i
-      );
-      return [1, "...", ...middleRange, "...", totalPages];
-    }
-
-    // Default (shouldn't be reached, but for safety)
-    return Array.from({ length: totalPages }, (_, i) => i + 1);
-  };
-
+  // ---- Fetch address lists (BKK + metro only)
   useEffect(() => {
     const fetchAddressData = async () => {
       setIsAddressLoading(true);
       try {
-        const [provincesRes, districtsRes, subDistrictsRes] = await Promise.all(
-          [
-            axios.get(PROVINCE_URL),
-            axios.get(DISTRICT_URL),
-            axios.get(SUBDISTRICT_URL),
-          ]
-        );
-        const provRes = provincesRes.data;
-        const distRes = districtsRes.data;
-        const subDistRes = subDistrictsRes.data;
+        const [prov, dist, subd] = await Promise.all([
+          axios.get(PROVINCE_URL),
+          axios.get(DISTRICT_URL),
+          axios.get(SUBDISTRICT_URL),
+        ]);
+        const provRes = prov.data;
+        const distRes = dist.data;
+        const subDistRes = subd.data;
 
-        const metroProvinces = METRO_PROVINCES.map((name) =>
+        const metroOnly = METRO_PROVINCES.map((name) =>
           provRes.find((p) => p.name_th === name)
         ).filter(Boolean);
 
-        setAllProvinces(metroProvinces); // 👈 ใช้ข้อมูลที่กรองแล้ว
+        setAllProvinces(metroOnly);
         setAllDistricts(distRes);
         setAllSubDistricts(subDistRes);
-      } catch (error) {
-        console.error("Failed to fetch address data:", error);
+      } catch (e) {
+        console.error("Failed to fetch address data:", e);
       } finally {
         setIsAddressLoading(false);
       }
@@ -176,33 +161,30 @@ const Home = () => {
     fetchAddressData();
   }, []);
 
+  // ---- Cascade: province -> districts
   useEffect(() => {
-    if (
-      selectedProvinceName &&
-      allProvinces.length > 0 &&
-      allDistricts.length > 0
-    ) {
+    if (selectedProvinceName && allProvinces.length && allDistricts.length) {
       const selectedProvince = allProvinces.find(
         (p) => p.name_th === selectedProvinceName
       );
       if (selectedProvince) {
-        const districtsInProvince = allDistricts.filter(
-          (d) => d.province_id === selectedProvince.id
+        setFilteredDistricts(
+          allDistricts.filter((d) => d.province_id === selectedProvince.id)
         );
-        setFilteredDistricts(districtsInProvince);
       }
     } else {
       setFilteredDistricts([]);
     }
   }, [selectedProvinceName, allProvinces, allDistricts]);
 
+  // ---- Cascade: district -> subdistricts
   useEffect(() => {
     setFilteredSubDistricts([]);
     if (
       selectedDistrictName &&
       selectedProvinceName &&
-      allDistricts.length > 0 &&
-      allSubDistricts.length > 0
+      allDistricts.length &&
+      allSubDistricts.length
     ) {
       const selectedProvince = allProvinces.find(
         (p) => p.name_th === selectedProvinceName
@@ -214,12 +196,11 @@ const Home = () => {
           d.name_th === selectedDistrictName &&
           d.province_id === selectedProvince.id
       );
-
       if (selectedDistrict) {
-        const subDistrictsInDistrict = allSubDistricts.filter(
+        const subs = allSubDistricts.filter(
           (sd) => String(sd.district_id) === String(selectedDistrict.id)
         );
-        setFilteredSubDistricts(subDistrictsInDistrict);
+        setFilteredSubDistricts(subs);
       }
     }
   }, [
@@ -230,32 +211,35 @@ const Home = () => {
     allSubDistricts,
   ]);
 
+  // ---- Search (debounced)
   useEffect(() => {
     const runSearch = async () => {
+      // reset pagination เมื่อเปลี่ยน filter
       setCurrentPage(1);
+
       const filters = JSON.parse(debouncedJSONFilters);
       setIsLoading(true);
       try {
-        const activeFilters = {};
-        if (filters.searchQuery) activeFilters.query = filters.searchQuery;
-        if (filters.categoryId) activeFilters.categoryId = filters.categoryId;
-        if (filters.province) activeFilters.province = filters.province;
-        if (filters.district) activeFilters.district = filters.district;
-        if (filters.subdistrict)
-          activeFilters.subdistrict = filters.subdistrict;
-        if (filters.minPrice) activeFilters.minPrice = filters.minPrice;
-        if (filters.maxPrice) activeFilters.maxPrice = filters.maxPrice;
+        const active = {};
+        if (filters.searchQuery) active.query = filters.searchQuery;
+        if (filters.categoryId) active.categoryId = filters.categoryId;
+        if (filters.province) active.province = filters.province;
+        if (filters.district) active.district = filters.district;
+        if (filters.subdistrict) active.subdistrict = filters.subdistrict;
+        if (filters.minPrice) active.minPrice = filters.minPrice;
+        if (filters.maxPrice) active.maxPrice = filters.maxPrice;
 
-        let response;
-        if (Object.values(filters).every((val) => val === "")) {
-          response = await apiClient.get("/homepage/posts");
-          setDisplayedPosts(formatPosts(response.data));
+        let res;
+        // ถ้าทุกช่องว่างหมด ให้โหลดโพสต์หน้าแรก
+        if (Object.values(filters).every((v) => v === "")) {
+          res = await apiClient.get("/homepage/posts");
+          setDisplayedPosts(formatPosts(res.data));
         } else {
-          response = await apiClient.post("/search/filters", activeFilters);
-          setDisplayedPosts(formatPosts(response.data.posts));
+          res = await apiClient.post("/search/filters", active);
+          setDisplayedPosts(formatPosts(res.data.posts));
         }
-      } catch (error) {
-        console.error("เกิดข้อผิดพลาดในการค้นหา:", error);
+      } catch (e) {
+        console.error("เกิดข้อผิดพลาดในการค้นหา:", e);
         setDisplayedPosts([]);
       } finally {
         setIsLoading(false);
@@ -264,15 +248,17 @@ const Home = () => {
     runSearch();
   }, [debouncedJSONFilters]);
 
+  // ---- Pagination derived
   const indexOfLastPost = currentPage * POSTS_PER_PAGE;
   const indexOfFirstPost = indexOfLastPost - POSTS_PER_PAGE;
   const currentPosts = displayedPosts.slice(indexOfFirstPost, indexOfLastPost);
   const totalPages = Math.ceil(displayedPosts.length / POSTS_PER_PAGE);
   const pageNumbers = getPaginationRange(currentPage, totalPages);
 
-  // --- Render ---
+  // ---- Render
   return (
     <div className="w-full min-h-screen bg-gray-50">
+      {/* Hero + Search */}
       <div className="relative flex items-center justify-center min-h-[70vh] p-4 bg-gradient-to-br from-[#2c3e50] to-[#3498db]">
         <video
           className="absolute top-0 left-0 w-full h-full object-cover opacity-30"
@@ -282,7 +268,6 @@ const Home = () => {
           muted
           playsInline
         />
-
         <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-6xl overflow-hidden">
           <div className="bg-[#2c3e50] text-white p-6">
             <h2 className="text-2xl md:text-3xl font-bold text-center">
@@ -293,10 +278,9 @@ const Home = () => {
             </p>
           </div>
 
-          {/* Search Form */}
           <form onSubmit={handleSubmit(() => {})} className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-              {/* Main Search */}
+              {/* คำค้น */}
               <div className="md:col-span-2 lg:col-span-3">
                 <div className="relative">
                   <Searchbar
@@ -304,11 +288,11 @@ const Home = () => {
                     placeholder="ค้นหาจากชื่อ, รายละเอียด, ที่อยู่..."
                     className="pl-12"
                   />
-                  <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
               </div>
 
-              {/* Property Type */}
+              {/* ประเภท */}
               <Controller
                 name="categoryId"
                 control={control}
@@ -330,7 +314,7 @@ const Home = () => {
                 )}
               />
 
-              {/* Province */}
+              {/* จังหวัด */}
               <Controller
                 name="province"
                 control={control}
@@ -361,7 +345,7 @@ const Home = () => {
                 )}
               />
 
-              {/* District */}
+              {/* อำเภอ */}
               <Controller
                 name="district"
                 control={control}
@@ -391,7 +375,7 @@ const Home = () => {
                 )}
               />
 
-              {/* Subdistrict */}
+              {/* ตำบล */}
               <Controller
                 name="subdistrict"
                 control={control}
@@ -417,7 +401,7 @@ const Home = () => {
                 )}
               />
 
-              {/* Price Range */}
+              {/* ช่วงราคา */}
               <div className="relative">
                 <input
                   type="number"
@@ -426,7 +410,6 @@ const Home = () => {
                   className="p-3 border border-gray-300 rounded-lg w-full focus:ring-2 focus:ring-blue-500 focus:border-transparent pl-10"
                 />
               </div>
-
               <div className="relative">
                 <input
                   type="number"
@@ -440,7 +423,7 @@ const Home = () => {
         </div>
       </div>
 
-      {/* Property Listings Section */}
+      {/* Listings + Pagination */}
       <div className="p-6 md:p-12 lg:p-20 mx-auto max-w-7xl">
         <div className="flex flex-col sm:flex-row items-center justify-between mb-8">
           <div>
@@ -467,77 +450,67 @@ const Home = () => {
             <Loader2 className="w-20 h-20 animate-spin" />
           </div>
         ) : displayedPosts.length > 0 ? (
-          // --- MODIFIED: Wrapper for Cards + Pagination ---
           <>
-            <Cards data={currentPosts} /> {/* 👈 MODIFIED: Use currentPosts */}
-            {/* --- ADDED: Pagination Controls --- */}
+            <Cards data={currentPosts} />
+
             {totalPages > 1 && (
               <div className="flex justify-center items-center mt-10 gap-2">
-                {/* Previous Button */}
-                <Buttons
-                  onClick={() =>
-                    setCurrentPage((prev) => Math.max(prev - 1, 1))
-                  }
+                {/* Prev */}
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                   disabled={currentPage === 1}
-                  text="< ก่อนหน้า"
-                  color={
+                  className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
                     currentPage === 1
-                      ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-[#2c3e50] hover:bg-[#1a252f]"
-                  }
-                  className="px-4 py-2 rounded-lg"
-                />
+                      ? "bg-gray-300 text-white cursor-not-allowed border-gray-300"
+                      : "bg-[#2c3e50] text-white hover:bg-[#1a252f] border-[#2c3e50]"
+                  }`}
+                >
+                  &lt; ก่อนหน้า
+                </button>
 
-                {/* Page Numbers */}
-                {pageNumbers.map((page, index) => {
-                  if (page === "...") {
-                    return (
-                      <span
-                        key={`ellipsis-${index}`}
-                        className="px-2 py-2 text-gray-500"
-                      >
-                        ...
-                      </span>
-                    );
-                  }
-
-                  const isActive = currentPage === page;
-                  return (
+                {/* numbers */}
+                {pageNumbers.map((page, idx) =>
+                  page === "..." ? (
+                    <span
+                      key={`ellipsis-${idx}`}
+                      className="px-2 py-2 text-gray-500"
+                    >
+                      ...
+                    </span>
+                  ) : (
                     <button
                       key={page}
                       onClick={() => setCurrentPage(page)}
-                      disabled={isActive}
+                      disabled={currentPage === page}
                       className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
-                        isActive
+                        currentPage === page
                           ? "bg-[#2c3e50] text-white border-[#2c3e50] cursor-default"
                           : "bg-white text-gray-700 hover:bg-gray-100 border-gray-300"
                       }`}
                     >
                       {page}
                     </button>
-                  );
-                })}
+                  )
+                )}
 
-                {/* Next Button */}
-                <Buttons
+                {/* Next */}
+                <button
                   onClick={() =>
-                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                    setCurrentPage((p) => Math.min(p + 1, totalPages))
                   }
                   disabled={currentPage === totalPages}
-                  text="ถัดไป >"
-                  color={
+                  className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
                     currentPage === totalPages
-                      ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-[#2c3e50] hover:bg-[#1a252f]"
-                  }
-                  className="px-4 py-2 rounded-lg"
-                />
+                      ? "bg-gray-300 text-white cursor-not-allowed border-gray-300"
+                      : "bg-[#2c3e50] text-white hover:bg-[#1a252f] border-[#2c3e50]"
+                  }`}
+                >
+                  ถัดไป &gt;
+                </button>
               </div>
             )}
-            {/* --- END: Pagination Controls --- */}
           </>
         ) : (
-          // --- END: MODIFIED Wrapper ---
           <div className="text-center py-16 bg-white rounded-xl shadow-md">
             <div className="text-6xl mb-4 ">
               <HeartCrack className="mx-auto text-gray-300 w-32 h-32" />
@@ -563,13 +536,11 @@ const Home = () => {
         <FaMoneyBillWave size={24} />
       </button>
 
-      {/* Loan Calculator Modal */}
+      {/* Loan Calculator Modal (shadcn dialog) */}
       <LoanCalculatorModal
         open={showLoanPopup}
         onOpenChange={setShowLoanPopup}
       />
     </div>
   );
-};
-
-export default Home;
+}
