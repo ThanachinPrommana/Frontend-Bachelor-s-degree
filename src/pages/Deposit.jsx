@@ -34,7 +34,7 @@ const categorythai = [
   { id: "cmegzfhx70007w2bwp63cbc1w", label: "บ้านเดี่ยว" },
   { id: "cmegzfov30009w2bwrxjpt7xn", label: "วิลล่า" },
   { id: "cmegzft08000aw2bwx91l68z9", label: "ทาวน์เฮาส์" },
- 
+
 ]
 
 const statusSellerThai = [
@@ -43,6 +43,13 @@ const statusSellerThai = [
   { value: "REJECTED", label: "ถูกปฏิเสธ" }
 ]
 
+const nearbyLandmarksList = [
+  { value: "BTS_MRT", label: "รถไฟฟ้า BTS/MRT" },
+  { value: "School", label: "โรงเรียน" },
+  { value: "Hospital", label: "โรงพยาบาล" },
+  { value: "Mall_Market", label: "ห้างสรรพสินค้า/ตลาด" },
+  { value: "Park", label: "สวนสาธารณะ" },
+];
 
 
 const Deposit = () => {
@@ -53,6 +60,7 @@ const Deposit = () => {
   const navigate = useNavigate();
   const { addToCompare, compareList } = useCompare();
   const { authUser } = useAuth();
+  const [lightboxImage, setLightboxImage] = useState(null);
 
 
   // ✅ เก็บเฉพาะ id ของยูนิตที่เลือก
@@ -97,14 +105,26 @@ const Deposit = () => {
   }
 
   const isAlreadyCompared = compareList.some((item) => item.id === post.id);
+  const categoriesToShow = Array.isArray(post.Category)
+    ? post.Category
+    : (post.Category ? [post.Category] : []);
+  const firstCategoryItem = categoriesToShow[0];
+  const categoryValue = typeof firstCategoryItem === 'object' && firstCategoryItem.id
+    ? firstCategoryItem.id
+    : firstCategoryItem;
+  const thaiCategoryLabel = categorythai.find(v => v.id === categoryValue)?.label || categoryValue || "-";
+
+  // 2. สร้าง Object ที่มีข้อมูลครบถ้วน
   const compareHouse = {
     id: post.id,
     name: post.Property_Name,
     src: post.Image?.[0]?.secure_url,
-    price: post.Price,
-    size: post.Usable_Area,
-    badroom: post.Bedrooms,
-    bathroom: post.Bathroom,
+    price: post.Price,            // ราคาบ้าน
+    deposit: post.Deposit_Amount, // ✅ 1. เพิ่ม ราคามัดจำ
+    size: post.Usable_Area,       // ขนาดพื้นที่
+    badroom: post.Bedrooms,       // ห้องนอน
+    bathroom: post.Bathroom,      // ห้องน้ำ
+    type: thaiCategoryLabel,      // ✅ 2. เพิ่ม ประเภท (ที่แปลไทยแล้ว)
   };
 
   const fullAddress = `${post.Address}, ${post.Subdistrict}, ${post.District}, ${post.Province}`;
@@ -194,12 +214,25 @@ const Deposit = () => {
             <img
               src={mainImage || "default-image-url.jpg"}
               alt={post.Property_Name}
-              className="rounded-2xl w-full h-[300px] md:h-[500px] object-cover shadow-lg"
+              // ⬇️ แก้ไข/เพิ่ม 2 บรรทัดนี้ ⬇️
+              className="rounded-2xl w-full h-[300px] md:h-[500px] object-cover shadow-lg cursor-pointer transition-transform hover:scale-[1.02]"
+              onClick={() => {
+                if (mainImage) setLightboxImage(mainImage);
+              }}
             />
           </div>
           <div className="w-full lg:w-[40%] grid grid-cols-2 gap-4">
             {post.Image?.slice(1, 5).map((img, index) => (
-              <div key={index} className="cursor-pointer" onClick={() => setMainImage(img.secure_url)}>
+              // ⬇️ แก้ไข onClick บรรทัดนี้ ⬇️
+              <div
+                key={index}
+                className="cursor-pointer"
+                // ⬇️ แก้ไข onClick ⬇️
+                onClick={() => {
+                  // setMainImage(img.secure_url); // ⬅️ เอาบรรทัดนี้ออกตามที่คุณต้องการ
+                  setLightboxImage(img.secure_url); // ⬅️ เปลี่ยนเป็นอันนี้เพื่อเปิด Lightbox
+                }}
+              >
                 <img
                   src={img.secure_url}
                   alt={`${post.Property_Name} thumbnail ${index + 1}`}
@@ -289,6 +322,26 @@ const Deposit = () => {
                         {/* --- ส่วนที่แก้ไข --- */}
                         <span>{thaiAmenity}</span>
                         {/* -------------------- */}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {/* --- Nearby Landmarks --- */}
+            {post.Nearby_Landmarks && post.Nearby_Landmarks.length > 0 && (
+              <div className="bg-white p-6 rounded-2xl shadow-md border">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">สถานที่ใกล้เคียง</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3">
+                  {post.Nearby_Landmarks.map((landmarkValue, index) => {
+                    // ค้นหาชื่อภาษาไทยจาก nearbyLandmarksList
+                    const thaiLandmark = nearbyLandmarksList.find(a => a.value === landmarkValue)?.label || landmarkValue;
+
+                    return (
+                      <div key={index} className="flex items-center gap-2 text-gray-700">
+                        {/* ใช้ไอคอน MapPin ที่ import ไว้แล้ว */}
+                        <MapPin size={18} className="text-purple-600" />
+                        <span>{thaiLandmark}</span>
                       </div>
                     );
                   })}
@@ -403,7 +456,7 @@ const Deposit = () => {
                 )}
                 <div className="flex flex-col">
                   <p className="font-semibold text-lg text-gray-900">{`${post.user?.First_name || ""} ${post.user?.Last_name || ""}`}</p>
-                 <div className="flex items-center gap-x-3 text-gray-600 mt-1"> {/* Use one flex container */}
+                  <div className="flex items-center gap-x-3 text-gray-600 mt-1"> {/* Use one flex container */}
                     {/* Phone */}
                     <div className="flex items-center gap-1"> {/* Sub-flex for phone icon+number */}
                       <Phone size={16} />
@@ -440,7 +493,7 @@ const Deposit = () => {
                   </div>
                   {/* ========================================== */}
 
-               
+
                   {post.seller?.Status ? (
                     <div className="flex items-center space-x-2 mt-2">
                       <p className="text-gray-600">สถานะผู้ประกาศ:</p>
@@ -458,6 +511,33 @@ const Deposit = () => {
           </div>
         </div>
       </div>
+      {lightboxImage && (
+        <div
+          // พื้นหลังสีดำโปร่งแสง
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4"
+          onClick={() => setLightboxImage(null)}// คลิกพื้นหลังเพื่อปิด
+        >
+          {/* ปุ่มปิด (X) ที่มุมบนขวา */}
+          <button
+            className="absolute top-4 right-6 text-white text-5xl font-bold hover:text-gray-300 z-50"
+            onClick={() => setLightboxImage(null)}
+          >
+            &times;
+          </button>
+
+          {/* รูปภาพ (ใช้ e.stopPropagation เพื่อไม่ให้การคลิกที่รูปปิด Modal) */}
+          <div
+            className="relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={lightboxImage} // ⬅️ แก้ไข 4 (แสดงรูปจาก state ใหม่)
+              alt={post.Property_Name}
+              className="max-w-[95vw] max-h-[95vh] object-contain rounded-lg shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
       <Credit className="mt-12" />
     </div>
   );

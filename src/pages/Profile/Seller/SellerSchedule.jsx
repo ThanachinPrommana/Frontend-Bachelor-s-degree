@@ -252,7 +252,7 @@ export default function SellerSchedule() {
 
     try {
       setCreating(true);
-     const postIdForApi = String(createPostId).trim(); // Use createPostId
+      const postIdForApi = String(createPostId).trim(); // Use createPostId
       if (!postIdForApi) {
         toast({ title: "รหัสโพสต์ไม่ถูกต้อง", variant: "warning" });
         setCreating(false);
@@ -573,34 +573,53 @@ export default function SellerSchedule() {
                   </td>
                 </tr>
               ) : (
-                currentTableData.map((s) => ( // Use paginated data
-                  <tr key={s.id || s._id} className="border-t hover:bg-muted/50">
-                    <td className="px-4 py-2">{s?.Post?.Property_Name || 'N/A'}</td>
-                    <td className="px-4 py-2">{new Date(s.startTime).toLocaleString("th-TH", { dateStyle: 'short', timeStyle: 'short' })}</td>
-                    <td className="px-4 py-2">{new Date(s.endTime).toLocaleString("th-TH", { dateStyle: 'short', timeStyle: 'short' })}</td>
-                    <td className="px-4 py-2">
-                      <span className={`px-2 py-0.5 rounded text-xs ${s.isBooked ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'}`}>
-                        {s.isBooked ? "ถูกจองแล้ว" : "ว่าง"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-red-600 hover:bg-red-100 hover:text-red-700"
-                        onClick={() => handleDeleteSlot(s.id, s.startTime)}
-                        disabled={s.isBooked || deletingId === s.id}
-                        aria-label="ลบช่วงเวลา"
-                      >
-                        {deletingId === s.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </td>
-                  </tr>
-                ))
+                currentTableData.map((s) => { // Use paginated data
+                  // 1. ดึงเวลาปัจจุบัน
+                  const now = new Date();
+                  // 2. ตรวจสอบว่าเวลาปัจจุบัน เลยเวลาสิ้นสุด (s.endTime) ของ slot นี้ไปแล้วหรือยัง
+                  const isPastEndTime = new Date(s.endTime) < now;
+
+                  return (
+                    <tr key={s.id || s._id} className="border-t hover:bg-muted/50">
+                      <td className="px-4 py-2">{s?.Post?.Property_Name || 'N/A'}</td>
+                      <td className="px-4 py-2">{new Date(s.startTime).toLocaleString("th-TH", { dateStyle: 'short', timeStyle: 'short' })}</td>
+                      <td className="px-4 py-2">{new Date(s.endTime).toLocaleString("th-TH", { dateStyle: 'short', timeStyle: 'short' })}</td>
+                      <td className="px-4 py-2">
+                        <span className={`px-2 py-0.5 rounded text-xs ${s.isBooked ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'}`}>
+                          {s.isBooked ? "ถูกจองแล้ว" : "ว่าง"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-red-600 hover:bg-red-100 hover:text-red-700"
+                          onClick={() => handleDeleteSlot(s.id, s.startTime)}
+                          //
+                          // === 💜 4. เปลี่ยนเงื่อนไข 'disabled' ตรงนี้ ===
+                          //
+                          // disabled={s.isBooked || deletingId === s.id} // <-- ลบอันเก่านี้
+                          //
+                          // ปุ่มจะถูกปิด (disabled) ถ้า:
+                          // 1. !isPastEndTime (ยังไม่เลยเวลาสิ้นสุด)
+                          // 2. deletingId === s.id (กำลังลบ)
+                          //
+                          disabled={!isPastEndTime || deletingId === s.id} // <-- ใช้อันใหม่นี้
+                          //
+                          // === 💜 จบการเปลี่ยนแปลง ===
+                          //
+                          aria-label="ลบช่วงเวลา"
+                        >
+                          {deletingId === s.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
