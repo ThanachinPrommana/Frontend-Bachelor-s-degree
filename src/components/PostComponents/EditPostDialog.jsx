@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+// src/components/PostComponents/EditPostDialog/index.jsx (หรือ EditPostDialog.jsx)
+import React, { lazy, Suspense, useEffect, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,12 +21,22 @@ import { postLocationSchema } from "@/components/schemas/postSchemas/postLocatio
 import { postDetailSchema } from "@/components/schemas/postSchemas/postDetailSchema";
 import { postPriceSchema } from "@/components/schemas/postSchemas/postPriceSchema";
 import { postInformSchema } from "@/components/schemas/postSchemas/postInformSchema";
+
+// ====== Steps (Title ใช้ import ปกติให้โหลดเร็วตอนเปิด Dialog) ======
 import TitleStep from "./steps/TitleStep";
+
+// แบ่งโหลดสเต็ปอื่น ๆ ด้วย React.lazy
+const LocationStep = lazy(() => import("./steps/LocationStep"));
+const DetailStep = lazy(() => import("./steps/DetailStep"));
+const PriceStep = lazy(() => import("./steps/PriceStep"));
+const InformStep = lazy(() => import("./steps/InformStep"));
+const MediaStep = lazy(() => import("./steps/MediaStep"));
+const ConfirmStep = lazy(() => import("./steps/ConfirmStep"));
 
 // ✅ ขยาย schema ราคา (เวอร์ชันย่อที่ใช้ใน Dialog นี้)
 const postPriceExtended = postPriceSchema.safeExtend({
   Sell_Rent: z.enum(["SALE", "RENT"]).optional(),
-// ... (fields อื่นๆ) ...
+  // ... (fields อื่นๆ) ...
   Deposit_Amount: z
     .union([z.number().min(0), z.string()])
     .optional()
@@ -60,7 +71,7 @@ const toNum = (v) =>
     : Number(v);
 
 export const formatBaht = (n) =>
-  Number.isFinite(Number(n)) ? Number(n).toLocaleString() : "-";
+  Number.isFinite(Number(n)) ? Number(n).toLocaleString("th-TH") : "-";
 
 // map API -> form (ใช้ Link_facbook เท่านั้น)
 function mapApiToForm(d = {}) {
@@ -297,6 +308,7 @@ export default function EditPostDialog({
     if (!ok) return;
     setActiveTab(tabOrder[idx + 1]);
   };
+
   const goPrev = () => {
     const idx = tabOrder.indexOf(activeTab);
     if (idx > 0) setActiveTab(tabOrder[idx - 1]);
@@ -333,8 +345,7 @@ export default function EditPostDialog({
         Name: values.Name ?? "",
         Link_line: values.Link_line ?? "",
         Link_facbook: values.Link_facbook ?? "",
-
-        // ⬇️ ใหม่: id ของสื่อเดิมที่ติ๊กว่าจะลบ
+        // สื่อเดิมที่ติ๊กว่าจะลบ
         removedOldImages: removedOldImages || [],
         removedOldVideos: removedOldVideos || [],
       };
@@ -342,7 +353,6 @@ export default function EditPostDialog({
       if (hasFiles) {
         const fd = new FormData();
         Object.entries(payload).forEach(([k, v]) => {
-          // ส่ง array เป็น JSON string (รวมถึง removedOld* ด้วย)
           if (Array.isArray(v)) fd.append(k, JSON.stringify(v));
           else if (v !== undefined && v !== null) fd.append(k, v);
         });
@@ -364,6 +374,13 @@ export default function EditPostDialog({
       setLoading(false);
     }
   };
+
+  const LazyFallback = (
+    <div className="flex items-center justify-center py-14 text-gray-500">
+      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+      กำลังโหลดส่วนประกอบ...
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -432,61 +449,64 @@ export default function EditPostDialog({
                           <TitleStep errors={errors} resetKey={resetKey} />
                         </div>
                       )}
-                      {activeTab === "location" && (
-                        <div className="space-y-6">
-                          <LocationStep errors={errors} resetKey={resetKey} />
-                        </div>
-                      )}
-                      {activeTab === "detail" && (
-                        <div className="space-y-6">
-                          <DetailStep
-                            errors={errors}
-                            categories={categories}
-                            resetKey={resetKey}
-                          />
-                        </div>
-                      )}
-                      {activeTab === "price" && (
-                        <div className="space-y-6">
-                          <PriceStep
-                            errors={errors}
-                            sellRentLocked={watch("Sell_Rent") || "SALE"}
-                            formatBaht={formatBaht}
-                            resetKey={resetKey}
-                          />
-                        </div>
-                      )}
-                      {activeTab === "inform" && (
-                        <div className="space-y-6">
-                          <InformStep errors={errors} resetKey={resetKey} />
-                        </div>
-                      )}
-                      {activeTab === "media" && (
-                        <div className="space-y-6">
-                          <MediaStep
-                            serverData={serverData}
-                            newImages={newImages}
-                            setNewImages={setNewImages}
-                            newVideos={newVideos}
-                            setNewVideos={setNewVideos}
-                            resetKey={resetKey}
-                            removedOldImages={removedOldImages}
-                            setRemovedOldImages={setRemovedOldImages}
-                            removedOldVideos={removedOldVideos}
-                            setRemovedOldVideos={setRemovedOldVideos}
-                          />
-                        </div>
-                      )}
-                      {activeTab === "confirm" && (
-                        <div className="space-y-6">
-                          <ConfirmStep
-                            categories={categories}
-                            formatBaht={formatBaht}
-                            watch={watch}
-                            resetKey={resetKey}
-                          />
-                        </div>
-                      )}
+
+                      <Suspense fallback={LazyFallback}>
+                        {activeTab === "location" && (
+                          <div className="space-y-6">
+                            <LocationStep errors={errors} resetKey={resetKey} />
+                          </div>
+                        )}
+                        {activeTab === "detail" && (
+                          <div className="space-y-6">
+                            <DetailStep
+                              errors={errors}
+                              categories={categories}
+                              resetKey={resetKey}
+                            />
+                          </div>
+                        )}
+                        {activeTab === "price" && (
+                          <div className="space-y-6">
+                            <PriceStep
+                              errors={errors}
+                              sellRentLocked={watch("Sell_Rent") || "SALE"}
+                              formatBaht={formatBaht}
+                              resetKey={resetKey}
+                            />
+                          </div>
+                        )}
+                        {activeTab === "inform" && (
+                          <div className="space-y-6">
+                            <InformStep errors={errors} resetKey={resetKey} />
+                          </div>
+                        )}
+                        {activeTab === "media" && (
+                          <div className="space-y-6">
+                            <MediaStep
+                              serverData={serverData}
+                              newImages={newImages}
+                              setNewImages={setNewImages}
+                              newVideos={newVideos}
+                              setNewVideos={setNewVideos}
+                              resetKey={resetKey}
+                              removedOldImages={removedOldImages}
+                              setRemovedOldImages={setRemovedOldImages}
+                              removedOldVideos={removedOldVideos}
+                              setRemovedOldVideos={setRemovedOldVideos}
+                            />
+                          </div>
+                        )}
+                        {activeTab === "confirm" && (
+                          <div className="space-y-6">
+                            <ConfirmStep
+                              categories={categories}
+                              formatBaht={formatBaht}
+                              watch={watch}
+                              resetKey={resetKey}
+                            />
+                          </div>
+                        )}
+                      </Suspense>
                     </>
                   )}
                 </div>
