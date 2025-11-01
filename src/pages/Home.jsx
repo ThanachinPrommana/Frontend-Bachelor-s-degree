@@ -1,4 +1,3 @@
-// src/pages/Home.jsx
 import { useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import axios from "axios";
@@ -37,6 +36,10 @@ const METRO_PROVINCES = [
 
 const POSTS_PER_PAGE = 10;
 
+// --- localStorage keys ---
+const KEY_FILTERS = "homeFilters";
+const KEY_SORT = "homeSortBy";
+
 // --- Helpers ---
 const formatPosts = (posts) => {
   if (!Array.isArray(posts)) return [];
@@ -61,7 +64,7 @@ const useDebounce = (value, delay) => {
 };
 
 const getPaginationRange = (currentPage, totalPages, siblings = 1) => {
-  const totalPageNumbersToShow = siblings * 2 + 3; // middle + first + last
+  const totalPageNumbersToShow = siblings * 2 + 3;
   const totalFixedPages = 3 + 2 * siblings;
 
   if (totalPages <= totalFixedPages + 2) {
@@ -86,7 +89,7 @@ const getPaginationRange = (currentPage, totalPages, siblings = 1) => {
     return [1, "...", ...rightRange];
   }
   if (showLeftEllipsis && showRightEllipsis) {
-    const middleCount = totalPageNumbersToShow - 2; // exclude first & last
+    const middleCount = totalPageNumbersToShow - 2;
     const middle = Array.from({ length: middleCount }, (_, i) => left + i);
     return [1, "...", ...middle, "...", totalPages];
   }
@@ -95,26 +98,19 @@ const getPaginationRange = (currentPage, totalPages, siblings = 1) => {
 
 // --- Main Component ---
 export default function Home() {
-  // UI / modal
   const [showLoanPopup, setShowLoanPopup] = useState(false);
-
-  // data
   const [displayedPosts, setDisplayedPosts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  // address data
+  const [sortBy, setSortBy] = useState("preferred");
   const [isAddressLoading, setIsAddressLoading] = useState(true);
   const [allProvinces, setAllProvinces] = useState([]);
   const [allDistricts, setAllDistricts] = useState([]);
   const [allSubDistricts, setAllSubDistricts] = useState([]);
   const [filteredDistricts, setFilteredDistricts] = useState([]);
   const [filteredSubDistricts, setFilteredSubDistricts] = useState([]);
-
-  // pagination
   const [currentPage, setCurrentPage] = useState(1);
 
-  // form
-  const { register, handleSubmit, watch, control, setValue } = useForm({
+  const { register, handleSubmit, watch, control, setValue, reset } = useForm({
     defaultValues: {
       searchQuery: "",
       province: "",
@@ -131,7 +127,7 @@ export default function Home() {
   const formValues = watch();
   const debouncedJSONFilters = useDebounce(JSON.stringify(formValues), 500);
 
-  // ---- Fetch address lists (BKK + metro only)
+  // ✅ โหลดข้อมูล address
   useEffect(() => {
     const fetchAddressData = async () => {
       setIsAddressLoading(true);
@@ -161,7 +157,38 @@ export default function Home() {
     fetchAddressData();
   }, []);
 
-  // ---- Cascade: province -> districts
+  // ✅ โหลดค่า filter/sort หลัง address โหลดครบ
+  useEffect(() => {
+    const savedFilters = localStorage.getItem(KEY_FILTERS);
+    const savedSort = localStorage.getItem(KEY_SORT);
+
+    if (savedSort) setSortBy(savedSort);
+
+    if (!isAddressLoading && savedFilters) {
+      try {
+        const parsed = JSON.parse(savedFilters);
+        reset(parsed);
+      } catch (e) {
+        console.error("Error restoring filters:", e);
+      }
+    }
+  }, [isAddressLoading, reset]);
+
+  // ✅ บันทึกค่า filter ทุกครั้งที่เปลี่ยน
+  useEffect(() => {
+    try {
+      localStorage.setItem(KEY_FILTERS, JSON.stringify(formValues));
+    } catch {}
+  }, [formValues]);
+
+  // ✅ บันทึกค่า sort ทุกครั้งที่เปลี่ยน
+  useEffect(() => {
+    try {
+      localStorage.setItem(KEY_SORT, sortBy);
+    } catch {}
+  }, [sortBy]);
+
+  // ---- Cascade province -> district
   useEffect(() => {
     if (selectedProvinceName && allProvinces.length && allDistricts.length) {
       const selectedProvince = allProvinces.find(
@@ -177,7 +204,7 @@ export default function Home() {
     }
   }, [selectedProvinceName, allProvinces, allDistricts]);
 
-  // ---- Cascade: district -> subdistricts
+  // ---- Cascade district -> subdistrict
   useEffect(() => {
     setFilteredSubDistricts([]);
     if (
@@ -197,10 +224,11 @@ export default function Home() {
           d.province_id === selectedProvince.id
       );
       if (selectedDistrict) {
-        const subs = allSubDistricts.filter(
-          (sd) => String(sd.district_id) === String(selectedDistrict.id)
+        setFilteredSubDistricts(
+          allSubDistricts.filter(
+            (sd) => String(sd.district_id) === String(selectedDistrict.id)
+          )
         );
-        setFilteredSubDistricts(subs);
       }
     }
   }, [
@@ -211,12 +239,10 @@ export default function Home() {
     allSubDistricts,
   ]);
 
-  // ---- Search (debounced)
+  // ✅ Search / Sort
   useEffect(() => {
     const runSearch = async () => {
-      // reset pagination เมื่อเปลี่ยน filter
       setCurrentPage(1);
-
       const filters = JSON.parse(debouncedJSONFilters);
       setIsLoading(true);
       try {
@@ -230,12 +256,17 @@ export default function Home() {
         if (filters.maxPrice) active.maxPrice = filters.maxPrice;
 
         let res;
-        // ถ้าทุกช่องว่างหมด ให้โหลดโพสต์หน้าแรก
         if (Object.values(filters).every((v) => v === "")) {
-          res = await apiClient.get("/homepage/posts");
+          res = await apiClient.get("/homepage/posts", {
+            params: { sort: sortBy },
+          });
           setDisplayedPosts(formatPosts(res.data));
         } else {
-          res = await apiClient.post("/search/filters", active);
+          const sortForSearch = sortBy === "preferred" ? "latest" : sortBy;
+          res = await apiClient.post("/search/filters", {
+            ...active,
+            sort: sortForSearch,
+          });
           setDisplayedPosts(formatPosts(res.data.posts));
         }
       } catch (e) {
@@ -246,9 +277,9 @@ export default function Home() {
       }
     };
     runSearch();
-  }, [debouncedJSONFilters]);
+  }, [debouncedJSONFilters, sortBy]);
 
-  // ---- Pagination derived
+  // ---- Pagination
   const indexOfLastPost = currentPage * POSTS_PER_PAGE;
   const indexOfFirstPost = indexOfLastPost - POSTS_PER_PAGE;
   const currentPosts = displayedPosts.slice(indexOfFirstPost, indexOfLastPost);
@@ -280,7 +311,6 @@ export default function Home() {
 
           <form onSubmit={handleSubmit(() => {})} className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-              {/* คำค้น */}
               <div className="md:col-span-2 lg:col-span-3">
                 <div className="relative">
                   <Searchbar
@@ -292,138 +322,122 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* ประเภท */}
+              {/* Filters */}
               <Controller
                 name="categoryId"
                 control={control}
                 render={({ field }) => (
-                  <div className="relative">
-                    <select
-                      {...field}
-                      disabled={isAddressLoading}
-                      className="p-3 border border-gray-300 rounded-lg w-full bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none pl-10"
-                    >
-                      <option value="">ทุกประเภทอสังหาริมทรัพย์</option>
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <select
+                    {...field}
+                    disabled={isAddressLoading}
+                    className="p-3 border rounded-lg w-full bg-white focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">ทุกประเภทอสังหาริมทรัพย์</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                 )}
               />
 
-              {/* จังหวัด */}
               <Controller
                 name="province"
                 control={control}
                 render={({ field }) => (
-                  <div className="relative">
-                    <select
-                      {...field}
-                      disabled={isAddressLoading}
-                      className="p-3 border border-gray-300 rounded-lg w-full bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none pl-10"
-                      onChange={(e) => {
-                        field.onChange(e);
-                        setValue("district", "");
-                        setValue("subdistrict", "");
-                      }}
-                    >
-                      <option value="">
-                        {isAddressLoading
-                          ? "กำลังโหลด..."
-                          : "เลือกจังหวัด (กทม./ปริมณฑล)"}
+                  <select
+                    {...field}
+                    disabled={isAddressLoading}
+                    onChange={(e) => {
+                      field.onChange(e);
+                      setValue("district", "");
+                      setValue("subdistrict", "");
+                    }}
+                    className="p-3 border rounded-lg w-full bg-white focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">
+                      {isAddressLoading
+                        ? "กำลังโหลด..."
+                        : "เลือกจังหวัด (กทม./ปริมณฑล)"}
+                    </option>
+                    {allProvinces.map((p) => (
+                      <option key={p.id} value={p.name_th}>
+                        {p.name_th}
                       </option>
-                      {allProvinces.map((p) => (
-                        <option key={p.id} value={p.name_th}>
-                          {p.name_th}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                    ))}
+                  </select>
                 )}
               />
 
-              {/* อำเภอ */}
               <Controller
                 name="district"
                 control={control}
                 render={({ field }) => (
-                  <div className="relative">
-                    <select
-                      {...field}
-                      className="p-3 border border-gray-300 rounded-lg w-full bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none pl-10"
-                      disabled={
-                        isAddressLoading || filteredDistricts.length === 0
-                      }
-                      onChange={(e) => {
-                        field.onChange(e);
-                        setValue("subdistrict", "");
-                      }}
-                    >
-                      <option value="">
-                        {selectedProvinceName ? "ทุกอำเภอ" : "เลือกจังหวัดก่อน"}
+                  <select
+                    {...field}
+                    disabled={
+                      isAddressLoading || filteredDistricts.length === 0
+                    }
+                    onChange={(e) => {
+                      field.onChange(e);
+                      setValue("subdistrict", "");
+                    }}
+                    className="p-3 border rounded-lg w-full bg-white focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">
+                      {selectedProvinceName ? "ทุกอำเภอ" : "เลือกจังหวัดก่อน"}
+                    </option>
+                    {filteredDistricts.map((d) => (
+                      <option key={d.id} value={d.name_th}>
+                        {d.name_th}
                       </option>
-                      {filteredDistricts.map((d) => (
-                        <option key={d.id} value={d.name_th}>
-                          {d.name_th}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                    ))}
+                  </select>
                 )}
               />
 
-              {/* ตำบล */}
               <Controller
                 name="subdistrict"
                 control={control}
                 render={({ field }) => (
-                  <div className="relative">
-                    <select
-                      {...field}
-                      className="p-3 border border-gray-300 rounded-lg w-full bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none pl-10"
-                      disabled={
-                        isAddressLoading || filteredSubDistricts.length === 0
-                      }
-                    >
-                      <option value="">
-                        {selectedDistrictName ? "ทุกตำบล" : "เลือกอำเภอก่อน"}
+                  <select
+                    {...field}
+                    disabled={
+                      isAddressLoading || filteredSubDistricts.length === 0
+                    }
+                    className="p-3 border rounded-lg w-full bg-white focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">
+                      {selectedDistrictName ? "ทุกตำบล" : "เลือกอำเภอก่อน"}
+                    </option>
+                    {filteredSubDistricts.map((s) => (
+                      <option key={s.id} value={s.name_th}>
+                        {s.name_th}
                       </option>
-                      {filteredSubDistricts.map((s) => (
-                        <option key={s.id} value={s.name_th}>
-                          {s.name_th}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                    ))}
+                  </select>
                 )}
               />
 
-              {/* ช่วงราคา */}
-              <div className="relative">
-                <input
-                  type="number"
-                  {...register("minPrice")}
-                  placeholder="ราคาต่ำสุด (บาท)"
-                  className="p-3 border border-gray-300 rounded-lg w-full focus:ring-2 focus:ring-blue-500 focus:border-transparent pl-10"
-                />
-              </div>
-              <div className="relative">
-                <input
-                  type="number"
-                  {...register("maxPrice")}
-                  placeholder="ราคาสูงสุด (บาท)"
-                  className="p-3 border border-gray-300 rounded-lg w-full focus:ring-2 focus:ring-blue-500 focus:border-transparent pl-10"
-                />
-              </div>
+              <input
+                type="number"
+                {...register("minPrice")}
+                placeholder="ราคาต่ำสุด (บาท)"
+                className="p-3 border rounded-lg w-full focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="number"
+                {...register("maxPrice")}
+                placeholder="ราคาสูงสุด (บาท)"
+                className="p-3 border rounded-lg w-full focus:ring-2 focus:ring-blue-500"
+              />
             </div>
           </form>
         </div>
       </div>
 
-      {/* Listings + Pagination */}
+      {/* Listings */}
       <div className="p-6 md:p-12 lg:p-20 mx-auto max-w-7xl">
         <div className="flex flex-col sm:flex-row items-center justify-between mb-8">
           <div>
@@ -436,11 +450,18 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-2 mt-4 sm:mt-0">
             <span className="text-gray-600">เรียงตาม:</span>
-            <select className="border border-gray-300 rounded-lg p-2 bg-white focus:ring-2 focus:ring-blue-500">
-              <option>ล่าสุด</option>
-              <option>ราคาต่ำสุด</option>
-              <option>ราคาสูงสุด</option>
-              <option>พื้นที่มากที่สุด</option>
+            <select
+              value={sortBy}
+              onChange={(e) => {
+                setSortBy(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="border rounded-lg p-2 bg-white focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="preferred">พื้นที่ที่ต้องการ</option>
+              <option value="latest">ล่าสุด</option>
+              <option value="priceAsc">ราคาต่ำสุด</option>
+              <option value="priceDesc">ราคาแพงสุด</option>
             </select>
           </div>
         </div>
@@ -452,28 +473,25 @@ export default function Home() {
         ) : displayedPosts.length > 0 ? (
           <>
             <Cards data={currentPosts} />
-
             {totalPages > 1 && (
               <div className="flex justify-center items-center mt-10 gap-2">
-                {/* Prev */}
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                   disabled={currentPage === 1}
                   className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
                     currentPage === 1
-                      ? "bg-gray-300 text-white cursor-not-allowed border-gray-300"
-                      : "bg-[#2c3e50] text-white hover:bg-[#1a252f] border-[#2c3e50]"
+                      ? "bg-gray-300 text-white cursor-not-allowed"
+                      : "bg-[#2c3e50] text-white hover:bg-[#1a252f]"
                   }`}
                 >
                   &lt; ก่อนหน้า
                 </button>
 
-                {/* numbers */}
                 {pageNumbers.map((page, idx) =>
                   page === "..." ? (
                     <span
                       key={`ellipsis-${idx}`}
-                      className="px-2 py-2 text-gray-500"
+                      className="px-2 text-gray-500"
                     >
                       ...
                     </span>
@@ -482,10 +500,10 @@ export default function Home() {
                       key={page}
                       onClick={() => setCurrentPage(page)}
                       disabled={currentPage === page}
-                      className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
+                      className={`px-4 py-2 rounded-lg border font-medium ${
                         currentPage === page
-                          ? "bg-[#2c3e50] text-white border-[#2c3e50] cursor-default"
-                          : "bg-white text-gray-700 hover:bg-gray-100 border-gray-300"
+                          ? "bg-[#2c3e50] text-white"
+                          : "bg-white text-gray-700 hover:bg-gray-100"
                       }`}
                     >
                       {page}
@@ -493,16 +511,15 @@ export default function Home() {
                   )
                 )}
 
-                {/* Next */}
                 <button
                   onClick={() =>
                     setCurrentPage((p) => Math.min(p + 1, totalPages))
                   }
                   disabled={currentPage === totalPages}
-                  className={`px-4 py-2 rounded-lg border font-medium transition-colors ${
+                  className={`px-4 py-2 rounded-lg border font-medium ${
                     currentPage === totalPages
-                      ? "bg-gray-300 text-white cursor-not-allowed border-gray-300"
-                      : "bg-[#2c3e50] text-white hover:bg-[#1a252f] border-[#2c3e50]"
+                      ? "bg-gray-300 text-white cursor-not-allowed"
+                      : "bg-[#2c3e50] text-white hover:bg-[#1a252f]"
                   }`}
                 >
                   ถัดไป &gt;
@@ -512,14 +529,12 @@ export default function Home() {
           </>
         ) : (
           <div className="text-center py-16 bg-white rounded-xl shadow-md">
-            <div className="text-6xl mb-4 ">
-              <HeartCrack className="mx-auto text-gray-300 w-32 h-32" />
-            </div>
+            <HeartCrack className="mx-auto text-gray-300 w-32 h-32 mb-4" />
             <h3 className="text-xl font-semibold text-gray-700 mb-2">
               ไม่พบอสังหาริมทรัพย์ที่ตรงกับการค้นหาของคุณ
             </h3>
             <p className="text-gray-500">
-              ลองปรับเปลี่ยนเงื่อนไขการค้นหาหรือล้างตัวกรองเพื่อดูผลลัพธ์ทั้งหมด
+              ลองปรับเงื่อนไขหรือกดล้างตัวกรองเพื่อดูผลลัพธ์ทั้งหมด
             </p>
           </div>
         )}
@@ -527,16 +542,15 @@ export default function Home() {
 
       <Credit />
 
-      {/* Floating Action Button */}
+      {/* Floating Button */}
       <button
         onClick={() => setShowLoanPopup((prev) => !prev)}
-        className="fixed bottom-6 right-6 z-40 bg-[#2c3e50] text-white border-0 shadow-lg rounded-full p-4 hover:bg-[#1a252f] transition-all duration-300 hover:scale-110"
+        className="fixed bottom-6 right-6 bg-[#2c3e50] text-white rounded-full p-4 shadow-lg hover:bg-[#1a252f] transition-all duration-300 hover:scale-110"
         aria-label="Loan Calculator"
       >
         <FaMoneyBillWave size={24} />
       </button>
 
-      {/* Loan Calculator Modal (shadcn dialog) */}
       <LoanCalculatorModal
         open={showLoanPopup}
         onOpenChange={setShowLoanPopup}
