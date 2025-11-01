@@ -126,8 +126,8 @@ const BookingScheduler = () => {
 
             {slots.length > 0 && (
                 <button
-                    className="w-full p-4 text-lg font-bold text-white bg-green-500 rounded-md 
-                               hover:bg-green-600 transition-colors
+                    className="w-full p-4 text-lg font-bold text-white bg-slate-700 rounded-md 
+                               hover:bg-gray-500 transition-colors
                                disabled:bg-gray-400 disabled:cursor-not-allowed"
                     onClick={handleBooking}
                     disabled={!selectedSlotId || isSubmitting}

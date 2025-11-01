@@ -13,7 +13,7 @@ import {
 
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { RefreshCcw, ChevronLeft, ChevronRight, Trash2, Loader2 } from "lucide-react";
+import { RefreshCcw, ChevronLeft, ChevronRight, Trash2, Loader2, CheckSquare } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { fmtDateTimeTH } from "@/lib/bookingUtils";
 
@@ -60,8 +60,8 @@ export default function BuyerBooking() {
   // Slip preview
   const [slipOpen, setSlipOpen] = useState(false);
   const [slipUrl, setSlipUrl] = useState("");
-
   const [deletingId, setDeletingId] = useState(null);
+  const [confirmingId, setConfirmingId] = useState(null); // ⭐️ (เพิ่ม State นี้)
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -140,6 +140,33 @@ export default function BuyerBooking() {
       });
     } finally {
       setDeletingId(null); // ลบเสร็จสิ้น (ไม่ว่าจะสำเร็จหรือล้มเหลว)
+    }
+  }
+
+  async function handleConfirm(bookingId) {
+    setConfirmingId(bookingId);
+    try {
+      // (สำคัญ) 
+      // เราต้องส่ง bookingId เป็น param ใน URL
+      // โปรดตรวจสอบว่า router ของคุณคือ: 
+      // router.post("/confirmed/booking/:bookingId", ...)
+
+      const res = await apiClient.post(`/confirmed/booking/${bookingId}`);
+
+      toast({
+        title: "ยืนยันการซื้อสำเร็จ!",
+        description: res.data.message,
+      });
+      await revalidateUser(); // รีเฟรชข้อมูลในตาราง
+    } catch (e) {
+      console.error("Error confirming purchase:", e);
+      toast({
+        title: "ยืนยันการซื้อไม่สำเร็จ",
+        description: e?.response?.data?.message || e.message || "โปรดลองอีกครั้ง",
+        variant: "destructive",
+      });
+    } finally {
+      setConfirmingId(null);
     }
   }
 
@@ -328,6 +355,41 @@ export default function BuyerBooking() {
                                   <AlertDialogAction
                                     onClick={() => handleDelete(b.id)}
                                     className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    ยืนยัน
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                          {b.bookingStatus === 'CONFIRMED' && !canDelete && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  className="bg-green-600 hover:bg-green-700"
+                                  disabled={confirmingId === b.id}
+                                >
+                                  {confirmingId === b.id ? (
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <CheckSquare className="w-4 h-4 mr-2" />
+                                  )}
+                                  ยืนยันการซื้อ
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>ยืนยันการซื้อยูนิตนี้?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    การดำเนินการนี้จะเปลี่ยนสถานะยูนิตเป็น "SOLD" (ขายแล้ว) และถือว่าการจองเสร็จสมบูรณ์ (ไม่สามารถย้อนกลับได้)
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleConfirm(b.id)}
+                                    className="bg-green-600 hover:bg-green-700"
                                   >
                                     ยืนยัน
                                   </AlertDialogAction>

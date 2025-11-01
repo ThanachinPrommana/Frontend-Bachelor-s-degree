@@ -12,7 +12,9 @@ import Cards from "@/components/Cards";
 import Credit from "@/components/Credit";
 import LoanCalculator from "@/components/form/LoanCalculator";
 import { HeartCrack, Loader2 } from 'lucide-react';
-
+import { useCompare } from "@/context/CompareContext";
+import { FaCheck } from "react-icons/fa";
+import { useMemo } from "react";
 // --- Data and Constants ---
 
 const categories = [
@@ -22,6 +24,11 @@ const categories = [
   { id: "cmegzft08000aw2bwx91l68z9", name: "ทาวน์เฮ้าส์" },
 
 ];
+
+const categoryMap = new Map(categories.map(item => [item.id, item.name]));
+const getCategoryLabel = (id) => {
+  return categoryMap.get(id) || "ไม่ระบุประเภท";
+};
 
 const PROVINCE_URL = "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/province.json";
 const DISTRICT_URL = "https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/district.json";
@@ -64,6 +71,12 @@ const Home = () => {
   const [displayedPosts, setDisplayedPosts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddressLoading, setIsAddressLoading] = useState(true);
+  const [originalPosts, setOriginalPosts] = useState([]);
+
+  // ⭐️ (เพิ่ม) 5. เรียกใช้ Compare Context
+  const { compareList, addToCompare, removeFromCompare } = useCompare();
+  const compareIds = useMemo(() => new Set(compareList.map(item => item.id)), [compareList]);
+  const MAX_COMPARE_ITEMS = 3; // (กำหนดค่าสูงสุด)
 
   const [allProvinces, setAllProvinces] = useState([]);
   const [allDistricts, setAllDistricts] = useState([]);
@@ -223,9 +236,11 @@ const Home = () => {
         let response;
         if (Object.values(filters).every(val => val === "")) {
           response = await apiClient.get('/homepage/posts');
+          setOriginalPosts(response.data); // ⭐️ (เพิ่ม) 6. เก็บข้อมูลดิบ
           setDisplayedPosts(formatPosts(response.data));
         } else {
           response = await apiClient.post('/search/filters', activeFilters);
+          setOriginalPosts(response.data.posts); // ⭐️ (เพิ่ม) 6. เก็บข้อมูลดิบ
           setDisplayedPosts(formatPosts(response.data.posts));
         }
       } catch (error) {
@@ -237,6 +252,39 @@ const Home = () => {
     };
     runSearch();
   }, [debouncedJSONFilters]);
+
+  // ⭐️ (เพิ่ม) 7. สร้างฟังก์ชันสำหรับจัดการการกดปุ่มเปรียบเทียบ
+  const handleAddToCompare = (postId) => {
+    if (compareIds.has(postId)) {
+      removeFromCompare(postId); // ถ้ามีอยู่แล้ว ให้ลบออก
+      return;
+    }
+
+    if (compareList.length >= MAX_COMPARE_ITEMS) {
+      alert(`คุณสามารถเปรียบเทียบได้สูงสุด ${MAX_COMPARE_ITEMS} รายการ`);
+      return;
+    }
+
+    // ใช้ข้อมูลจาก "originalPosts" (ที่มีข้อมูลครบ)
+    const postToAdd = originalPosts.find(p => p.id === postId);
+    if (!postToAdd) return;
+
+    // (สำคัญ) แปลงข้อมูลให้ตรงกับที่หน้า Compare.jsx ต้องการ
+    // (ตรวจสอบฟิลด์เหล่านี้จาก Backend / Schema ของคุณ)
+    const formattedPost = {
+      id: postToAdd.id,
+      name: postToAdd.Property_Name,
+      src: postToAdd.Image?.[0]?.secure_url || postToAdd.Image?.[0]?.url || '/placeholder.jpg',
+      price: postToAdd.Price,
+      deposit: postToAdd.Deposit_Amount,
+      size: postToAdd.Usable_Area, // (ตรวจสอบชื่อฟิลด์นี้)
+      badroom: postToAdd.Bedrooms,
+      bathroom: postToAdd.Bathrooms, // (ตรวจสอบชื่อฟิลด์นี้)
+      type: getCategoryLabel(postToAdd.categoryId)
+    };
+
+    addToCompare(formattedPost);
+  };
 
 
   const indexOfLastPost = currentPage * POSTS_PER_PAGE;
@@ -424,7 +472,11 @@ const Home = () => {
         ) : displayedPosts.length > 0 ? (
           // --- MODIFIED: Wrapper for Cards + Pagination ---
           <>
-            <Cards data={currentPosts} /> {/* 👈 MODIFIED: Use currentPosts */}
+            <Cards
+              data={currentPosts}
+              onAddToCompare={handleAddToCompare} // ⭐️ (เพิ่ม)
+              compareIds={compareIds} // ⭐️ (เพิ่ม)
+            /> {/* 👈 MODIFIED: Use currentPosts */}
 
             {/* --- ADDED: Pagination Controls --- */}
             {totalPages > 1 && (
@@ -451,8 +503,8 @@ const Home = () => {
                       onClick={() => setCurrentPage(page)}
                       disabled={isActive}
                       className={`px-4 py-2 rounded-lg border font-medium transition-colors ${isActive
-                          ? 'bg-[#2c3e50] text-white border-[#2c3e50] cursor-default'
-                          : 'bg-white text-gray-700 hover:bg-gray-100 border-gray-300'
+                        ? 'bg-[#2c3e50] text-white border-[#2c3e50] cursor-default'
+                        : 'bg-white text-gray-700 hover:bg-gray-100 border-gray-300'
                         }`}
                     >
                       {page}

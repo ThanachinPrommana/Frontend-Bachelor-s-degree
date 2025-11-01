@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 // import SignatureCanvas from "react-signature-canvas";
 import { PDFDownloadLink } from "@react-pdf/renderer";
@@ -58,10 +58,10 @@ const SectionHeader = ({ title }) => (
 const ContractForm = () => {
     // --- State Management ---
     // (แก้ไข) ⭐️ 3. เพิ่ม control
-    const { register, watch, control } = useForm();
+
     const navigate = useNavigate()
     const location = useLocation()
-    const { authUser } = useAuth()
+    const { authUser, loading } = useAuth()
 
     const buyerSigCanvas = useRef({});
     const sellerSigCanvas = useRef({});
@@ -73,7 +73,6 @@ const ContractForm = () => {
     const witness1SigCanvas2 = useRef({});
     const witness2SigCanvas2 = useRef({});
 
-    const formData = watch();
     const [buyerSignature, setBuyerSignature] = useState(null);
     const [sellerSignature, setSellerSignature] = useState(null);
     const [witness1Signature, setWitness1Signature] = useState(null);
@@ -95,6 +94,33 @@ const ContractForm = () => {
 
     const { postData, selectedUnit } = location.state || {};
 
+    const defaultValues = useMemo(() => {
+        if (!authUser) return {};
+        const fullName = `${authUser.First_name || ''} ${authUser.Last_name || ''}`.trim();
+
+        return {
+            buyerName: fullName,
+            buyerAge: authUser.Buyer?.Age || '',
+            buyerID: authUser.Buyer?.National_ID || '',
+            buyerAddress: authUser.Buyer?.Address || '',
+            buyerVillageNo: authUser.Buyer?.VillageNo || '',
+            buyerSoi: authUser.Buyer?.Soi || '',
+            buyerRoad: authUser.Buyer?.Road || '',
+            buyerSubDistrict: authUser.Buyer?.SubDistrict || '',
+            buyerDistrict: authUser.Buyer?.District || '',
+            buyerProvince: authUser.Buyer?.Province || '',
+        };
+    }, [authUser]);
+
+    // (แก้ไข) ⭐️ 3. ส่ง defaultValues เข้าไปใน useForm
+    const { register, watch, control } = useForm({
+        defaultValues: defaultValues
+    });
+
+    const formData = watch();
+
+    
+
     // (เพิ่ม) 2. เพิ่ม useEffect เพื่อตรวจสอบว่า Font โหลดเสร็จหรือยัง
     useEffect(() => {
         // ป้องกันการเข้าหน้านี้โดยตรง
@@ -106,6 +132,14 @@ const ContractForm = () => {
         const timer = setTimeout(() => setIsFontLoaded(true), 500);
         return () => clearTimeout(timer);
     }, [postData, selectedUnit, navigate]);
+
+    if (loading) {
+        return (
+            <div className="bg-gray-200 min-h-screen p-4 sm:p-8 flex items-center justify-center">
+                <Loader2 className="w-12 h-12 animate-spin text-gray-500" />
+            </div>
+        );
+    }
 
     const handleRemoveFile = (indexToRemove) => {
         setFilesToUpload(prevFiles => prevFiles.filter((_, index) => index !== indexToRemove));
@@ -178,6 +212,7 @@ const ContractForm = () => {
             setIsUploading(false);
         }
     };
+
 
     return (
         <div className="bg-gray-200 min-h-screen p-4 sm:p-8 flex items-center justify-center font-['Sarabun']">
