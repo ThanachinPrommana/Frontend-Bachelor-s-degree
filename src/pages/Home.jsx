@@ -251,7 +251,7 @@ const Home = () => {
       <div className="relative flex items-center justify-center min-h-[70vh] p-4 bg-gradient-to-br from-[#2c3e50] to-[#3498db]">
         <video
           className="absolute top-0 left-0 w-full h-full object-cover opacity-30"
-          src="/video/16919716-uhd_3840_2160_30fps.mp4"
+          src="video/8302413-uhd_4096_2160_25fps.mp4"
           autoPlay
           loop
           muted

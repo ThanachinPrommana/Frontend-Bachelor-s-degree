@@ -28,7 +28,9 @@ import {
   Clock,
   Trash2,
   ChevronLeft, // <-- Add this
-  ChevronRight // <-- Add this
+  ChevronRight,
+  FileText,
+  UserRound
 } from "lucide-react";
 import {
   Popover,
@@ -130,6 +132,9 @@ export default function SellerSchedule() {
   });
   const [creating, setCreating] = useState(false);
   const [createPostId, setCreatePostId] = useState(""); // Separate state for create form
+
+  const [selectedDocumentId, setSelectedDocumentId] = useState("");
+
   const [selectedDate, setSelectedDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [duration, setDuration] = useState(30);
@@ -204,6 +209,49 @@ export default function SellerSchedule() {
     return filteredSlots.slice(firstPageIndex, lastPageIndex);
   }, [filteredSlots, currentPage]);
 
+  console.log("Auth User Data:", authUser);
+
+  const depositDocumentsForPost = useMemo(() => {
+    // ต้องมี authUser และ โพสต์ที่ถูกเลือก
+    if (!createPostId || !authUser?.PropertyPost) {
+      return [];
+    }
+
+    // 2. ค้นหาโพสต์ที่ถูกเลือก
+    const selectedPostData = authUser.PropertyPost.find(p => String(p.id) === String(createPostId));
+    // ถ้าไม่เจอโพสต์ หรือ โพสต์นั้นไม่มีเอกสารเลย
+    if (!selectedPostData || !selectedPostData.DocumentUpload) {
+      console.log("ไม่พบข้อมูลโพสต์ หรือ ไม่มีเอกสารในโพสต์นี้");
+      return [];
+    }
+
+    const allDocuments = selectedPostData.DocumentUpload;
+    console.log("Selected Post Data:", selectedPostData.id);
+    console.log("Found Documents in Post (raw):", allDocuments.length);
+
+    // 3. สร้าง Map เพื่อจัดกลุ่ม (bundle) ตาม User ID **เท่านั้น**
+    const groupedByUser = new Map();
+
+    allDocuments.forEach(doc => {
+      // สร้าง key ที่ไม่ซ้ำกันสำหรับ User **เท่านั้น**
+      // (ถ้าไม่มี doc.User.id จะถูกจัดกลุ่ม 'no_user')
+      const userId = doc.User?.id ?? 'no_user';
+      const groupKey = userId; // <-- ⭐️ นี่คือจุดที่เปลี่ยน!
+
+      // 4. ถ้ายังไม่เคยเห็น User ID นี้, ให้เพิ่ม doc นี้ (ซึ่งจะเป็น doc แรก) ลงใน Map
+      //    เราจะใช้ doc.id (DocumentUpload ID) ของรายการแรกนี้เป็นตัวแทนของกลุ่ม
+      if (!groupedByUser.has(groupKey)) {
+        groupedByUser.set(groupKey, doc);
+      }
+    });
+
+    // 5. คืนค่าเป็น Array ของ doc ที่ถูกจัดกลุ่มแล้ว (ไม่ซ้ำ User ID)
+    const bundledList = Array.from(groupedByUser.values());
+    console.log("Bundled Document List (User-Only):", bundledList.length);
+    return bundledList;
+
+
+  }, [createPostId, authUser]);
   // --- Event Handlers & API Calls ---
 
   function onFilterChange(key, value) {
@@ -236,8 +284,8 @@ export default function SellerSchedule() {
   }
 
   async function handleCreateSlotButton() {
-    if (!createPostId || !selectedDate || !startTime) { // <-- ใช้ createPostId
-      toast({ title: "ข้อมูลไม่ครบ", description: "กรุณาเลือกโพสต์, วันที่, และเวลาเริ่ม", variant: "warning" });
+    if (!createPostId || !selectedDocumentId || !selectedDate || !startTime) { // <-- เพิ่ม !selectedDocumentId
+      toast({ title: "ข้อมูลไม่ครบ", description: "กรุณาเลือกโพสต์, เอกสารมัดจำ, วันที่, และเวลาเริ่ม", variant: "warning" }); // <-- อัปเดตข้อความ
       return;
     }
     const inputDate = new Date(selectedDate + "T00:00:00");
@@ -283,6 +331,7 @@ export default function SellerSchedule() {
         postId: postIdForApi,
         date: selectedDate,
         timeSlots: [{ startTime: startTime, endTime: endTime }],
+        documentUploadId: selectedDocumentId
       };
 
       console.log("Sending payload:", JSON.stringify(payload, null, 2));
@@ -290,6 +339,7 @@ export default function SellerSchedule() {
 
       setSelectedDate("");
       setStartTime("");
+      setSelectedDocumentId("");
       // Don't reset createPostId unless intended
       // setDuration(30); // Keep duration user selected?
       await revalidateUser(); // Refresh authUser -> updates allSellerSlots
@@ -398,15 +448,18 @@ export default function SellerSchedule() {
           <h3 className="font-semibold text-lg">สร้างช่วงเวลาว่างใหม่</h3>
 
           {/* Form Grid */}
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {/* Post Selection */}
-            <div>
-              <label className="text-sm font-medium block mb-1">ประกาศ*</label>
+            <div className="lg:col-span-1">
+              <label className="text-sm font-medium block mb-1">ประกาศ</label>
               <Select
                 value={createPostId} // Use createForm state here
                 onValueChange={(v) => {
                   setCreatePostId(v); // <-- เปลี่ยนมาใช้ setCreatePostId โดยตรง
                   // รีเซ็ตวันที่/เวลา เมื่อโพสต์เปลี่ยน
+                  // setSelectedDate("");
+                  // setStartTime("");
+                  setSelectedDocumentId("");
                   setSelectedDate("");
                   setStartTime("");
                 }}
@@ -425,15 +478,65 @@ export default function SellerSchedule() {
               </Select>
             </div>
 
+            {/* ========================================== */}
+            {/* 3. เพิ่ม Dropdown เลือกเอกสาร */}
+            {/* ========================================== */}
+            <div className="lg:col-span-2"> {/* ปรับ col-span */}
+              <label className="text-sm font-medium block mb-1">เลือกผู้ยื่นเอกสาร</label>
+              <Select
+                value={selectedDocumentId}
+                onValueChange={(v) => {
+                  setSelectedDocumentId(v);
+                  setSelectedDate(""); // Reset วันที่/เวลา เมื่อเอกสารเปลี่ยน
+                  setStartTime("");
+                }}
+                disabled={!createPostId || depositDocumentsForPost.length === 0} // Disable ถ้ายังไม่เลือก Post หรือ ไม่มีเอกสาร
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={
+                    !createPostId
+                      ? "กรุณาเลือกประกาศก่อน"
+                      : depositDocumentsForPost.length === 0
+                        ? "ไม่พบเอกสารมัดจำสำหรับโพสต์นี้"
+                        : "เลือกผู้ยื่นเอกสาร"
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {depositDocumentsForPost.map((doc) => {
+
+                    // 1. ดึงชื่อผู้ใช้ (เจ้าของเอกสาร)
+                    const userName = (doc.User?.First_name || doc.User?.Last_name)
+                      ? `${doc.User.First_name || ''} ${doc.User.Last_name || ''}`.trim()
+                      : `(ผู้ใช้ ID: ${doc.User?.id || 'N/A'})`;
+
+                    return (
+                      <SelectItem key={doc.id} value={doc.id}>
+                        {/* 3. แสดงเฉพาะชื่อผู้ใช้ และยูนิต (ลบชื่อเอกสารออก) */}
+                        <div className="flex items-center gap-2 font-medium">
+                          <UserRound size={14} className="text-muted-foreground" />
+                          <span>{userName} (ยูนิต: {doc.unit?.Unit_Number || 'N/A'})</span>
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              {createPostId && depositDocumentsForPost.length === 0 && (
+                <p className="text-xs text-red-600 mt-1">ไม่สามารถสร้างนัดได้ (ไม่มีเอกสาร)</p>
+              )}
+            </div>
+            {/* ========================================== */}
+
             {/* Date Selection */}
             <div>
-              <label className="text-sm font-medium block mb-1">วันนัด*</label>
+              <label className="text-sm font-medium block mb-1">วันนัด</label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     className="w-full justify-start font-normal"
-                    postId={createPostId}// Check createForm state
+                    // postId={createPostId}// Check createForm state
+                    disabled={!createPostId || !selectedDocumentId}
                   >
                     <CalendarIcon className="w-4 h-4 mr-2 text-muted-foreground" />
                     {selectedDate || <span className="text-muted-foreground">เลือกวันที่</span>}
@@ -468,6 +571,7 @@ export default function SellerSchedule() {
               <Select
                 value={String(duration)}
                 onValueChange={(v) => setDuration(Number(v))}
+                disabled={!createPostId || !selectedDocumentId}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -482,8 +586,8 @@ export default function SellerSchedule() {
 
             {/* Start Time Display */}
             <div>
-              <label className="text-sm font-medium block mb-1">เวลาเริ่ม*</label>
-              <div className="mt-1 h-10 px-3 py-2 flex items-center gap-2 border rounded-md bg-muted">
+              <label className="text-sm font-medium block mb-1">เวลาเริ่ม</label>
+              <div className={`mt-1 h-10 px-3 py-2 flex items-center gap-2 border rounded-md ${!createPostId || !selectedDocumentId ? 'bg-gray-100 opacity-70' : 'bg-muted'}`}>
                 <Clock className="w-4 h-4 text-muted-foreground" />
                 <div className={`text-sm ${startTime ? '' : 'text-muted-foreground'}`}>{startTime || "เลือกด้านล่าง"}</div>
               </div>
@@ -492,14 +596,24 @@ export default function SellerSchedule() {
 
           {/* Time Grid Picker */}
           <div className="pt-2">
-            <label className="text-sm font-medium block mb-2">เลือกเวลาเริ่ม*</label>
-            <TimeGridPicker
-              selectedDate={selectedDate}
-              postId={createPostId} // Use createForm state here
-              duration={duration}
-              allSlots={allSellerSlots} // Pass ALL slots for overlap check
-              onPick={(t) => setStartTime(t)}
-            />
+            <label className="text-sm font-medium block mb-2">เลือกเวลาเริ่ม</label>
+            {/* ========================================== */}
+            {/* 4. ปรับ Logic การแสดงผล TimeGridPicker */}
+            {/* ========================================== */}
+            {(!createPostId || !selectedDocumentId) ? (
+              <div className="text-sm text-muted-foreground p-4 text-center border rounded-md bg-muted/50">
+                กรุณาเลือกประกาศและเอกสารมัดจำก่อน
+              </div>
+            ) : (
+              <TimeGridPicker
+                selectedDate={selectedDate}
+                postId={createPostId}
+                duration={duration}
+                allSlots={allSellerSlots}
+                onPick={(t) => setStartTime(t)}
+              />
+            )}
+            {/* ========================================== */}
           </div>
 
           {/* End time preview */}
@@ -523,7 +637,7 @@ export default function SellerSchedule() {
           <div className="flex justify-end pt-2">
             <Button
               onClick={handleCreateSlotButton}
-              disabled={creating || !createPostId || !selectedDate || !startTime || (startTime && (() => { // <-- เปลี่ยนเป็น !createPostId
+              disabled={creating || !createPostId || !selectedDocumentId || !selectedDate || !startTime || (startTime && (() => { // <-- เปลี่ยนเป็น !createPostId
                 const [hh, mm] = startTime.split(":").map(Number);
                 const endM = hh * 60 + mm + duration;
                 const endHH = Math.floor(endM / 60);
@@ -651,7 +765,7 @@ export default function SellerSchedule() {
           </CardContent>
         )}
       </Card>
-    </div>
+    </div >
   );
 }
 

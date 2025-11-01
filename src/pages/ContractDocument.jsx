@@ -10,6 +10,35 @@ Font.register({
   ],
 });
 // สร้าง Stylesheet (เหมือนเดิม)
+const formatThaiDate = (isoDate) => {
+  if (!isoDate) return " "; // ถ้าไม่มีข้อมูล ให้คืนค่าว่าง
+
+  try {
+    const date = new Date(isoDate);
+
+    // ถ้าวันที่ผิดพลาด
+    if (isNaN(date.getTime())) {
+      console.warn("Invalid date value passed to formatThaiDate:", isoDate);
+      return " ";
+    }
+
+    const options = {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      calendar: 'buddhist', // หัวใจสำคัญ
+      timeZone: 'Asia/Bangkok'
+    };
+
+    // จะได้ผลลัพธ์เช่น "31 ตุลาคม 2568"
+    return new Intl.DateTimeFormat('th-TH', options).format(date);
+
+  } catch (error) {
+    console.error("Error formatting date:", error);
+    return " "; // คืนค่าว่างหากเกิด Error
+  }
+};
+
 const styles = StyleSheet.create({
   // ... (style ทั้งหมดของคุณเหมือนเดิม)
   page: {
@@ -121,7 +150,8 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
           </View>
           <View style={styles.flexRow}>
             <Text>ในวันที่:</Text>
-            <Text style={styles.input}>{`${data?.date || ''} ${data?.month || ''} ${data?.year || ''}`}</Text>
+            {/* ***** 2. แก้ไขบรรทัดนี้ ***** */}
+            <Text style={styles.input}>{formatThaiDate(data?.contractDate)}</Text>
           </View>
         </View>
       </View>
@@ -244,8 +274,11 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
             <Text style={styles.input}>{data?.remainingAmount || ""}</Text>
             <Text>เลขที่เช็ค</Text>
             <Text style={styles.input}>{data?.checkNo || ""}</Text>
-            <Text>สั่งจ่ายเงินวันที่</Text>
-            <Text style={styles.input}>{data?.datepay || ""}</Text>
+
+            <Text>ในวันที่:</Text>
+            {/* ***** 2. แก้ไขบรรทัดนี้ ***** */}
+            <Text style={styles.input}>{formatThaiDate(data?.datepay)}</Text>
+
           </View>
           <View style={styles.flexRow}>
             <Text>โอนเงินเข้าบัญชี</Text>
@@ -270,7 +303,7 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
             <Text style={styles.input}>{data?.pricefont4 || ""}</Text>
             <Text>)</Text>
             <Text>ภายในวันที่</Text>
-            <Text style={styles.input}>{data?.dateofpay5 || ""}</Text>
+            <Text style={styles.input}>{formatThaiDate(data?.dateofpay5)}</Text>
           </View>
         </View>
 

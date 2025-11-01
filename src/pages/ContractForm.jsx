@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 // import SignatureCanvas from "react-signature-canvas";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import ContractDocument from "./ContractDocument";
@@ -9,9 +9,10 @@ import SignaturePad from 'react-signature-pad-wrapper';
 import { useLocation, useNavigate } from "react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
-import { Upload, FileText, Loader2, X, Trash2 } from "lucide-react";
+import { Upload, FileText, Loader2, X, Trash2, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@headlessui/react";
 import { apiClient } from "@/api/authconfig";
+import { ThaiDatePicker } from "thaidatepicker-react";
 
 // (แก้ไข) 1. ย้าย InputField ออกมาไว้นอก Component หลัก
 // และรับ register เข้ามาเป็น prop
@@ -23,6 +24,14 @@ const InputField = ({ id, placeholder, className = "", register }) => (
         className={`border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-solid focus:border-black pb-1 px-1 ${className}`}
     />
 );
+const InputDate = ({ id, register, className = "" }) => (
+    <input
+        type="date"
+        {...register(id)}
+        className={`border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-solid focus:border-black pb-1 px-1 ${className}`}
+    />
+)
+
 
 Font.register({
     family: 'Sarabun',
@@ -48,7 +57,8 @@ const SectionHeader = ({ title }) => (
 
 const ContractForm = () => {
     // --- State Management ---
-    const { register, watch } = useForm();
+    // (แก้ไข) ⭐️ 3. เพิ่ม control
+    const { register, watch, control } = useForm();
     const navigate = useNavigate()
     const location = useLocation()
     const { authUser } = useAuth()
@@ -192,16 +202,40 @@ const ContractForm = () => {
                             <InputField id="contractPlace" placeholder="สถานที่ทำสัญญา" register={register} className="w-full" />
                         </FormField>
 
-                        <FormField label="วันที่">
-                            <InputField id="date" placeholder="เช่น 12" register={register} className="w-full" />
-                        </FormField>
+                        {/* ⭐️ (แก้ไข) 4. ใช้ Controller ครอบ ThaiDatePicker ⭐️ */}
+                        <FormField label="วันที่ทำสัญญา" className="md:col-span-2">
+                            {/* 1. เพิ่ม div relative เพื่อจัดตำแหน่งไอคอน */}
+                            <div className="relative w-full">
+                                {/* 2. เพิ่มไอคอน (วางทับแบบ absolute) */}
+                                <CalendarIcon
+                                    className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none"
+                                />
 
-                        <FormField label="เดือน">
-                            <InputField id="month" placeholder="เช่น มกราคม" register={register} className="w-full" />
-                        </FormField>
-
-                        <FormField label="พ.ศ.">
-                            <InputField id="year" placeholder="เช่น 2568" register={register} className="w-full" />
+                                {/* 3. Controller และ ThaiDatePicker เหมือนเดิม */}
+                                <Controller
+                                    name="contractDate"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <ThaiDatePicker
+                                            value={field.value}
+                                            onChange={(christDate, buddhistDate) => {
+                                                field.onChange(christDate);
+                                            }}
+                                            inputProps={{
+                                                placeholder: "เลือกวันที่ (พ.ศ.)",
+                                                // 4. (สำคัญ) แก้ไข className ให้สวยงาม
+                                                // (และแก้ typo จาก _className เป็น className)
+                                                className: `
+                                                  w-full rounded-md border border-gray-300 bg-white 
+                                                  px-3 py-2 pl-10 
+                                                  text-gray-900 shadow-sm 
+                                                  focus:outline-none focus:ring-2 focus:ring-blue-500
+                                                `
+                                            }}
+                                        />
+                                    )}
+                                />
+                            </div>
                         </FormField>
                     </div>
 
@@ -329,7 +363,38 @@ const ContractForm = () => {
                             </FormField>
 
                             <FormField label="ลงวันที่">
-                                <InputField id="datepay" register={register} className="w-full" />
+                                {/* 1. เพิ่ม div relative เพื่อจัดตำแหน่งไอคอน */}
+                                <div className="relative w-full">
+                                    {/* 2. เพิ่มไอคอน (วางทับแบบ absolute) */}
+                                    <CalendarIcon
+                                        className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none"
+                                    />
+
+                                    {/* 3. Controller และ ThaiDatePicker */}
+                                    <Controller
+                                        name="datepay"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <ThaiDatePicker
+                                                value={field.value}
+                                                onChange={(christDate, buddhistDate) => {
+                                                    field.onChange(christDate);
+                                                }}
+                                                inputProps={{
+                                                    placeholder: "เลือกวันที่ (พ.ศ.)",
+                                                    // 4. (สำคัญ) แก้ไข className ให้สวยงาม
+                                                    // (และแก้ typo จาก _className เป็น className)
+                                                    className: `
+                                                  w-full rounded-md border border-gray-300 bg-white 
+                                                  px-3 py-2 pl-10 
+                                                  text-gray-900 shadow-sm 
+                                                  focus:outline-none focus:ring-2 focus:ring-blue-500
+                                                `
+                                                }}
+                                            />
+                                        )}
+                                    />
+                                </div>
                             </FormField>
 
                             <FormField label="โอนเงินเข้าบัญชี">
@@ -354,7 +419,29 @@ const ContractForm = () => {
                             </FormField>
 
                             <FormField label="ภายในวันที่">
-                                <InputField id="dateofpay5" register={register} className="w-full" />
+                                <Controller
+                                    name="dateofpay5"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <ThaiDatePicker
+                                            value={field.value}
+                                            onChange={(christDate, buddhistDate) => {
+                                                field.onChange(christDate);
+                                            }}
+                                            inputProps={{
+                                                placeholder: "เลือกวันที่ (พ.ศ.)",
+                                                // 4. (สำคัญ) แก้ไข className ให้สวยงาม
+                                                // (และแก้ typo จาก _className เป็น className)
+                                                className: `
+                                                  w-full rounded-md border border-gray-300 bg-white 
+                                                  px-3 py-2 pl-10 
+                                                  text-gray-900 shadow-sm 
+                                                  focus:outline-none focus:ring-2 focus:ring-blue-500
+                                                `
+                                            }}
+                                        />
+                                    )}
+                                />
                             </FormField>
                         </div>
 
@@ -614,7 +701,7 @@ const ContractForm = () => {
                                     witness2Signature3={witness2Signature2}
                                 />
                             }
-                            fileName="สัญญาเงินมัดจำ.pdf"
+                            fileName="Deposit.pdf"
                             className="w-full flex items-center justify-center text-center bg-green-600 text-white font-bold h-16 px-6 rounded-lg hover:bg-green-700 transition-colors duration-300 text-lg"
                         >
                             {({ loading }) => (loading ? "กำลังสร้างเอกสาร PDF..." : "สร้างและดาวน์โหลดสัญญา (PDF)")}
@@ -660,7 +747,7 @@ const ContractForm = () => {
                                     <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
                                         <p className="font-semibold mb-2">กรุณาอัปโหลดเอกสารทั้งหมด 3 ฉบับ (PDF):</p>
                                         <ul className="list-disc pl-5 space-y-1">
-                                            <li>เอกสารสัญญา (ที่ลงนามแล้ว)</li>
+                                            <li>เอกสารสัญญามัดจำ (ที่ลงนามแล้ว)</li>
                                             <li>สำเนาบัตรประชาชน</li>
                                             <li>สำเนาทะเบียนบ้าน</li>
                                         </ul>
