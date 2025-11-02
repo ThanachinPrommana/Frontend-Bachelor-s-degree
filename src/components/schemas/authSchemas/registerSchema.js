@@ -1,15 +1,7 @@
+// src/components/schemas/authSchemas.js
 import { z } from "zod";
 
 const digitsOnly = (s) => (s || "").replace(/\D/g, "");
-
-const isThaiId = (id) => {
-  const value = digitsOnly(String(id || ""));
-  if (!/^\d{13}$/.test(value)) return false;
-  const d = value.split("").map(Number);
-  const sum = d.slice(0, 12).reduce((acc, x, i) => acc + x * (13 - i), 0);
-  const check = (11 - (sum % 11)) % 10;
-  return check === d[12];
-};
 
 export const registerSchema = z
   .object({
@@ -30,16 +22,14 @@ export const registerSchema = z
       .max(72, "รหัสผ่านยาวเกินไป"),
     ConfirmPassword: z.string().min(1, "กรุณายืนยันรหัสผ่าน"),
 
-    // ✅ บัตรประชาชน 13 หลัก ตรวจ checksum
+    // ✅ บัตรประชาชน: ไม่ตรวจ checksum แล้ว / ต้องเป็นตัวเลข 13 หลัก
     nationalId: z
       .string({ required_error: "กรุณากรอกเลขบัตรประชาชน" })
       .transform(digitsOnly)
-      .refine((v) => /^\d{13}$/.test(v), "อนุญาตเฉพาะตัวเลข 13 หลัก")
-      .refine(isThaiId, "เลขบัตรประชาชนไม่ถูกต้อง"),
+      .refine((v) => /^\d{13}$/.test(v), "อนุญาตเฉพาะตัวเลข 13 หลัก"),
 
     // ✅ ที่อยู่ตามบัตร
     regAddress: z.object({
-      // ต้องกรอก
       houseNo: z.string().trim().min(1, "กรุณากรอกเลขที่บ้าน"),
       subdistrict: z.string().trim().min(1, "กรุณากรอกตำบล"),
       district: z.string().trim().min(1, "กรุณากรอกอำเภอ"),

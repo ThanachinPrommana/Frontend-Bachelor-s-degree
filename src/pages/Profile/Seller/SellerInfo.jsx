@@ -152,7 +152,10 @@ const USER_ALLOWED = [
   "image",
   "publicId",
 ];
+
+/** ✅ ย้าย National_ID มาไว้ฝั่ง Buyer */
 const BUYER_ALLOWED = [
+  "National_ID",
   "DateofBirth",
   "Occupation",
   "Monthly_Income",
@@ -165,8 +168,9 @@ const BUYER_ALLOWED = [
   "Lifestyle_Preferences",
   "Special_Requirements",
 ];
+
+/** ⛔ ลบ National_ID ออกจากฝั่ง Seller */
 const SELLER_ALLOWED = [
-  "National_ID",
   "Company_Name",
   "RealEstate_License",
   "nationalIdImage",
@@ -214,17 +218,18 @@ export default function SellerInfo() {
     const b = user?.Buyer || {};
     const s = user?.Seller || {};
 
+    // เลขบัตร: ใช้ Buyer ก่อน ถ้าไม่มีค่อย fallback Seller (รองรับช่วงย้ายข้อมูล)
+    const nationalIdMasked = maskThaiID(b?.National_ID || s?.National_ID);
+
     // จำกัดการแสดงจังหวัดเฉพาะปริมณฑล (ถ้าไม่ใช่ แสดง "-")
     const provinceDisplay = isMetroProvince(b?.Preferred_Province)
       ? b.Preferred_Province
       : "-";
 
-    return [
+    // ✅ แยก buyerRows / sellerRows แบบชัดเจน (ไม่ใช้ตัดด้วย findIndex แล้ว)
+    const buyerRows = [
       { label: "เบอร์โทร", value: user?.Phone || "-" },
-      // ⬇️ ตัดออกตามคำขอ
-      // { label: "วันเกิด", value: formatDateThai(b?.DateofBirth) },
-      // { label: "อาชีพ", value: b?.Occupation || "-" },
-
+      { label: "เลขบัตรประชาชน", value: nationalIdMasked },
       { label: "รายได้ต่อเดือน", value: formatBaht(b?.Monthly_Income) },
       {
         label: "ขนาดครอบครัว",
@@ -237,11 +242,15 @@ export default function SellerInfo() {
       { label: "สิ่งอำนวยความสะดวก", value: nearbyLabel(b?.Nearby_Facilities) },
       { label: "ไลฟ์สไตล์", value: lifestyleLabel(b?.Lifestyle_Preferences) },
       { label: "ความต้องการพิเศษ", value: b?.Special_Requirements || "-" },
-      { label: "เลขบัตรประชาชน", value: maskThaiID(s?.National_ID) },
+    ];
+
+    const sellerRows = [
       { label: "บริษัท", value: s?.Company_Name || "-" },
       { label: "ใบอนุญาตนายหน้า", value: s?.RealEstate_License || "-" },
       { label: "สถานะบัญชี", value: <StatusBadge status={s?.Status} /> },
     ];
+
+    return { buyerRows, sellerRows };
   }, [user]);
 
   const copyEmail = useCallback(async () => {
@@ -268,6 +277,8 @@ export default function SellerInfo() {
     const base = localAvatar || withBust(absolutize(user?.image), avatarBust);
     return base || "https://via.placeholder.com/80";
   }, [localAvatar, user?.image, avatarBust]);
+
+  const { buyerRows, sellerRows } = detailRows;
 
   return (
     <div className="space-y-6">
@@ -346,58 +357,32 @@ export default function SellerInfo() {
 
           {/* รายละเอียด */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-1 gap-x-6 text-sm">
-            {(() => {
-              // หา index แถวแรกของ "ข้อมูลผู้ขาย" (เริ่มที่ 'เลขบัตรประชาชน')
-              const cut = detailRows.findIndex(
-                (r) => r.label === "เลขบัตรประชาชน"
-              );
-              const buyerRows =
-                cut > -1 ? detailRows.slice(0, cut) : detailRows;
-              const sellerRows = cut > -1 ? detailRows.slice(cut) : [];
+            {/* หัวข้อฝั่งผู้ซื้อ */}
+            <div className="col-span-1 sm:col-span-2 mb-1">
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                ข้อมูลผู้ซื้อ
+              </div>
+            </div>
 
-              return (
-                <>
-                  {/* หัวข้อฝั่งผู้ซื้อ */}
-                  <div className="col-span-1 sm:col-span-2 mb-1">
-                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      ข้อมูลผู้ซื้อ
-                    </div>
-                  </div>
+            {/* รายการผู้ซื้อ (มีเลขบัตรอยู่ตรงนี้) */}
+            {buyerRows.map((row) => (
+              <DetailRow key={row.label} label={row.label} value={row.value} />
+            ))}
 
-                  {/* รายการผู้ซื้อ */}
-                  {buyerRows.map((row) => (
-                    <DetailRow
-                      key={row.label}
-                      label={row.label}
-                      value={row.value}
-                    />
-                  ))}
+            {/* เส้นคั่น + หัวข้อฝั่งผู้ขาย */}
+            <div className="col-span-1 sm:col-span-2 my-3">
+              <div className="h-px bg-gray-200" />
+            </div>
+            <div className="col-span-1 sm:col-span-2 mb-1">
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                ข้อมูลผู้ขาย
+              </div>
+            </div>
 
-                  {/* เส้นคั่น + หัวข้อฝั่งผู้ขาย */}
-                  {sellerRows.length > 0 && (
-                    <>
-                      <div className="col-span-1 sm:col-span-2 my-3">
-                        <div className="h-px bg-gray-200" />
-                      </div>
-                      <div className="col-span-1 sm:col-span-2 mb-1">
-                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                          ข้อมูลผู้ขาย
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {/* รายการผู้ขาย: บัตรประชาชน / บริษัท / ใบอนุญาตนายหน้า / สถานะ */}
-                  {sellerRows.map((row) => (
-                    <DetailRow
-                      key={row.label}
-                      label={row.label}
-                      value={row.value}
-                    />
-                  ))}
-                </>
-              );
-            })()}
+            {/* รายการผู้ขาย */}
+            {sellerRows.map((row) => (
+              <DetailRow key={row.label} label={row.label} value={row.value} />
+            ))}
           </div>
 
           {/* โมดัลอัปโหลดรูป */}
