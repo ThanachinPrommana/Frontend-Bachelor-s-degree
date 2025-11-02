@@ -14,6 +14,7 @@ import { Button } from "@headlessui/react";
 import { apiClient } from "@/api/authconfig";
 import { ThaiDatePicker } from "thaidatepicker-react";
 
+
 // (แก้ไข) 1. ย้าย InputField ออกมาไว้นอก Component หลัก
 // และรับ register เข้ามาเป็น prop
 const InputField = ({ id, placeholder, className = "", register }) => (
@@ -94,6 +95,9 @@ const ContractForm = () => {
 
     const { postData, selectedUnit } = location.state || {};
 
+    // 4. ใช้ useEffect เติมข้อมูล
+
+
     const defaultValues = useMemo(() => {
         if (!authUser) return {};
         const fullName = `${authUser.First_name || ''} ${authUser.Last_name || ''}`.trim();
@@ -103,27 +107,64 @@ const ContractForm = () => {
             buyerAge: authUser.Buyer?.Age || '',
             buyerID: authUser.Buyer?.National_ID || '',
             buyerAddress: authUser.Buyer?.Address || '',
-            buyerVillageNo: authUser.Buyer?.VillageNo || '',
+            // buyerVillageNo: authUser.Buyer?.VillageNo || '',
             buyerSoi: authUser.Buyer?.Soi || '',
             buyerRoad: authUser.Buyer?.Road || '',
             buyerSubDistrict: authUser.Buyer?.SubDistrict || '',
             buyerDistrict: authUser.Buyer?.District || '',
             buyerProvince: authUser.Buyer?.Province || '',
+
+            buyerReg_HouseNo: authUser.Buyer?.Reg_HouseNo || '',
+            buyerReg_Village: authUser.Buyer?.Reg_Village || '',
+            buyerReg_Alley: authUser.Buyer?.Reg_Alley || '',
+            buyerReg_Road: authUser.Buyer?.Reg_Road || '',
+            buyerReg_Subdistrict: authUser.Buyer?.Reg_Subdistrict || '',
+            buyerReg_District: authUser.Buyer?.Reg_District || '',
+            buyerReg_Province: authUser.Buyer?.Reg_Province || '',
         };
     }, [authUser]);
 
     // (แก้ไข) ⭐️ 3. ส่ง defaultValues เข้าไปใน useForm
-    const { register, watch, control } = useForm({
+    const { register, watch, control, reset } = useForm({
         defaultValues: defaultValues
     });
 
     const formData = watch();
 
-    
+    useEffect(() => {
+        // 5. เช็กว่ามี postData และข้อมูลผู้ขายที่ซ้อนอยู่หรือไม่
+        if (postData && postData.user && postData.user.Buyer) {
+
+            const sellerUser = postData.user;
+            const sellerProfile = postData.user.Buyer; // 👈 นี่คือข้อมูลที่คุณต้องการ
+            console.log("Post Data:", sellerUser);
+            reset({
+                // ▼ ข้อมูลผู้ขายที่คุณต้องการทั้งหมดอยู่ที่นี่ ▼
+                sellerName: `${sellerUser.First_name || ''} ${sellerUser.Last_name || ''}`,
+
+                // ▼ ⭐️ แก้ไข: ดึงข้อมูลจาก sellerProfile (ซึ่งคือ .Buyer) โดยตรง
+                sellerID: sellerProfile.National_ID || "",
+                sellerAddress: sellerProfile.Reg_HouseNo || "",
+                sellerVillageNo: sellerProfile.Reg_Village || "",
+                sellerSoi: sellerProfile.Reg_Alley || "",
+                sellerRoad: sellerProfile.Reg_Road || "",
+                sellerSubDistrict: sellerProfile.Reg_Subdistrict || "",
+                sellerDistrict: sellerProfile.Reg_District || "",
+                sellerProvince: sellerProfile.Reg_Province || "",
+
+
+                price: postData.Price || 0,
+                somecontract: postData.Deposit_Amount || 0,
+            });
+        }
+    }, [postData, reset]);
+
+
 
     // (เพิ่ม) 2. เพิ่ม useEffect เพื่อตรวจสอบว่า Font โหลดเสร็จหรือยัง
     useEffect(() => {
         // ป้องกันการเข้าหน้านี้โดยตรง
+
         if (!postData || !selectedUnit) {
             console.error("Missing data, redirecting to home.");
             navigate('/');
@@ -334,31 +375,31 @@ const ContractForm = () => {
                         </FormField>
 
                         <FormField label="บ้านเลขที่" className="lg:col-span-2">
-                            <InputField id="buyerAddress" register={register} className="w-full" />
+                            <InputField id="buyerReg_HouseNo" register={register} className="w-full" />
                         </FormField>
 
                         <FormField label="หมู่ที่">
-                            <InputField id="buyerVillageNo" register={register} className="w-full" />
+                            <InputField id="buyerReg_Village" register={register} className="w-full" />
                         </FormField>
 
                         <FormField label="ซอย">
-                            <InputField id="buyerSoi" register={register} className="w-full" />
+                            <InputField id="buyerReg_Alley" register={register} className="w-full" />
                         </FormField>
 
                         <FormField label="ถนน">
-                            <InputField id="buyerRoad" register={register} className="w-full" />
+                            <InputField id="buyerReg_Road" register={register} className="w-full" />
                         </FormField>
 
                         <FormField label="ตำบล/แขวง">
-                            <InputField id="buyerSubDistrict" register={register} className="w-full" />
+                            <InputField id="buyerReg_Subdistrict" register={register} className="w-full" />
                         </FormField>
 
                         <FormField label="อำเภอ/เขต">
-                            <InputField id="buyerDistrict" register={register} className="w-full" />
+                            <InputField id="buyerReg_District" register={register} className="w-full" />
                         </FormField>
 
                         <FormField label="จังหวัด">
-                            <InputField id="buyerProvince" register={register} className="w-full" />
+                            <InputField id="buyerReg_Province" register={register} className="w-full" />
                         </FormField>
                     </div>
 

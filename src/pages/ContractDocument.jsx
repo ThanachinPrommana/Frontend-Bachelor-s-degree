@@ -3,10 +3,10 @@ import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/
 
 
 Font.register({
-  family: 'Sarabun',
+  family: 'Noto Sans Thai',
   fonts: [
-    { src: '/public/fonts/Sarabun-Regular.ttf' }, // path to font file
-    { src: '/public/fonts/Sarabun-Bold.ttf', fontWeight: 'bold' },
+    { src: '/fonts/NotoSansThai-Regular.ttf' }, // path to font file
+    { src: '/fonts/NotoSansThai-Bold.ttf', fontWeight: 'bold' },
   ],
 });
 // สร้าง Stylesheet (เหมือนเดิม)
@@ -42,7 +42,7 @@ const formatThaiDate = (isoDate) => {
 const styles = StyleSheet.create({
   // ... (style ทั้งหมดของคุณเหมือนเดิม)
   page: {
-    fontFamily: 'Sarabun',
+    fontFamily: 'Noto Sans Thai',
     padding: 50,
     fontSize: 11,
     lineHeight: 1.3,
@@ -107,29 +107,21 @@ const styles = StyleSheet.create({
   },
 });
 
+// ใช้ฟังก์ชันนี้แทน
 const wordBreak = (word) => {
-  // 1. สร้างเครื่องมือตัดคำสำหรับภาษาไทย ('th')
-  const segmenter = new Intl.Segmenter('th', { granularity: 'word' });
-
-  // 2. ทำการตัดคำจากประโยคที่ได้รับ
-  const segments = segmenter.segment(word);
-
-  // 3. แปลงผลลัพธ์ให้อยู่ในรูปแบบ Array ของคำจริงๆ (ไม่เอาเว้นวรรคหรือเครื่องหมาย)
-  // แล้วส่งค่ากลับไปให้ @react-pdf/renderer ใช้งาน
-  return Array.from(segments)
-    .filter((segment) => segment.isWordLike)
-    .map((segment) => segment.segment);
+  return word.split('');
 };
 
 // ***** 1. เพิ่มฟังก์ชัน Helper นี้เข้าไป *****
-const addSoftHyphens = (text) => {
-  if (!text || typeof text !== 'string') return ' ';
-  return text
-    // รวมพยัญชนะกับวรรณยุกต์เป็นหนึ่งกลุ่ม
-    .normalize('NFC')
-    // แล้วค่อยแทรก zero-width space
-    .split(/(?=[ก-ฮ])/).join('\u200B');
-};
+// const addSoftHyphens = (text) => {
+//   if (!text || typeof text !== 'string') return ' ';
+//   return text
+//     // รวมพยัญชนะกับวรรณยุกต์เป็นหนึ่งกลุ่ม
+//     .normalize('NFC')
+//     // แล้วค่อยแทรก zero-width space
+//     .split(/(?=[ก-ฮ])/).join('\u200B');
+// };
+
 
 
 const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signature,
@@ -137,7 +129,7 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
   witness1Signature2, witness2Signature3 }) => (
 
   <Document>
-    <Page size="A4" style={styles.page} hyphenationCallback={wordBreak}>
+    <Page size="A4" style={styles.page}>
       {/* ***** 2. นำฟังก์ชัน addSoftHyphens ไปใช้กับข้อความต่างๆ ***** */}
       <Text style={styles.header}>สัญญาจะซื้อจะขาย หรือ สัญญาวางเงินมัดจำา</Text>
 
@@ -214,23 +206,23 @@ const ContractDocument = ({ data, buyerSignature, sellerSignature, witness1Signa
 
         <View style={styles.flexRow}>
           <Text style={styles.label}>อยู่บ้านเลขที่</Text>
-          <Text style={{ ...styles.input, flexGrow: 1.5 }}>{data?.buyerAddress || ' '}</Text>
+          <Text style={{ ...styles.input, flexGrow: 1.5 }}>{`${data?.buyerReg_HouseNo || ' '}\u200B`}</Text>
           <Text style={styles.label}>หมู่ที่</Text>
-          <Text style={{ ...styles.input, width: 40, flexGrow: 0 }}>{data?.buyerVillageNo || ' '}</Text>
+          <Text style={{ ...styles.input, width: 40, flexGrow: 0 }}>{`${data?.buyerReg_Village || ' '}\u200B`}</Text>
           <Text style={styles.label}>ซอย</Text>
-          <Text style={{ ...styles.input, flexGrow: 1 }}>{data?.buyerSoi || ' '}</Text>
+          <Text style={{ ...styles.input, flexGrow: 1 }}>{`${data?.buyerReg_Alley || ' '}\u200B`}</Text>
           <Text style={styles.label}>ถนน</Text>
-          <Text style={{ ...styles.input, flexGrow: 1 }}>{data?.buyerRoad || ' '}</Text>
+          <Text style={{ ...styles.input, flexGrow: 1 }}>{`${data?.buyerReg_Road || ' '}\u200B`}</Text>
         </View>
 
 
         <View style={styles.flexRow}>
           <Text>ตำบล/แขวงง</Text>
-          <Text style={styles.input}>{data?.buyerSubDistrict || ' '}</Text>
+          <Text style={styles.input}>{`${data?.buyerReg_Subdistrict || ' '}\u200B`}</Text>
           <Text>อำเภอ/เขตต</Text>
-          <Text style={styles.input}>{data?.buyerDistrict || ' '}</Text>
+          <Text style={styles.input}>{`${data?.buyerReg_District || ' '}\u200B`}</Text>
           <Text style={styles.label}>จังหวัด</Text>
-          <Text style={styles.input}>{data?.buyerProvince || ' '}</Text>
+          <Text style={styles.input}>{`${data?.buyerReg_Province || ' '}\u200B`}</Text>
         </View>
 
         <Text>ซึ่งต่อไปในสัญญานี้จะเรียกว่า<Text style={styles.bold}>ผู้จะซื้อ</Text>ฝ่ายหนึ่ง</Text>

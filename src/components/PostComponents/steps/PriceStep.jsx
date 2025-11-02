@@ -144,7 +144,6 @@ export default function PriceStep({
   const priceInputRef = useRef(null);
   const [priceDisplay, setPriceDisplay] = useState("");
 
-  // sync จากค่าในฟอร์ม -> UI string
   const priceVal = useWatch({ control, name: "Price" });
   useEffect(() => {
     if (priceVal == null || priceVal === "") setPriceDisplay("");
@@ -220,19 +219,29 @@ export default function PriceStep({
 
   return (
     <Card className="shadow-sm">
-      <CardHeader className="py-4">
-        <CardTitle className="text-lg">ราคา</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          ประเภทประกาศ:{" "}
-          <span className="font-medium">
-            {sellRentLocked === "SALE" ? "ขาย (SALE)" : "ให้เช่า (RENT)"}
-          </span>{" "}
-          — ขั้นตอนนี้ไม่สามารถเปลี่ยนประเภทได้
-        </p>
+      {/* Header แบบมีไอคอน & คำอธิบายกลางหน้า */}
+      <CardHeader className="py-6">
+        <div className="flex flex-col items-center gap-2">
+          <span className="text-3xl" role="img" aria-label="price">
+            💰
+          </span>
+          <CardTitle className="text-xl">ราคาและเงื่อนไขการขาย</CardTitle>
+          <p className="text-xs text-muted-foreground text-center">
+            ระบุราคาขาย เงื่อนไข และรายจ่ายที่เกี่ยวข้องให้ชัดเจน
+            เพื่อให้ผู้ซื้อเปรียบเทียบและตัดสินใจได้ง่ายขึ้น
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            ประเภทประกาศ:{" "}
+            <span className="font-medium">
+              {sellRentLocked === "SALE" ? "ขาย (SALE)" : "ให้เช่า (RENT)"}
+            </span>{" "}
+            — ขั้นตอนนี้ไม่สามารถเปลี่ยนประเภทได้
+          </p>
+        </div>
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* ราคา & เปอร์เซ็นต์ดาวน์ (เหลือ 2 ช่อง) */}
+        {/* ราคา & เปอร์เซ็นต์ดาวน์ */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Price (auto-grouping) */}
           <div>
@@ -311,7 +320,7 @@ export default function PriceStep({
           </div>
         </div>
 
-        {/* ผลลัพธ์เงินดาวน์ที่คำนวณได้ (แสดงแทนช่องกรอกเงินดาวน์) */}
+        {/* ผลลัพธ์เงินดาวน์ที่คำนวณได้ */}
         <div className="rounded-lg border px-4 py-3 bg-muted/20">
           <div className="text-sm text-muted-foreground">
             ผลลัพธ์เงินดาวน์ที่คำนวณได้
@@ -320,8 +329,7 @@ export default function PriceStep({
             ฿ {nfBaht2.format(Number(computedAmount || 0))}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            ระบบจะบันทึกจำนวนนี้ลงฟิลด์ <code>Deposit_Amount</code>{" "}
-            ให้โดยอัตโนมัติ
+            ระบบจะบันทึกจำนวนนี้ลงฟิลด์ <code>Deposit_Amount</code> ให้อัตโนมัติ
           </p>
         </div>
 

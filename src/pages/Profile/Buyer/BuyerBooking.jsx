@@ -18,7 +18,7 @@ import { useAuth } from "@/context/AuthContext";
 import { fmtDateTimeTH } from "@/lib/bookingUtils";
 
 import SlipButton from "@/components/booking/SlipButton";
-import UploadFinalSlipButton from "@/components/UploadFinalSlipButton";
+// import UploadFinalSlipButton from "@/components/UploadFinalSlipButton";
 import StatusBadge from "@/components/StatusBadge";
 import { useNavigate } from "react-router";
 import { apiClient } from "@/api/authconfig";
@@ -380,9 +380,9 @@ export default function BuyerBooking() {
                               </AlertDialogTrigger>
                               <AlertDialogContent>
                                 <AlertDialogHeader>
-                                  <AlertDialogTitle>ยืนยันการซื้อยูนิตนี้?</AlertDialogTitle>
+                                  <AlertDialogTitle>ยืนยันการซื้อและการนัดหมาย?</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    การดำเนินการนี้จะเปลี่ยนสถานะยูนิตเป็น "SOLD" (ขายแล้ว) และถือว่าการจองเสร็จสมบูรณ์ (ไม่สามารถย้อนกลับได้)
+                                    การดำเนินการนี้จะเปลี่ยนสถานะยูนิตเป็น (ขายแล้ว) และถือว่าการจองเสร็จสมบูรณ์ (ไม่สามารถย้อนกลับได้)
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -399,12 +399,12 @@ export default function BuyerBooking() {
                           )}
 
                           {/* Show Upload Button ONLY if Delete Button is NOT shown */}
-                          {!showDeleteButton && (
+                          {/* {!showDeleteButton && (
                             <UploadFinalSlipButton
                               booking={b}
                               onUploadSuccess={revalidateUser}
                             />
-                          )}
+                          )} */}
 
                         </div>
                       </td>

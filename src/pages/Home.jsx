@@ -10,7 +10,7 @@ import Searchbar from "@/components/form/Searchbar";
 import Buttons from "@/components/Buttons";
 import Cards from "@/components/Cards";
 import Credit from "@/components/Credit";
-import LoanCalculator from "@/components/form/LoanCalculator";
+import LoanCalculatorModal from "@/components/form/LoanCalculatorModal";
 import { HeartCrack, Loader2 } from 'lucide-react';
 import { useCompare } from "@/context/CompareContext";
 import { FaCheck } from "react-icons/fa";
@@ -44,6 +44,9 @@ const METRO_PROVINCES = [
   "นครปฐม",
 ];
 
+const KEY_FILTERS = "homeFilters";
+const KEY_SORT = "homeSortBy";
+
 const formatPosts = (posts) => {
   if (!Array.isArray(posts)) return [];
   return posts.map(post => ({
@@ -63,6 +66,37 @@ const useDebounce = (value, delay) => {
   return debouncedValue;
 };
 
+const getPaginationRange = (currentPage, totalPages, siblings = 1) => {
+  const totalPageNumbersToShow = siblings * 2 + 3;
+  const totalFixedPages = 3 + 2 * siblings;
+
+  if (totalPages <= totalFixedPages + 2) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  const leftSiblingIndex = Math.max(currentPage - siblings, 1);
+  const rightSiblingIndex = Math.min(currentPage + siblings, totalPages);
+  const showLeftEllipsis = leftSiblingIndex > 2;
+  const showRightEllipsis = rightSiblingIndex < totalPages - 1;
+
+  if (!showLeftEllipsis && showRightEllipsis) {
+    let leftItemCount = totalFixedPages;
+    const leftRange = Array.from({ length: leftItemCount }, (_, i) => i + 1);
+    return [...leftRange, '...', totalPages];
+  }
+  if (showLeftEllipsis && !showRightEllipsis) {
+    let rightItemCount = totalFixedPages;
+    const rightRange = Array.from({ length: rightItemCount }, (_, i) => totalPages - rightItemCount + i + 1);
+    return [1, '...', ...rightRange];
+  }
+  if (showLeftEllipsis && showRightEllipsis) {
+    let middleRangeCount = totalPageNumbersToShow - 2;
+    let middleRange = Array.from({ length: middleRangeCount }, (_, i) => leftSiblingIndex + i);
+    return [1, '...', ...middleRange, '...', totalPages];
+  }
+  return Array.from({ length: totalPages }, (_, i) => i + 1);
+};
+
 // --- Main Component ---
 
 const Home = () => {
@@ -74,6 +108,7 @@ const Home = () => {
   const [originalPosts, setOriginalPosts] = useState([]);
 
   // ⭐️ (เพิ่ม) 5. เรียกใช้ Compare Context
+  const [sortBy, setSortBy] = useState("preferred");
   const { compareList, addToCompare, removeFromCompare } = useCompare();
   const compareIds = useMemo(() => new Set(compareList.map(item => item.id)), [compareList]);
   const MAX_COMPARE_ITEMS = 3; // (กำหนดค่าสูงสุด)
@@ -87,7 +122,7 @@ const Home = () => {
 
   const [currentPage, setCurrentPage] = useState(1);
   // --- Form Management ---
-  const { register, handleSubmit, watch, control, setValue } = useForm({
+  const { register, handleSubmit, watch, control, setValue, reset } = useForm({
     defaultValues: {
       searchQuery: "", province: "", district: "", subdistrict: "",
       minPrice: "", maxPrice: "", categoryId: ""
@@ -145,30 +180,52 @@ const Home = () => {
     const fetchAddressData = async () => {
       setIsAddressLoading(true);
       try {
-        const [provincesRes, districtsRes, subDistrictsRes] = await Promise.all([
+        const [prov, dist, subd] = await Promise.all([
           axios.get(PROVINCE_URL),
           axios.get(DISTRICT_URL),
-          axios.get(SUBDISTRICT_URL)
+          axios.get(SUBDISTRICT_URL),
         ]);
-        const provRes = provincesRes.data;
-        const distRes = districtsRes.data;
-        const subDistRes = subDistrictsRes.data;
+        const provRes = prov.data;
+        const distRes = dist.data;
+        const subDistRes = subd.data;
 
-        const metroProvinces = METRO_PROVINCES.map((name) =>
+        const metroOnly = METRO_PROVINCES.map((name) =>
           provRes.find((p) => p.name_th === name)
         ).filter(Boolean);
 
-        setAllProvinces(metroProvinces); // 👈 ใช้ข้อมูลที่กรองแล้ว
+        setAllProvinces(metroOnly);
         setAllDistricts(distRes);
         setAllSubDistricts(subDistRes);
-      } catch (error) {
-        console.error("Failed to fetch address data:", error);
+      } catch (e) {
+        console.error("Failed to fetch address data:", e);
       } finally {
         setIsAddressLoading(false);
       }
     };
     fetchAddressData();
   }, []);
+
+  useEffect(() => {
+    const savedFilters = localStorage.getItem(KEY_FILTERS);
+    const savedSort = localStorage.getItem(KEY_SORT);
+
+    if (savedSort) setSortBy(savedSort);
+
+    if (!isAddressLoading && savedFilters) {
+      try {
+        const parsed = JSON.parse(savedFilters);
+        reset(parsed);
+      } catch (e) {
+        console.error("Error restoring filters:", e);
+      }
+    }
+  }, [isAddressLoading, reset]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(KEY_FILTERS, JSON.stringify(formValues));
+    } catch { }
+  }, [formValues]);
 
   useEffect(() => {
     if (selectedProvinceName && allProvinces.length > 0 && allDistricts.length > 0) {
@@ -181,6 +238,12 @@ const Home = () => {
       setFilteredDistricts([]);
     }
   }, [selectedProvinceName, allProvinces, allDistricts]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(KEY_SORT, sortBy);
+    } catch { }
+  }, [sortBy]);
 
   useEffect(() => {
     setFilteredSubDistricts([]);
@@ -235,23 +298,33 @@ const Home = () => {
 
         let response;
         if (Object.values(filters).every(val => val === "")) {
-          response = await apiClient.get('/homepage/posts');
-          setOriginalPosts(response.data); // ⭐️ (เพิ่ม) 6. เก็บข้อมูลดิบ
+          // (เพิ่ม params.sort)
+          response = await apiClient.get('/homepage/posts', {
+            params: { sort: sortBy },
+          });
+          setOriginalPosts(response.data); // (คงไว้)
           setDisplayedPosts(formatPosts(response.data));
         } else {
-          response = await apiClient.post('/search/filters', activeFilters);
-          setOriginalPosts(response.data.posts); // ⭐️ (เพิ่ม) 6. เก็บข้อมูลดิบ
+          // (เพิ่ม sort payload)
+          const sortForSearch = sortBy === "preferred" ? "latest" : sortBy;
+          const payload = {
+            ...activeFilters,
+            sort: sortForSearch,
+          };
+          response = await apiClient.post('/search/filters', payload);
+          setOriginalPosts(response.data.posts); // (คงไว้)
           setDisplayedPosts(formatPosts(response.data.posts));
         }
       } catch (error) {
         console.error("เกิดข้อผิดพลาดในการค้นหา:", error);
+        setOriginalPosts([]); // (เพิ่ม)
         setDisplayedPosts([]);
       } finally {
         setIsLoading(false);
       }
     };
     runSearch();
-  }, [debouncedJSONFilters]);
+  }, [debouncedJSONFilters, sortBy, reset]);
 
   // ⭐️ (เพิ่ม) 7. สร้างฟังก์ชันสำหรับจัดการการกดปุ่มเปรียบเทียบ
   const handleAddToCompare = (postId) => {
@@ -279,7 +352,7 @@ const Home = () => {
       deposit: postToAdd.Deposit_Amount,
       size: postToAdd.Usable_Area, // (ตรวจสอบชื่อฟิลด์นี้)
       badroom: postToAdd.Bedrooms,
-      bathroom: postToAdd.Bathrooms, // (ตรวจสอบชื่อฟิลด์นี้)
+      bathroom: postToAdd.Bathroom, // (ตรวจสอบชื่อฟิลด์นี้)
       type: getCategoryLabel(postToAdd.categoryId)
     };
 
@@ -456,11 +529,18 @@ const Home = () => {
           </div>
           <div className="flex items-center gap-2 mt-4 sm:mt-0">
             <span className="text-gray-600">เรียงตาม:</span>
-            <select className="border border-gray-300 rounded-lg p-2 bg-white focus:ring-2 focus:ring-blue-500">
-              <option>ล่าสุด</option>
-              <option>ราคาต่ำสุด</option>
-              <option>ราคาสูงสุด</option>
-              <option>พื้นที่มากที่สุด</option>
+            <select
+              value={sortBy}
+              onChange={(e) => {
+                setSortBy(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="border border-gray-300 rounded-lg p-2 bg-white focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="preferred">พื้นที่ที่ต้องการ</option>
+              <option value="latest">ล่าสุด</option>
+              <option value="priceAsc">ราคาต่ำสุด</option>
+              <option value="priceDesc">ราคาแพงสุด</option>
             </select>
           </div>
         </div>

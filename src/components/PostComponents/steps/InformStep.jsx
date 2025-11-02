@@ -1,3 +1,4 @@
+// src/components/PostComponents/EditPostDialog/steps/InformStep.jsx
 import { useFormContext } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,8 +23,19 @@ export default function InformStep({ errors, resetKey }) {
 
   return (
     <Card className="shadow-sm">
-      <CardHeader className="py-4">
-        <CardTitle className="text-lg">ข้อมูลผู้ขาย / ช่องทางติดต่อ</CardTitle>
+      {/* Header แบบมีไอคอนและคำอธิบาย ให้เข้าธีมเดียวกัน */}
+      <CardHeader className="py-6">
+        <div className="flex flex-col items-center gap-2">
+          <div className="text-2xl" aria-hidden>
+            📞
+          </div>
+          <CardTitle className="text-xl">
+            ข้อมูลผู้ขาย / ช่องทางติดต่อ
+          </CardTitle>
+          <p className="text-xs text-muted-foreground text-center">
+            ระบุชื่อและช่องทางที่ติดต่อได้จริง เพื่อให้ผู้สนใจติดต่อกลับได้สะดวก
+          </p>
+        </div>
       </CardHeader>
 
       <CardContent className="space-y-6">
@@ -43,6 +55,9 @@ export default function InformStep({ errors, resetKey }) {
             {errors?.Name && (
               <p className="text-red-500 text-sm mt-1">{errors.Name.message}</p>
             )}
+            <p className="text-[11px] text-muted-foreground mt-1">
+              * ชื่อจะใช้แสดงบนหน้าประกาศ
+            </p>
           </div>
 
           {/* เบอร์โทร */}
@@ -61,12 +76,16 @@ export default function InformStep({ errors, resetKey }) {
                   { shouldDirty: true }
                 )
               }
+              autoComplete="tel"
             />
             {errors?.Phone && (
               <p className="text-red-500 text-sm mt-1">
                 {errors.Phone.message}
               </p>
             )}
+            <p className="text-[11px] text-muted-foreground mt-1">
+              * ใส่เฉพาะตัวเลข 10 หลัก
+            </p>
           </div>
 
           {/* LINE */}
@@ -89,6 +108,9 @@ export default function InformStep({ errors, resetKey }) {
                 {errors.Link_line.message}
               </p>
             )}
+            <p className="text-[11px] text-muted-foreground mt-1">
+              * วางลิงก์เชิญหรือโปรไฟล์ LINE
+            </p>
           </div>
 
           {/* Facebook — ใช้ Link_facbook เท่านั้น */}
@@ -111,6 +133,9 @@ export default function InformStep({ errors, resetKey }) {
                 {errors.Link_facbook.message}
               </p>
             )}
+            <p className="text-[11px] text-muted-foreground mt-1">
+              * ลิงก์เพจ/โปรไฟล์เพื่อให้ลูกค้าติดต่อผ่าน Facebook
+            </p>
           </div>
         </div>
       </CardContent>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   BedSingle, Bath, Grid2x2, Calendar, Car, Home,
   Building, Phone, MapPin, Tag, CheckCircle, Info, Video,
@@ -61,6 +61,7 @@ const Deposit = () => {
   const { addToCompare, compareList } = useCompare();
   const { authUser } = useAuth();
   const [lightboxImage, setLightboxImage] = useState(null);
+  const location = useLocation();
 
 
   // ✅ เก็บเฉพาะ id ของยูนิตที่เลือก
@@ -138,7 +139,7 @@ const Deposit = () => {
   );
 
   const isAnyUnitAvailable = post.PropertyUnit?.some((unit) => unit.Status === "AVAILABLE") ?? false;
-
+  const isOwner = authUser && post.userId && authUser.id === post.userId;
 
   const getStatusSeller = (status) => {
     const baseStyles = 'px-2 py-0.5 rounded-md text-xs font-medium'
@@ -279,7 +280,7 @@ const Deposit = () => {
                     <button
                       key={unit.id}
                       onClick={() => {
-                        if (isAvailable) setSelectedUnitId(unit.id);
+                        // if (isAvailable) setSelectedUnitId(unit.id);
                         console.log("Selected Unit Data:", unit);
                         setSelectedUnitId(isSelected ? null : unit.id);
                       }}
@@ -390,23 +391,45 @@ const Deposit = () => {
 
               <Buttons
                 onClick={() => {
-
                   if (!authUser) {
-                    conslog.log("User:", authUser);
-                    // ถ้าไม่มี user (ยังไม่ล็อกอิน) ให้เด้งไปหน้า login
+
+                    console.log("User:", authUser); // <-- แก้จาก conslog
                     navigate("/login", { state: { from: location } });
+
                   } else if (authUser.userType == "Buyer") {
+
                     // ถ้าล็อกอินแล้ว ให้ไปหน้า Deposit_doc ตามปกติ
+
                     navigate("/buyer/contract", { state: { postData: post, selectedUnit: selectedUnit } });
+
                   } else if (authUser.userType == "Seller") {
+
                     navigate("/seller/contract", { state: { postData: post, selectedUnit: selectedUnit } });
+
                   }
                 }}
-                text={!authUser ? "กรุณาล็อกอินเพื่อดำเนินการต่อ" : "ดำเนินการต่อ"}
-                color={authUser && selectedUnit ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-400 cursor-not-allowed"}
+                // (แก้ไข text) ถ้าเป็นเจ้าของ ให้เปลี่ยนข้อความปุ่ม
+                text={
+                  !authUser ? "กรุณาล็อกอินเพื่อดำเนินการต่อ"
+                    : isOwner ? "คุณเป็นเจ้าของโพสต์นี้"
+                      : "ดำเนินการต่อ"
+                }
+                // (แก้ไข color) ถ้าไม่ผ่านเงื่อนไข (รวมถึง isOwner) ให้เป็นสีเทา
+                color={authUser && selectedUnit && !isOwner ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-400 cursor-not-allowed"}
                 className="w-full text-lg"
-                disabled={!selectedUnit || !authUser} // <-- ปิดปุ่มถ้ายังไม่เลือกยูนิต หรือ ยังไม่ล็อกอิน
+                // (แก้ไข disabled) เพิ่มเงื่อนไข isOwner
+                disabled={!selectedUnit || !authUser || isOwner}
               />
+
+              {/* (เพิ่ม) แสดงข้อความแจ้งเตือน ถ้าเป็นเจ้าของ */}
+              {isOwner && (
+                <p className="text-xs text-center text-red-600">
+                  <Info size={12} className="inline-block mr-1" />
+                  คุณไม่สามารถทำรายการกับโพสต์ของตัวเองได้
+                </p>
+              )}
+
+
 
               {!selectedUnit && isAnyUnitAvailable && (
                 <p className="text-xs text-center text-gray-600">
