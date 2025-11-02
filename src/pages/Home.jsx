@@ -113,6 +113,7 @@ const Home = () => {
   const compareIds = useMemo(() => new Set(compareList.map(item => item.id)), [compareList]);
   const MAX_COMPARE_ITEMS = 3; // (กำหนดค่าสูงสุด)
 
+
   const [allProvinces, setAllProvinces] = useState([]);
   const [allDistricts, setAllDistricts] = useState([]);
   const [allSubDistricts, setAllSubDistricts] = useState([]);
@@ -643,15 +644,11 @@ const Home = () => {
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
               <div className="bg-[#2c3e50] text-white p-4 rounded-t-xl flex justify-between items-center">
                 <h3 className="text-xl font-bold">คำนวณสินเชื่อบ้าน</h3>
-                <button
-                  className="text-white hover:text-gray-300 text-2xl"
-                  onClick={() => setShowLoanPopup(false)}
-                >
-                  &times;
-                </button>
+                <button onClick={() => setShowLoanPopup((prev) => !prev)}> ... </button>
+
               </div>
               <div className="p-6">
-                <LoanCalculator />
+                <LoanCalculatorModal open={showLoanPopup} onOpenChange={setShowLoanPopup} />
               </div>
             </div>
           </motion.div>

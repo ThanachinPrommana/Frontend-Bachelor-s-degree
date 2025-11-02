@@ -288,7 +288,11 @@ export default function SellerDoc() {
                 return (app.buyerName.toLowerCase().includes(key) || app.propertyName.toLowerCase().includes(key));
             })
             .filter(app => {
-                return app.groupStatus !== 'HIDDEN' && app.groupStatus !== 'COMPLETED'; // กรองทั้ง HIDDEN และ COMPLETED ออก
+                // เพิ่ม PENDING_FINAL_VERIFICATION และ REJECTED เข้าไปในเงื่อนไขการกรองออก
+                return app.groupStatus !== 'HIDDEN' &&
+                    app.groupStatus !== 'COMPLETED' &&
+                    app.groupStatus !== 'PENDING_FINAL_VERIFICATION' && // ⬅️ เพิ่ม 1
+                    app.groupStatus !== 'REJECTED'; // ⬅️ เพิ่ม 2
             })
             .filter(app => { // กรองตาม Tab
                 if (activeTab === "ALL") return true;
@@ -368,9 +372,9 @@ export default function SellerDoc() {
                 >
                     <option value="ALL">ทั้งหมด</option>
                     <option value="PENDING">รอตรวจสอบเอกสาร</option>
-                    <option value="PENDING_FINAL_VERIFICATION">รอตรวจสอบสลิปสุดท้าย</option>
+                    {/* <option value="PENDING_FINAL_VERIFICATION">รอตรวจสอบสลิปสุดท้าย</option> */}
                     <option value="APPROVED">อนุมัติแล้ว</option>
-                    <option value="REJECTED">ถูกปฏิเสธ</option>
+                    {/* <option value="REJECTED">ถูกปฏิเสธ</option> */}
                 </select>
             </div>
 
