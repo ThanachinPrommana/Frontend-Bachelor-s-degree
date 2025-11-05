@@ -31,7 +31,9 @@ const BUYER_KEYS = [
   "Lifestyle_Preferences",
   "Special_Requirements",
 ];
-const SELLER_KEYS = ["National_ID", "Company_Name", "RealEstate_License"];
+
+/* ✅ ตัด National_ID ออกจากรายการที่อนุญาตให้แก้ไข */
+const SELLER_KEYS = ["Company_Name", "RealEstate_License"];
 
 /* ====== ค่าเริ่มต้น ====== */
 function buildDefaults(user) {
@@ -60,6 +62,7 @@ function buildDefaults(user) {
       Special_Requirements: b?.Special_Requirements ?? "",
     },
     Seller: {
+      /* เก็บไว้เฉยๆ แต่ไม่ได้แสดง/แก้ไขแล้ว */
       National_ID: s?.National_ID ?? "",
       Company_Name: s?.Company_Name ?? "",
       RealEstate_License: s?.RealEstate_License ?? "",
@@ -130,18 +133,10 @@ function makeDiff(values, user) {
   const sCur = values.Seller || {};
   const putSeller = (k, v) => {
     if (!diff.seller) diff.seller = {};
-    if (k === "National_ID") {
-      if (v === "") return; // ห้ามส่งค่าว่าง
-      const onlyDigit = String(v).replace(/\D/g, "");
-      if (onlyDigit.length !== 13) {
-        throw new Error("เลขบัตรประชาชนต้องมี 13 หลัก");
-      }
-      diff.seller[k] = onlyDigit;
-      return;
-    }
     if (v === "") v = null;
     diff.seller[k] = v;
   };
+
   SELLER_KEYS.forEach((k) => {
     const cur = sCur[k] ?? "";
     const old = sOld[k] ?? "";
@@ -243,7 +238,7 @@ export default function SellerEditForm({ user, onCancel, onSubmitDiff }) {
       Special_Requirements: register("Buyer.Special_Requirements"),
     },
     Seller: {
-      National_ID: register("Seller.National_ID"),
+      /* ❌ ไม่มี National_ID ให้แก้แล้ว */
       Company_Name: register("Seller.Company_Name"),
       RealEstate_License: register("Seller.RealEstate_License"),
     },
@@ -519,20 +514,7 @@ export default function SellerEditForm({ user, onCancel, onSubmitDiff }) {
       {/* ---------- หน้า 3: ผู้ขาย ---------- */}
       <div className={step === 3 ? "" : "hidden"}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">
-              เลขบัตรประชาชน
-            </label>
-            <input
-              {...f.Seller.National_ID}
-              className="w-full rounded border px-3 py-2"
-              placeholder="13 หลัก"
-              disabled={loading}
-              onChange={(e) => {
-                e.target.value = e.target.value.replace(/\D/g, "").slice(0, 13);
-              }}
-            />
-          </div>
+          {/* ❌ ลบช่องเลขบัตรประชาชนออกแล้ว */}
 
           <div>
             <label className="block text-sm text-gray-600 mb-1">
