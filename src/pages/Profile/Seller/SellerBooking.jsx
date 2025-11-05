@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, RefreshCcw, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { Loader2, RefreshCcw, ChevronLeft, ChevronRight, Trash2, CheckSquare } from "lucide-react";
 
 import {
   getProfile as apiGetProfile,
@@ -22,7 +22,7 @@ import {
 import { fmtDateTimeTH, maskEmail } from "@/lib/bookingUtils";
 import SlipButton from "@/components/booking/SlipButton";
 import { useAuth } from "@/context/AuthContext";
-import UploadFinalSlipButton from "@/components/UploadFinalSlipButton";
+// import UploadFinalSlipButton from "@/components/UploadFinalSlipButton";
 import StatusBadge from "@/components/StatusBadge";
 import {
   AlertDialog,
@@ -56,7 +56,7 @@ export default function SellerBooking() {
   }, [rawQ]);
 
   const [deletingId, setDeletingId] = useState(null);
-
+  const [confirmingId, setConfirmingId] = useState(null);
   // Pagination - เหมือน BuyerBooking
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -140,6 +140,28 @@ export default function SellerBooking() {
       });
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleConfirmPurchase(bookingId) {
+    setConfirmingId(bookingId);
+    try {
+      const res = await apiClient.post(`/confirmed/booking/${bookingId}`);
+      const data = res.data;
+      toast({
+        title: "ยืนยันการซื้อสำเร็จ",
+        description: data.message || "การจองเสร็จสมบูรณ์",
+      });
+      await revalidateUser(); // รีเฟรชข้อมูล
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: "ยืนยันการซื้อไม่สำเร็จ",
+        description: e?.response?.data?.message || e.message || "โปรดลองอีกครั้ง",
+        variant: "destructive",
+      });
+    } finally {
+      setConfirmingId(null);
     }
   }
 
@@ -236,6 +258,7 @@ export default function SellerBooking() {
                   const startTime = new Date(appointmentStartTime);
                   const canDelete = appointmentStartTime && startTime > now;
                   const showDeleteButton = canDelete || b.bookingStatus === 'COMPLETED';
+                  const showConfirmButton = !showDeleteButton && b.bookingStatus === 'CONFIRMED';
                   return (
                     <tr key={b.id} className="border-t">
                       {/* 1. แสดงชื่อประกาศ - เหมือน BuyerBooking */}
@@ -320,14 +343,51 @@ export default function SellerBooking() {
                               </AlertDialogContent>
                             </AlertDialog>
                           )}
+                          {showConfirmButton && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  className="bg-green-600 hover:bg-green-700"
+                                  disabled={confirmingId === b.id}
+                                >
+                                  {confirmingId === b.id ? (
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <CheckSquare className="w-4 h-4 mr-2" />
+                                  )}
+                                  ยืนยันการซื้อ
+                                </Button>
+                              </AlertDialogTrigger>
+
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>ยืนยันการซื้อและการนัดหมาย?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    การดำเนินการนี้จะเปลี่ยนสถานะยูนิตเป็น (ขายแล้ว) และถือว่าการจองเสร็จสมบูรณ์ (ไม่สามารถย้อนกลับได้)
+
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleConfirmPurchase(b.id)}
+                                    className="bg-green-600 hover:bg-green-700"
+                                  >
+                                    ยืนยัน
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
 
                           {/* แสดงปุ่ม Upload ถ้า !showDeleteButton */}
-                          {!showDeleteButton && (
+                          {/* {!showDeleteButton && (
                             <UploadFinalSlipButton
                               booking={b}
                               onUploadSuccess={revalidateUser}
                             />
-                          )}
+                          )} */}
 
                         </div>
                       </td>

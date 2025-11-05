@@ -84,8 +84,8 @@ const BookingScheduler = () => {
     if (bookingSuccess) {
         return (
             <div className="max-w-2xl mx-auto my-8 p-8 bg-white rounded-lg shadow-lg text-center">
-                <h2 className="text-2xl font-bold text-green-700 mb-4">✅ การจองนัดหมายสำเร็จ!</h2>
-                <p className="text-gray-600">ทีมงานจะติดต่อกลับเพื่อยืนยันอีกครั้ง ขอบคุณครับ</p>
+                <h2 className="text-2xl font-bold text-green-700 mb-4">การจองนัดหมายสำเร็จ!</h2>
+                <p className="text-red-600 ">จะมีการแจ้งเตือน เมื่อถึงเวลานัดกรุณายืนยันการนัดในหน้าการจอง</p>
             </div>
         );
     }
@@ -126,8 +126,8 @@ const BookingScheduler = () => {
 
             {slots.length > 0 && (
                 <button
-                    className="w-full p-4 text-lg font-bold text-white bg-green-500 rounded-md 
-                               hover:bg-green-600 transition-colors
+                    className="w-full p-4 text-lg font-bold text-white bg-slate-700 rounded-md 
+                               hover:bg-gray-500 transition-colors
                                disabled:bg-gray-400 disabled:cursor-not-allowed"
                     onClick={handleBooking}
                     disabled={!selectedSlotId || isSubmitting}

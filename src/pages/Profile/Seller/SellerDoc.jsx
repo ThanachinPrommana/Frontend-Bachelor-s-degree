@@ -41,7 +41,7 @@ const StatusBadge = ({ status }) => {
 export default function SellerDoc() {
     const { authUser, loading, revalidateUser } = useAuth();
     const [searchTerm, setSearchTerm] = useState("");
-    const [activeTab, setActiveTab] = useState('PENDING');
+    const [activeTab, setActiveTab] = useState('ALL');
     const [reviewingId, setReviewingId] = useState(null);
     const [confirmingId, setConfirmingId] = useState(null);
     const navigate = useNavigate()
@@ -194,6 +194,13 @@ export default function SellerDoc() {
         const docsFromMe = authUser.DocumentUpload || [];
         const allUniqueDocuments = Array.from(new Map([...docsFromOthers, ...docsFromMe].map(doc => doc && [doc.id, doc])).values()).filter(Boolean);
 
+        if (docsFromMe.length > 0) {
+            console.log("--- DEBUG: docsFromMe (เอกสารที่ฉันส่ง) ---");
+            console.log("Auth User ID:", authUser.id);
+            console.log("First doc from me:", docsFromMe[0]);
+            console.log("Does first doc have User.id?", docsFromMe[0]?.User?.id);
+        }
+
         allUniqueDocuments.forEach(doc => {
             if (!doc.unitId) return;
             if (!applications.has(doc.unitId)) {
@@ -202,7 +209,7 @@ export default function SellerDoc() {
                     unitNumber: doc.unit?.Unit_Number || 'N/A',
                     propertyName: doc.Post?.Property_Name || 'N/A',
                     buyerName: `${doc.User?.First_name || ''} ${doc.User?.Last_name || ''}`,
-                    buyerUserId: doc.User?.id,
+                    buyerUserId: doc.User?.id || doc.userId, // ⭐️ (แก้ไข) ใช้ doc.User?.id || doc.userId
                     createdAt: doc.createdAt,
                     depositStatus: doc.unit?.Deposit?.Deposit_Status,
                     documents: [],
@@ -239,13 +246,17 @@ export default function SellerDoc() {
             .map(app => {
                 let groupStatus;
                 // จัดลำดับความสำคัญ: สลิปสุดท้าย > สถานะเอกสาร
-                if (app.bookingStatus === 'COMPLETED') { // เพิ่ม check COMPLETED ก่อน
-                    groupStatus = 'COMPLETED'; // ใช้สถานะ COMPLETED โดยตรง
-                } else if (app.bookingStatus === 'PENDING_FINAL_VERIFICATION') {
+                if (app.bookingStatus === 'COMPLETED') { // 1. เสร็จสิ้น (กรองออก)
+                    groupStatus = 'COMPLETED';
+                } else if (app.bookingStatus === 'PENDING_FINAL_VERIFICATION') { // 2. รอตอบสลิป (แสดง)
                     groupStatus = 'PENDING_FINAL_VERIFICATION';
-                } else if (app.documents.length > 0) {
+
+                    // ⭐️ (เพิ่ม) 3. ถ้ามีสถานะจองอื่นๆ (เช่น BOOKED) = ซ่อน
+                } else if (app.bookingStatus) {
+                    groupStatus = 'HIDDEN'; // (จะถูกกรองออกโดย .filter() ด้านล่าง)
+
+                } else if (app.documents.length > 0) { // 4. ถ้ายังไม่มีการจอง ให้ดูเอกสาร
                     const statuses = app.documents.map(d => d.Review_Status);
-                    // 1. ถ้าทุกเอกสารเป็น HIDDEN -> groupStatus = HIDDEN
                     if (statuses.every(s => s === 'HIDDEN')) {
                         groupStatus = 'HIDDEN';
                     }
@@ -277,7 +288,11 @@ export default function SellerDoc() {
                 return (app.buyerName.toLowerCase().includes(key) || app.propertyName.toLowerCase().includes(key));
             })
             .filter(app => {
-                return app.groupStatus !== 'HIDDEN' && app.groupStatus !== 'COMPLETED'; // กรองทั้ง HIDDEN และ COMPLETED ออก
+                // เพิ่ม PENDING_FINAL_VERIFICATION และ REJECTED เข้าไปในเงื่อนไขการกรองออก
+                return app.groupStatus !== 'HIDDEN' &&
+                    app.groupStatus !== 'COMPLETED' &&
+                    app.groupStatus !== 'PENDING_FINAL_VERIFICATION' && // ⬅️ เพิ่ม 1
+                    app.groupStatus !== 'REJECTED'; // ⬅️ เพิ่ม 2
             })
             .filter(app => { // กรองตาม Tab
                 if (activeTab === "ALL") return true;
@@ -357,9 +372,9 @@ export default function SellerDoc() {
                 >
                     <option value="ALL">ทั้งหมด</option>
                     <option value="PENDING">รอตรวจสอบเอกสาร</option>
-                    <option value="PENDING_FINAL_VERIFICATION">รอตรวจสอบสลิปสุดท้าย</option>
+                    {/* <option value="PENDING_FINAL_VERIFICATION">รอตรวจสอบสลิปสุดท้าย</option> */}
                     <option value="APPROVED">อนุมัติแล้ว</option>
-                    <option value="REJECTED">ถูกปฏิเสธ</option>
+                    {/* <option value="REJECTED">ถูกปฏิเสธ</option> */}
                 </select>
             </div>
 
@@ -370,8 +385,10 @@ export default function SellerDoc() {
                     <div className="text-center text-gray-500 py-10"><p>ไม่พบรายการในหมวดหมู่นี้</p></div>
                 ) : (
                     groupedApplications.map((app) => {
-                        const isMyOwnDocument = authUser.id === app.buyerUserId;
-
+                        // ⭐️ ยืนยันว่าบรรทัดนี้ถูกต้อง
+                        const isMyOwnDocument = app.documents.some(doc =>
+                            (doc.User?.id || doc.userId) === authUser.id
+                        );
 
                         const cardClassName = `bg-white p-4 rounded-lg shadow-sm border flex flex-col gap-4 relative`;
 
@@ -418,7 +435,7 @@ export default function SellerDoc() {
                                 )}
 
                                 <div className="mt-4 border-t pt-4">
-                                    {app.groupStatus === 'PENDING' && (
+                                    {app.groupStatus === 'PENDING' && !isMyOwnDocument && (
                                         <div className="flex items-center justify-end gap-3">
                                             <Button variant="outline" onClick={() => handleReview(app, 'REJECTED')} disabled={reviewingId === app.unitId} className="border-red-500 text-red-500 hover:bg-red-50">
                                                 {reviewingId === app.unitId ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}

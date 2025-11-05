@@ -127,7 +127,8 @@ const BuyerDoc = () => {
         return propertyMatch || docNameMatch;
       })
       .filter(app => {
-        return app.groupStatus !== 'HIDDEN'; // กรอง HIDDEN ออกเสมอ
+        // กรอง HIDDEN และ REJECTED ออกเสมอ
+        return app.groupStatus !== 'HIDDEN' && app.groupStatus !== 'REJECTED';
       })
       .filter(app => {
         if (statusFilter === "ALL") return true;
@@ -180,7 +181,7 @@ const BuyerDoc = () => {
           <option value="ALL">สถานะทั้งหมด</option>
           <option value="PENDING">รอตรวจสอบ</option>
           <option value="APPROVED">อนุมัติแล้ว</option>
-          <option value="REJECTED">ถูกปฏิเสธ</option>
+          {/* <option value="REJECTED">ถูกปฏิเสธ</option> */}
           {/* <option value="HIDDEN">สำเร็จ</option> */}
           {/* (ตัวเลือก Filter อื่นๆ สามารถเพิ่มได้ตามต้องการ) */}
         </select>
