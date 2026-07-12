@@ -1,0 +1,11 @@
+import{d as s,j as r,n,B as c}from"./index-WG7wF8qp.js";/**
+ * @license lucide-react v0.509.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const o=[["path",{d:"M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8",key:"14sxne"}],["path",{d:"M3 3v5h5",key:"1xhq8a"}],["path",{d:"M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16",key:"1hlbsb"}],["path",{d:"M16 16h5v5",key:"ccwih5"}]],l=s("refresh-ccw",o);/**
+ * @license lucide-react v0.509.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const i=[["path",{d:"M21 10.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.5",key:"1uzm8b"}],["path",{d:"m9 11 3 3L22 4",key:"1pflzl"}]],g=s("square-check-big",i);function h({className:e,...t}){return r.jsx("div",{className:n("animate-pulse rounded-md bg-muted",e),...t})}const b=e=>e?new Date(e).toLocaleString("th-TH",{timeZone:"Asia/Bangkok",year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):"-";function u({url:e}){return!e||typeof e!="string"||!e.startsWith("http")?r.jsx("span",{className:"text-muted-foreground",children:"—"}):r.jsx(c,{variant:"outline",size:"sm",asChild:!0,children:r.jsx("a",{href:e,children:"ดูสลิป"})})}const x=({status:e})=>{let t="bg-gray-100 text-gray-800",a=e;switch(e){case"PENDING_PAYMENT":t="bg-yellow-100 text-yellow-800",a="รอจ่ายมัดจำ";break;case"CONFIRMED":t="bg-blue-100 text-blue-800",a="ยืนยันแล้ว";break;case"PENDING_FINAL_VERIFICATION":t="bg-orange-100 text-orange-800",a="รอตรวจสอบสลิปสุดท้าย";break;case"COMPLETED":t="bg-green-100 text-green-800",a="เสร็จสมบูรณ์";break;case"CANCELLED":t="bg-red-100 text-red-800",a="ยกเลิกแล้ว";break;case"PENDING":t="bg-yellow-100 text-yellow-800",a="รอตรวจสอบ";break;case"APPROVED":t="bg-green-100 text-green-800",a="อนุมัติแล้ว";break;case"REJECTED":t="bg-red-100 text-red-800",a="ถูกปฏิเสธ";break;case"HIDDEN":t="bg-gray-100 text-gray-800",a="สำเร็จ";break;default:a=e||"ไม่ทราบสถานะ";break}return r.jsx("span",{className:`px-2.5 py-1 text-xs font-semibold rounded-full whitespace-nowrap ${t}`,children:a})};export{l as R,h as S,x as a,u as b,g as c,b as f};
