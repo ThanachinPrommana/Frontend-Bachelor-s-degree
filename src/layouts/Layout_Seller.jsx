@@ -1,12 +1,14 @@
-import Navbar_Seller from "@/components/Nav/Navbar_Seller";
-import { Outlet } from "react-router";
+// src/layouts/Layout_Seller.jsx
+import Navbar from "@/components/Nav/Navbar";
+import { Outlet } from "react-router-dom";
 
-const Layout_Seller = () => {
+export default function Layout_Seller() {
   return (
-    <div>
-      <Navbar_Seller />
-      <Outlet />
-    </div>
+    <>
+      <Navbar />
+      <main className="min-h-screen bg-[#FAF0E6]">
+        <Outlet />
+      </main>
+    </>
   );
-};
-export default Layout_Seller;
+}

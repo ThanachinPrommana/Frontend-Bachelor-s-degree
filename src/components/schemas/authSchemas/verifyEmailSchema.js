@@ -1,18 +1,44 @@
-import { z } from "zod";
+  import { z } from "zod";
 
-export const verifyEmailSchema = z.object({
-  DateofBirth: z.string().min(1, "กรุณากรอกวันเกิด"),
-  Occupation: z.string().min(1, "กรุณากรอกอาชีพ"),
-  Monthly_Income: z
-    .number({ invalid_type_error: "รายได้ต้องเป็นตัวเลข" })
-    .positive("กรุณากรอกรายได้ต่อเดือน"),
-  Family_Size: z
-    .number({ invalid_type_error: "จำนวนสมาชิกครอบครัวต้องเป็นตัวเลข" })
-    .min(1, "กรุณากรอกจำนวนสมาชิกครอบครัว"),
-  Preferred_Province: z.string().min(1, "กรุณาเลือกจังหวัด"),
-  Preferred_District: z.string().min(1, "กรุณาเลือกอำเภอ"),
-  Parking_Needs: z.string().min(1, "กรุณาเลือกความต้องการที่จอดรถ"),
-  Nearby_Facilities: z.string().min(1, "กรุณาเลือกสิ่งอำนวยความสะดวกใกล้เคียง"),
-  Lifestyle_Preferences: z.string().min(1, "กรุณาเลือกรูปแบบการใช้ชีวิต"),
-  Special_Requirements: z.string().optional(),
-});
+  export const verifyEmailSchema = z.object({
+    // ตัวเลข
+    Monthly_Income: z
+    .coerce
+    .number("กรุณากรอกเป็นตัวเลขจำนวนเต็ม")
+    .min(1, "กรุณากรอกรายได้ต่อเดือน (มากกว่า 0)"),
+
+   Family_Size: z
+    .coerce.number() // 👈 1. เปลี่ยนเป็น coerce
+    .int("จำนวนสมาชิกครอบครัวต้องเป็นจำนวนเต็ม") // 👈 2. เพิ่ม Error message ให้ int()
+    .min(1, "กรุณากรอกจำนวนสมาชิกครอบครัว (อย่างน้อย 1 คน)"),
+
+    // จังหวัด/อำเภอ/ตำบล (ตาม UI ยังบังคับทั้งหมด)
+    Preferred_Province: z.string().trim().min(1, "กรุณาเลือกจังหวัด"),
+    Preferred_District: z.string().trim().min(1, "กรุณาเลือกอำเภอ/เขต"),
+    Preferred_Subdistrict: z.string().trim().min(1, "กรุณาเลือกตำบล/แขวง"),
+
+    // Dropdown ต่าง ๆ (บังคับใน UI)
+    Parking_Needs: z
+      .string()
+      .trim()
+      .min(1, "กรุณาเลือกความต้องการที่จอดรถ"),
+
+    // 🔻 แก้ไขตรงนี้
+    Nearby_Facilities: z
+      .string()
+      .trim()
+      .min(1, "กรุณาเลือกสิ่งอำนวยความสะดวกใกล้เคียง"),
+
+    // 🔻 แก้ไขตรงนี้
+    Lifestyle_Preferences: z
+      .string()
+      .trim()
+      .min(1, "กรุณาเลือกรูปแบบการใช้ชีวิต"),
+
+    // ข้อความอิสระ (ไม่บังคับ)
+    Special_Requirements: z
+      .string()
+      .trim()
+      .max(1000, "ความต้องการพิเศษยาวเกินไป")
+      .optional(),
+  });

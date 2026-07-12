@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 // Layouts
 import Layout from "../layouts/Layout";
@@ -17,9 +17,9 @@ import Compare from "@/pages/Compare";
 
 // Profile Pages
 import ProfileTypeSelector from "@/pages/Profile/ProfileTypeSelector";
-import ProfileSeller from "@/pages/Profile/ProfileSeller";
-import ProfileBuyer from "@/pages/Profile/ProfileBuyer";
-import BuyerNoti from "@/pages/Profile/BuyerNoti";
+import ProfileSeller from "@/pages/Profile/Seller/ProfileSeller";
+import ProfileBuyer from "@/pages/Profile/Buyer/ProfileBuyer";
+import BuyerNoti from "@/pages/Profile/Buyer/BuyerNoti";
 
 // Post for Sale Layout
 import PostForSaleLayout from "@/pages/Post_for_sale/PostForSaleLayout";
@@ -60,9 +60,22 @@ import RejectSeller from "@/pages/admin/User account/RejectSeller";
 import PayDeposit from "@/pages/admin/Payment/PayDeposit";
 import PayBank from "@/pages/admin/Payment/PayBank";
 import DescriptionReport from "@/pages/admin/DescriptionReport";
+
 import { PostFormProvider } from "@/pages/Post_for_sale/PostFormProvider";
 import { AuthProvider } from "@/context/AuthContext";
 import RegisterSeller from "@/pages/Auth/RegisterSeller";
+
+import NotFound from "@/pages/NotFound";
+import ContractForm from "@/pages/ContractForm";
+import DepositPaymentPage from "@/pages/Profile/Payment/DepositPaymentPage";
+import PaymentStatusPage from "@/pages/Profile/Payment/PaymentStatusPage";
+import { Elements } from "@stripe/react-stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
+import BookingScheduler from "@/pages/Booking/BookingScheduler ";
+
+const stripePromise = loadStripe(
+  "pk_test_51R6USEEHWiwlX27ITAS8FPSrge8gvKXeRe12WMaZl79xFCVeea2cpExdBdNgrD8IbaX7ZnGCtiXCFBmsuEjYwlrY00E1uHNRCr"
+);
 
 const AppRouter = () => {
   return (
@@ -75,6 +88,7 @@ const AppRouter = () => {
             <Route path="/compare" element={<Compare />} />
             <Route path="/support" element={<Support />} />
             <Route path="/noti" element={<BuyerNoti />} />
+            <Route path="*" element={<NotFound />} />
 
             {/* Profile Selection */}
             <Route
@@ -93,6 +107,7 @@ const AppRouter = () => {
             <Route path="/deposit/:id" element={<Deposit />} />
             <Route path="/deposit_doc" element={<Deposit_doc />} />
             <Route path="/payment" element={<Payment />} />
+            <Route path="/booking/:postId/:unitId" element={<BookingScheduler />} />
           </Route>
 
           {/* 👤 Buyer Routes (Protected) */}
@@ -104,6 +119,18 @@ const AppRouter = () => {
               <Route path="payment" element={<Payment />} />
               <Route path="deposit/:id" element={<Deposit />} />
               <Route path="register/seller" element={<RegisterSeller />} />
+              <Route path="contract" element={<ContractForm />} />
+              {/* ----- Routes สำหรับ Stripe Payment ----- */}
+              <Route path="deposit-payment" element={<DepositPaymentPage />} />
+              <Route
+                path="payment-status"
+                element={
+                  <Elements stripe={stripePromise}>
+                    <PaymentStatusPage />
+                  </Elements>
+                }
+              />
+              {/* --------------------------------------- */}
             </Route>
           </Route>
 
@@ -113,24 +140,37 @@ const AppRouter = () => {
               <Route index element={<Home />} />
               <Route path="profile" element={<ProfileSeller />} />
               <Route path="support" element={<Support />} />
+              <Route path="contract" element={<ContractForm />} />
+              <Route path="payment" element={<Payment />} />
 
-              {/* Post For Sale - Seller Access */}
+              {/* ----- Routes สำหรับ Stripe Payment (ฝั่ง Seller) ----- */}
+              <Route path="deposit-payment" element={<DepositPaymentPage />} />
               <Route
+                path="payment-status"
+                element={
+                  <Elements stripe={stripePromise}>
+                    <PaymentStatusPage />
+                  </Elements>
+                }
+              />
+              {/* ---------------------------------------------------- */}
+
+              {/* Post For Sale - ห่อด้วย PostFormProvider ทั้ง flow */}
+              <Route
+                path="post-for-sale/*"
                 element={
                   <PostFormProvider>
-                    <Outlet />
+                    <PostForSaleLayout />
                   </PostFormProvider>
                 }
               >
-                <Route path="post-for-sale" element={<PostForSaleLayout />}>
-                  <Route path="title" element={<PostTitle />} />
-                  <Route path="location" element={<PostLocation />} />
-                  <Route path="detail" element={<PostDetail />} />
-                  <Route path="price" element={<PostPrice />} />
-                  <Route path="inform" element={<PostInform />} />
-                  <Route path="upload" element={<PostUpload />} />
-                  <Route path="confirm" element={<PostConfirm />} />
-                </Route>
+                <Route path="title" element={<PostTitle />} />
+                <Route path="location" element={<PostLocation />} />
+                <Route path="detail" element={<PostDetail />} />
+                <Route path="price" element={<PostPrice />} />
+                <Route path="inform" element={<PostInform />} />
+                <Route path="upload" element={<PostUpload />} />
+                <Route path="confirm" element={<PostConfirm />} />
               </Route>
             </Route>
           </Route>

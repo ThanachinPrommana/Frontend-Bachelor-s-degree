@@ -1,0 +1,1 @@
+import{r}from"./index-WG7wF8qp.js";function u(){return{toast:r.useCallback(({title:t="",description:o="",variant:a="default",duration:s=3500}={})=>{const e=`${Date.now()}_${Math.random().toString(36).slice(2)}`,n=new CustomEvent("app:toast",{detail:{id:e,title:t,description:o,variant:a,duration:s}});window.dispatchEvent(n)},[])}}export{u};

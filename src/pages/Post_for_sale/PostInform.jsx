@@ -15,9 +15,31 @@ import PostLayout from "@/layouts/PostLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { User, Phone, MessageCircle, Facebook, Info } from "lucide-react";
 
-
 import { postInformSchema } from "@/components/schemas/postSchemas/postInformSchema";
 import { validateStep } from "@/lib/zodRHF";
+
+/* ========= helpers ========= */
+const normalizeUrl = (val) => {
+  if (!val) return "";
+  const raw = String(val).trim();
+  if (!raw) return "";
+  const withProto = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const u = new URL(withProto);
+    if (!/^https?:$/i.test(u.protocol)) return "";
+    return u.toString();
+  } catch {
+    return "";
+  }
+};
+
+const sanitize = (v) => ({
+  ...v,
+  Name: v?.Name?.trim() || "",
+  Phone: (v?.Phone || "").replace(/\D+/g, "").trim(),
+  Link_line: normalizeUrl(v?.Link_line),
+  Link_facbook: normalizeUrl(v?.Link_facbook),
+});
 
 const PostInform = () => {
   const navigate = useNavigate();
@@ -29,9 +51,17 @@ const PostInform = () => {
       "Phone",
       "Link_line",
       "Link_facbook",
-      "Contract_Seller", 
     ]);
     if (!ok) return;
+
+    const current = form.getValues();
+    const nextValues = sanitize(current);
+
+    form.reset(
+      { ...current, ...nextValues },
+      { keepDirty: true, keepTouched: true }
+    );
+
     navigate("/seller/post-for-sale/upload");
   };
 
@@ -40,7 +70,6 @@ const PostInform = () => {
       <div className="flex justify-center">
         <Card className="w-full max-w-3xl shadow-xl border-0 ring-1 ring-black/5">
           <CardContent className="py-8 px-6 md:px-8 space-y-8">
-            {/* Header */}
             <div className="text-center space-y-2">
               <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                 <User className="w-6 h-6 text-primary" />
@@ -51,21 +80,21 @@ const PostInform = () => {
               </p>
             </div>
 
-            {/* Helper banner */}
             <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground flex items-start gap-3">
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
                 กรุณากรอกเบอร์โทรที่ติดต่อได้จริง และใส่ลิงก์แบบเต็ม{" "}
                 <span className="font-medium">https://</span>{" "}
-                เพื่อให้ผู้ซื้อคลิกได้ทันที          
+                เพื่อให้ผู้ซื้อคลิกได้ทันที
               </p>
             </div>
 
-            {/* Form */}
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              {/* Basic info */}
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-8"
+              noValidate
+            >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* ชื่อผู้ขาย */}
                 <FormField
                   control={form.control}
                   name="Name"
@@ -76,8 +105,13 @@ const PostInform = () => {
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
                           {...field}
+                          value={field.value ?? ""}
                           placeholder="นายสมชาย บ้านดี"
                           className="pl-9 h-11"
+                          autoComplete="name"
+                          autoCapitalize="words"
+                          onBlur={(e) => field.onChange(e.target.value.trim())}
+                          aria-invalid={!!form.formState.errors?.Name}
                         />
                       </div>
                       <FormMessage />
@@ -85,7 +119,6 @@ const PostInform = () => {
                   )}
                 />
 
-                {/* เบอร์โทรศัพท์ */}
                 <FormField
                   control={form.control}
                   name="Phone"
@@ -96,9 +129,29 @@ const PostInform = () => {
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
                           {...field}
+                          type="tel"
+                          value={field.value ?? ""}
                           inputMode="tel"
+                          autoComplete="tel-national"
                           placeholder="0812345678"
                           className="pl-9 h-11"
+                          maxLength={10}
+                          pattern="^0\\d{9}$"
+                          title="กรุณากรอกเบอร์โทรศัพท์ไทย 10 หลัก (เริ่มด้วย 0)"
+                          onBlur={(e) =>
+                            field.onChange(
+                              e.target.value.replace(/\D+/g, "").trim()
+                            )
+                          }
+                          onPaste={(e) => {
+                            const text = (
+                              e.clipboardData || window.clipboardData
+                            ).getData("text");
+                            const digits = text.replace(/\D+/g, "");
+                            e.preventDefault();
+                            field.onChange(digits.slice(0, 10));
+                          }}
+                          aria-invalid={!!form.formState.errors?.Phone}
                         />
                       </div>
                       <FormMessage />
@@ -107,7 +160,6 @@ const PostInform = () => {
                 />
               </div>
 
-              {/* Social links */}
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-medium text-foreground/80">
@@ -115,7 +167,6 @@ const PostInform = () => {
                   </h3>
                 </div>
 
-                {/* LINE */}
                 <FormField
                   control={form.control}
                   name="Link_line"
@@ -127,8 +178,14 @@ const PostInform = () => {
                         <Input
                           {...field}
                           type="url"
+                          value={field.value ?? ""}
                           placeholder="https://line.me/ti/p/..."
                           className="pl-9 h-11"
+                          autoComplete="url"
+                          onBlur={(e) =>
+                            field.onChange(normalizeUrl(e.target.value))
+                          }
+                          aria-invalid={!!form.formState.errors?.Link_line}
                         />
                       </div>
                       <FormMessage />
@@ -136,7 +193,6 @@ const PostInform = () => {
                   )}
                 />
 
-                {/* Facebook (คงชื่อฟิลด์ Link_facbook ให้ตรง backend) */}
                 <FormField
                   control={form.control}
                   name="Link_facbook"
@@ -148,8 +204,14 @@ const PostInform = () => {
                         <Input
                           {...field}
                           type="url"
+                          value={field.value ?? ""}
                           placeholder="https://facebook.com/username"
                           className="pl-9 h-11"
+                          autoComplete="url"
+                          onBlur={(e) =>
+                            field.onChange(normalizeUrl(e.target.value))
+                          }
+                          aria-invalid={!!form.formState.errors?.Link_facbook}
                         />
                       </div>
                       <FormMessage />
@@ -158,26 +220,6 @@ const PostInform = () => {
                 />
               </div>
 
-              {/* (ถ้ามี) เงื่อนไข/ข้อตกลงผู้ขาย */}
-              {/* 
-              <FormField
-                control={form.control}
-                name="Contract_Seller"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>เงื่อนไข/ข้อตกลงผู้ขาย</FormLabel>
-                    <Input
-                      {...field}
-                      placeholder="เช่น นัดดูห้องวันทำการ, เงื่อนไขค่าธรรมเนียม"
-                      className="h-11"
-                    />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              */}
-
-              {/* Actions */}
               <div className="flex items-center justify-between pt-2">
                 <Button
                   type="button"

@@ -1,19 +1,36 @@
+// src/components/schemas/registerSellerSchema.js
 import { z } from "zod";
 
 export const registerSellerSchema = z.object({
-  National_ID: z
-    .string()
-    .regex(/^[0-9]{13}$/, "เลขบัตรประชาชนต้องมี 13 หลัก"),
   Company_Name: z
     .string()
+    .trim()
+    .max(255, "ยาวเกินไป (สูงสุด 255 ตัวอักษร)")
     .optional()
-    .refine((val) => !val || val.length >= 2, {
-      message: "ชื่อบริษัทต้องมีอย่างน้อย 2 ตัวอักษร",
-    }),
+    .transform((v) => (v === "" ? undefined : v)),
+
   RealEstate_License: z
     .string()
+    .trim()
+    .max(255, "ยาวเกินไป (สูงสุด 255 ตัวอักษร)")
     .optional()
-    .refine((val) => !val || val.length >= 5, {
-      message: "เลขใบอนุญาตต้องมีอย่างน้อย 5 ตัวอักษร",
-    }),
+    .transform((v) => (v === "" ? undefined : v)),
+
+  nationalIdImage: z
+    .union([
+      typeof File !== "undefined"
+        ? z.instanceof(File).optional()
+        : z.any().optional(),
+      z.string().url().optional(),
+      z.string().length(0).optional(),
+    ])
+    .optional()
+    .transform((v) => (v === "" ? undefined : v)),
+
+  StartTime: z
+    .string()
+    .datetime()
+    .optional()
+    .or(z.string().length(0).optional())
+    .transform((v) => (v === "" ? undefined : v)),
 });

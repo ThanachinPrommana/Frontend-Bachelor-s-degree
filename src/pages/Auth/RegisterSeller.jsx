@@ -1,12 +1,15 @@
+// src/pages/Profile/Seller/RegisterSeller.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerSeller } from "@/api/auth";
 import { useAuth } from "@/context/AuthContext";
-import { Loader2 } from "lucide-react";
+import { Loader2, Image as ImageIcon } from "lucide-react";
 import Logo from "@/components/Logo";
 import { registerSellerSchema } from "@/components/schemas/authSchemas";
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 const RegisterSeller = () => {
   const { authUser, revalidateUser } = useAuth();
@@ -15,14 +18,20 @@ const RegisterSeller = () => {
   const {
     register,
     handleSubmit,
-    reset,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(registerSellerSchema),
+    defaultValues: {
+      Company_Name: "",
+      RealEstate_License: "",
+    },
   });
 
   const [serverError, setServerError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
+  const [nationalIdFile, setNationalIdFile] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
+  const [fileError, setFileError] = useState(null);
 
   useEffect(() => {
     if (authUser && authUser.userType === "Seller") {
@@ -30,17 +39,60 @@ const RegisterSeller = () => {
     }
   }, [authUser, navigate]);
 
+  useEffect(() => {
+    return () => {
+      if (filePreview) URL.revokeObjectURL(filePreview);
+    };
+  }, [filePreview]);
+
+  const handleFileChange = (e) => {
+    const f = e.target.files?.[0] || null;
+    setFileError(null);
+
+    if (!f) {
+      setNationalIdFile(null);
+      setFilePreview(null);
+      return;
+    }
+    if (!/^image\/(jpeg|jpg|png|heic|webp)/i.test(f.type)) {
+      setFileError("โปรดเลือกไฟล์รูปภาพ (JPG/PNG)");
+      setNationalIdFile(null);
+      setFilePreview(null);
+      return;
+    }
+    if (f.size > MAX_FILE_SIZE) {
+      setFileError("ขนาดไฟล์ต้องไม่เกิน 5MB");
+      setNationalIdFile(null);
+      setFilePreview(null);
+      return;
+    }
+    setNationalIdFile(f);
+    setFilePreview(URL.createObjectURL(f));
+  };
+
   const onSubmit = async (data) => {
     setServerError(null);
     setSuccessMessage(null);
+
+    if (!nationalIdFile) {
+      setFileError("กรุณาอัปโหลดรูปภาพบัตรประชาชน");
+      return;
+    }
+
     try {
-      const response = await registerSeller(data);
+      const fd = new FormData();
+      if (data.Company_Name)
+        fd.append("Company_Name", data.Company_Name.trim());
+      if (data.RealEstate_License)
+        fd.append("RealEstate_License", data.RealEstate_License.trim());
+      fd.append("nationalIdImage", nationalIdFile); // ← field ตรง backend เดิม
+
+      const response = await registerSeller(fd);
       setSuccessMessage(response?.message || "สมัครเป็นผู้ขายสำเร็จ");
       await revalidateUser();
-      // ไปหน้า Seller หลังแสดงผลลัพธ์สั้น ๆ
       setTimeout(() => navigate("/seller"), 1200);
     } catch (err) {
-      console.error("Caught Error on Frontend:", err);
+      console.error("RegisterSeller error:", err);
       setServerError(
         err?.response?.data?.message || "เกิดข้อผิดพลาดที่ไม่คาดคิด"
       );
@@ -65,6 +117,10 @@ const RegisterSeller = () => {
     );
   }
 
+  const fileNameText = nationalIdFile
+    ? nationalIdFile.name
+    : "ไม่มีไฟล์ที่ถูกเลือก";
+
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-xl bg-white border border-gray-300 rounded-2xl shadow-2xl ring-1 ring-gray-200 p-6 md:p-8">
@@ -74,7 +130,7 @@ const RegisterSeller = () => {
             สมัครเป็นผู้ขาย
           </h2>
           <p className="text-sm text-gray-500 mt-1">
-            กรอกข้อมูลด้านล่างเพื่ออัปเกรดบัญชีของคุณเป็นผู้ขาย
+            กรอกข้อมูลและอัปโหลดรูปบัตรประชาชนเพื่ออัปเกรดบัญชีของคุณเป็นผู้ขาย
           </p>
         </div>
 
@@ -85,38 +141,7 @@ const RegisterSeller = () => {
         )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-          {/* National ID */}
-          <div>
-            <label
-              htmlFor="National_ID"
-              className="block text-sm font-medium text-gray-700"
-            >
-              บัตรประจำตัวประชาชน <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              id="National_ID"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={13}
-              {...register("National_ID")}
-              className={`mt-1 block w-full px-3 py-2 border ${
-                errors.National_ID ? "border-red-500" : "border-gray-300"
-              } rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-400`}
-              placeholder="กรอกเลข 13 หลัก"
-            />
-            {errors.National_ID ? (
-              <p className="mt-1 text-sm text-red-600">
-                {errors.National_ID.message}
-              </p>
-            ) : (
-              <p className="mt-1 text-xs text-gray-500">
-                ต้องเป็นตัวเลข 13 หลัก
-              </p>
-            )}
-          </div>
-
-          {/* Company Name (optional) */}
+          {/* Company Name */}
           <div>
             <label
               htmlFor="Company_Name"
@@ -140,7 +165,7 @@ const RegisterSeller = () => {
             )}
           </div>
 
-          {/* Real Estate License (optional) */}
+          {/* Real Estate License */}
           <div>
             <label
               htmlFor="RealEstate_License"
@@ -162,6 +187,55 @@ const RegisterSeller = () => {
                 {errors.RealEstate_License.message}
               </p>
             )}
+          </div>
+
+          {/* Upload National ID Image */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              รูปภาพบัตรประชาชน <span className="text-red-500">*</span>
+            </label>
+
+            <div className="mt-1 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4">
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 rounded-md border bg-white overflow-hidden flex items-center justify-center">
+                  {filePreview ? (
+                    <img
+                      src={filePreview}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <ImageIcon className="w-8 h-8 text-gray-400" />
+                  )}
+                </div>
+
+                <div className="flex-1 flex items-center gap-3">
+                  <label
+                    htmlFor="file-national-id"
+                    className="inline-flex items-center px-4 py-2 rounded-md bg-[#2C3E50] text-white text-sm font-medium hover:bg-[#1a252f] cursor-pointer"
+                  >
+                    เรียกดู...
+                  </label>
+                  <input
+                    id="file-national-id"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <span className="text-sm text-gray-700 truncate">
+                    {fileNameText}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-500 mt-2">
+                รองรับ JPG/PNG ขนาดไม่เกิน 5MB
+              </p>
+              {fileError && (
+                <p className="mt-1 text-sm text-red-600">{fileError}</p>
+              )}
+            </div>
           </div>
 
           {/* Submit */}

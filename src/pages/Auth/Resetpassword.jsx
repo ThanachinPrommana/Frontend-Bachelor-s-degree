@@ -28,12 +28,13 @@ const Resetpassword = () => {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-    watch,
     reset,
   } = useForm({
     resolver: zodResolver(resetPasswordSchema),
+    mode: "onSubmit",
   });
 
+  // ปิดปุ่มถ้าไม่มี token หรือกำลัง submit
   const submitDisabled = useMemo(
     () => isSubmitting || !token,
     [isSubmitting, token]
@@ -46,17 +47,18 @@ const Resetpassword = () => {
     }
     setServerError("");
     try {
-      const res = await resetpassword({ token, Password: data.Password });
-      // แสดง UI สำเร็จเล็กน้อย แล้วพากลับหน้า login
+      await resetpassword({ token, Password: data.Password });
       setDone(true);
-      setTimeout(() => navigate("/login"), 1200);
-      // ถ้าอยากโชว์ alert ด้วยก็ได้:
-      // alert(res?.message || "ตั้งรหัสผ่านใหม่สำเร็จ");
       reset();
+      setTimeout(() => navigate("/login"), 1200);
     } catch (err) {
-      setServerError(
-        err?.response?.data?.message || "เกิดข้อผิดพลาดจากเซิร์ฟเวอร์"
-      );
+      const msg =
+        err?.response?.data?.message ??
+        (err?.message?.includes("Network")
+          ? "เครือข่ายมีปัญหา กรุณาลองใหม่อีกครั้ง"
+          : null) ??
+        "เกิดข้อผิดพลาดจากเซิร์ฟเวอร์";
+      setServerError(msg);
     }
   };
 
@@ -128,10 +130,14 @@ const Resetpassword = () => {
               </span>
               <input
                 type={showPw ? "text" : "password"}
+                inputMode="text"
                 {...register("Password")}
                 className="w-full pl-10 pr-10 py-2 rounded-md outline-none bg-transparent"
                 placeholder="••••••••"
                 autoComplete="new-password"
+                minLength={6}
+                required
+                aria-invalid={!!errors.Password}
               />
               <button
                 type="button"
@@ -168,10 +174,14 @@ const Resetpassword = () => {
               </span>
               <input
                 type={showConfirm ? "text" : "password"}
+                inputMode="text"
                 {...register("ConfirmPassword")}
                 className="w-full pl-10 pr-10 py-2 rounded-md outline-none bg-transparent"
                 placeholder="••••••••"
                 autoComplete="new-password"
+                minLength={6}
+                required
+                aria-invalid={!!errors.ConfirmPassword}
               />
               <button
                 type="button"

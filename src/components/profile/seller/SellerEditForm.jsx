@@ -1,0 +1,594 @@
+// src/pages/Profile/Seller/SellerEditForm.jsx
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
+import ThaiLocationSelect from "@/components/profile/ThaiLocationSelect";
+
+/* ====== ปริมณฑล (whitelist) ====== */
+const METRO_PROVINCES = [
+  "กรุงเทพมหานคร",
+  "นนทบุรี",
+  "ปทุมธานี",
+  "สมุทรปราการ",
+  "สมุทรสาคร",
+  "นครปฐม",
+];
+const isMetro = (name) => METRO_PROVINCES.includes(String(name || "").trim());
+
+/* ====== ตัวเลือกที่จอดรถ (เพิ่ม threePlus) ====== */
+const ALLOWED_PARKING = ["oneCar", "twoCars", "threePlus", "Not_required"];
+
+/* ====== ฟิลด์ (ตัด DateofBirth, Occupation ออก) ====== */
+const BUYER_KEYS = [
+  "Monthly_Income",
+  "Family_Size",
+  "Preferred_Province",
+  "Preferred_District",
+  "Preferred_Subdistrict",
+  "Parking_Needs",
+  "Nearby_Facilities",
+  "Lifestyle_Preferences",
+  "Special_Requirements",
+];
+const SELLER_KEYS = ["National_ID", "Company_Name", "RealEstate_License"];
+
+/* ====== ค่าเริ่มต้น ====== */
+function buildDefaults(user) {
+  const b = user?.Buyer || {};
+  const s = user?.Seller || {};
+
+  const province = isMetro(b?.Preferred_Province) ? b.Preferred_Province : "";
+
+  return {
+    First_name: user?.First_name ?? "",
+    Last_name: user?.Last_name ?? "",
+    Phone: user?.Phone ?? "",
+    Buyer: {
+      Monthly_Income:
+        typeof b?.Monthly_Income === "number" ? String(b.Monthly_Income) : "",
+      Family_Size:
+        typeof b?.Family_Size === "number" ? String(b.Family_Size) : "",
+      Preferred_Province: province,
+      Preferred_District: province ? b?.Preferred_District ?? "" : "",
+      Preferred_Subdistrict: province ? b?.Preferred_Subdistrict ?? "" : "",
+      Parking_Needs: ALLOWED_PARKING.includes(b?.Parking_Needs)
+        ? b.Parking_Needs
+        : "",
+      Nearby_Facilities: b?.Nearby_Facilities ?? "",
+      Lifestyle_Preferences: b?.Lifestyle_Preferences ?? "",
+      Special_Requirements: b?.Special_Requirements ?? "",
+    },
+    Seller: {
+      National_ID: s?.National_ID ?? "",
+      Company_Name: s?.Company_Name ?? "",
+      RealEstate_License: s?.RealEstate_License ?? "",
+    },
+  };
+}
+
+/* ====== diff (กัน province นอกลิสต์ + แปลงชนิดที่ต้องเป็นตัวเลข) ====== */
+function makeDiff(values, user) {
+  const diff = {};
+
+  // --- User-level ---
+  const putUser = (k, cur, old) => {
+    if ((cur ?? "") === (old ?? "")) return;
+    if (cur === "") return; // ไม่ส่งค่าว่างสำหรับ field บังคับ
+    diff[k] = cur;
+  };
+  putUser("First_name", values.First_name, user?.First_name);
+  putUser("Last_name", values.Last_name, user?.Last_name);
+  putUser("Phone", values.Phone, user?.Phone);
+
+  // --- Buyer-level ---
+  const bOld = user?.Buyer || {};
+  const bCur = values.Buyer || {};
+  const putBuyer = (k, v) => {
+    if (!diff.buyer) diff.buyer = {};
+    if (v === "") v = null;
+
+    if (k === "Monthly_Income" || k === "Family_Size") {
+      if (v !== null) {
+        const n = Number(v);
+        v = Number.isNaN(n) ? null : n;
+      }
+    }
+
+    // กันจังหวัดนอกปริมณฑล
+    if (k === "Preferred_Province" && v && !isMetro(v)) v = null;
+    // ถ้า province ว่าง/นอกลิสต์ → district/subdistrict เป็น null
+    if (
+      (k === "Preferred_District" || k === "Preferred_Subdistrict") &&
+      !isMetro(bCur?.Preferred_Province)
+    ) {
+      v = null;
+    }
+
+    // ✅ กันค่าที่จอดรถนอกลิสต์
+    if (k === "Parking_Needs" && v !== null) {
+      v = ALLOWED_PARKING.includes(v) ? v : null;
+    }
+
+    diff.buyer[k] = v;
+  };
+
+  BUYER_KEYS.forEach((k) => {
+    const cur = bCur[k] ?? "";
+    const old =
+      k === "Monthly_Income" || k === "Family_Size"
+        ? typeof bOld[k] === "number"
+          ? String(bOld[k])
+          : ""
+        : bOld[k] ?? "";
+    if ((cur ?? "") !== (old ?? "")) putBuyer(k, cur);
+  });
+  if (diff.buyer && Object.keys(diff.buyer).length === 0) delete diff.buyer;
+
+  // --- Seller-level ---
+  const sOld = user?.Seller || {};
+  const sCur = values.Seller || {};
+  const putSeller = (k, v) => {
+    if (!diff.seller) diff.seller = {};
+    if (k === "National_ID") {
+      if (v === "") return; // ห้ามส่งค่าว่าง
+      const onlyDigit = String(v).replace(/\D/g, "");
+      if (onlyDigit.length !== 13) {
+        throw new Error("เลขบัตรประชาชนต้องมี 13 หลัก");
+      }
+      diff.seller[k] = onlyDigit;
+      return;
+    }
+    if (v === "") v = null;
+    diff.seller[k] = v;
+  };
+  SELLER_KEYS.forEach((k) => {
+    const cur = sCur[k] ?? "";
+    const old = sOld[k] ?? "";
+    if ((cur ?? "") !== (old ?? "")) putSeller(k, cur);
+  });
+  if (diff.seller && Object.keys(diff.seller).length === 0) delete diff.seller;
+
+  return diff;
+}
+
+/* ====== number-format helpers สำหรับช่องรายได้ต่อเดือน ====== */
+const nfTH = new Intl.NumberFormat("th-TH");
+function sanitizeDigits(s) {
+  return String(s ?? "").replace(/\D/g, "");
+}
+function formatGrouping(sDigits) {
+  if (!sDigits) return "";
+  return nfTH.format(Number(sDigits));
+}
+function digitsRightCount(str, cursor) {
+  let cnt = 0;
+  for (let i = cursor; i < str.length; i++) if (/\d/.test(str[i])) cnt++;
+  return cnt;
+}
+function caretFromDigitsRight(str, digitsRight) {
+  for (let i = str.length; i >= 0; i--) {
+    if (digitsRightCount(str, i) === digitsRight) return i;
+  }
+  return str.length;
+}
+
+/* ====== Component ====== */
+export default function SellerEditForm({ user, onCancel, onSubmitDiff }) {
+  const defaults = useMemo(() => buildDefaults(user), [user]);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { isDirty },
+    reset,
+    setValue,
+    watch,
+  } = useForm({
+    defaultValues: defaults,
+    mode: "onChange",
+    shouldUnregister: false,
+  });
+
+  useEffect(() => {
+    reset(buildDefaults(user));
+  }, [user, reset]);
+
+  const [step, setStep] = useState(1); // 1: User, 2: Buyer, 3: Seller
+  const [loading, setLoading] = useState(false);
+
+  const buyerVals = watch("Buyer");
+
+  // ====== สถานะ + ref สำหรับ "รายได้ต่อเดือน" ที่ต้องโชว์คอมม่า ======
+  const incomeRef = useRef(null);
+  const [incomeDisplay, setIncomeDisplay] = useState("");
+
+  // sync display เมื่อค่าในฟอร์มเปลี่ยนจากภายนอก
+  useEffect(() => {
+    const rawDigits = sanitizeDigits(buyerVals?.Monthly_Income ?? "");
+    setIncomeDisplay(formatGrouping(rawDigits));
+  }, [buyerVals?.Monthly_Income]);
+
+  // onChange แบบคงตำแหน่ง caret
+  const handleIncomeChange = (e) => {
+    const raw = e.target.value;
+    const prevPos = incomeRef.current?.selectionStart ?? raw.length;
+    const rightDigits = digitsRightCount(raw, prevPos);
+
+    const digits = sanitizeDigits(raw); // เก็บ digits ล้วนในฟอร์ม
+    setValue("Buyer.Monthly_Income", digits, { shouldDirty: true });
+
+    const display = formatGrouping(digits); // แสดงมีคอมม่า
+    setIncomeDisplay(display);
+
+    requestAnimationFrame(() => {
+      const el = incomeRef.current;
+      if (!el) return;
+      const newPos = caretFromDigitsRight(display, rightDigits);
+      el.setSelectionRange(newPos, newPos);
+    });
+  };
+
+  const f = {
+    First_name: register("First_name"),
+    Last_name: register("Last_name"),
+    Phone: register("Phone"),
+    Buyer: {
+      // NOTE: Monthly_Income ใช้ manual onChange + value จาก incomeDisplay
+      Monthly_Income: register("Buyer.Monthly_Income"),
+      Family_Size: register("Buyer.Family_Size"),
+      Parking_Needs: register("Buyer.Parking_Needs"),
+      Nearby_Facilities: register("Buyer.Nearby_Facilities"),
+      Lifestyle_Preferences: register("Buyer.Lifestyle_Preferences"),
+      Special_Requirements: register("Buyer.Special_Requirements"),
+    },
+    Seller: {
+      National_ID: register("Seller.National_ID"),
+      Company_Name: register("Seller.Company_Name"),
+      RealEstate_License: register("Seller.RealEstate_License"),
+    },
+  };
+
+  const onSubmit = async (vals) => {
+    try {
+      setLoading(true);
+      const diff = makeDiff(vals, user);
+      await onSubmitDiff?.(diff);
+    } catch (e) {
+      alert(e.message || "กรุณาตรวจสอบข้อมูลอีกครั้ง");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
+      {/* Tabs */}
+      <div className="flex items-center gap-3">
+        <span
+          className={`px-3 py-1 rounded-full text-sm ${
+            step === 1 ? "bg-slate-900 text-white" : "bg-slate-100"
+          }`}
+        >
+          1 บัญชีผู้ใช้
+        </span>
+        <span
+          className={`px-3 py-1 rounded-full text-sm ${
+            step === 2 ? "bg-slate-900 text-white" : "bg-slate-100"
+          }`}
+        >
+          2 ผู้ซื้อ
+        </span>
+        <span
+          className={`px-3 py-1 rounded-full text-sm ${
+            step === 3 ? "bg-slate-900 text-white" : "bg-slate-100"
+          }`}
+        >
+          3 ผู้ขาย
+        </span>
+      </div>
+
+      {/* ---------- หน้า 1: บัญชีผู้ใช้ ---------- */}
+      <div className={step === 1 ? "" : "hidden"}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="sm:col-span-2">
+            <label className="block text-sm text-gray-600 mb-1">
+              อีเมล (ล็อกไว้)
+            </label>
+            <input
+              value={user?.Email ?? ""}
+              disabled
+              className="w-full rounded border px-3 py-2 bg-gray-100 text-gray-600"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+              ชื่อจริง (First Name)
+            </label>
+            <input
+              {...f.First_name}
+              className="w-full rounded border px-3 py-2"
+              placeholder="เช่น Somchai"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+              นามสกุล (Last Name)
+            </label>
+            <input
+              {...f.Last_name}
+              className="w-full rounded border px-3 py-2"
+              placeholder="เช่น Jaidee"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="block text-sm text-gray-600 mb-1">เบอร์โทร</label>
+            <input
+              {...f.Phone}
+              className="w-full rounded border px-3 py-2"
+              placeholder="เช่น 0812345678"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="sm:col-span-2 flex justify-between mt-2">
+            <Button
+              variant="destructive"
+              type="button"
+              onClick={onCancel}
+              disabled={loading}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              type="button"
+              className="bg-[#2C3E50] hover:bg-[#1a252f] text-white"
+              onClick={() => setStep(2)}
+              disabled={loading}
+            >
+              ถัดไป
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* ---------- หน้า 2: ผู้ซื้อ (ไม่มีวันเกิด/อาชีพ) ---------- */}
+      <div className={step === 2 ? "" : "hidden"}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+              รายได้ต่อเดือน (บาท)
+            </label>
+            {/* ✅ แสดงลูกน้ำอัตโนมัติระหว่างพิมพ์ */}
+            <input
+              ref={incomeRef}
+              type="text"
+              inputMode="numeric"
+              value={incomeDisplay}
+              onChange={handleIncomeChange}
+              className="w-full rounded border px-3 py-2"
+              placeholder="เช่น 50,000"
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+              จำนวนสมาชิกครอบครัว (คน)
+            </label>
+            <input
+              type="number"
+              inputMode="numeric"
+              {...f.Buyer.Family_Size}
+              className="w-full rounded border px-3 py-2"
+              disabled={loading}
+            />
+          </div>
+
+          {/* จำกัดจังหวัดเฉพาะปริมณฑลในดรอปดาวน์ */}
+          <ThaiLocationSelect
+            provinceWhitelist={METRO_PROVINCES}
+            provinceValue={buyerVals?.Preferred_Province || ""}
+            districtValue={buyerVals?.Preferred_District || ""}
+            subDistrictValue={buyerVals?.Preferred_Subdistrict || ""}
+            showSubDistrict
+            disabled={loading}
+            onProvinceChange={(v) => {
+              const next = isMetro(v) ? v : "";
+              setValue("Buyer.Preferred_Province", next, { shouldDirty: true });
+              // ถ้า province ไม่ใช่ปริมณฑล → ล้างเขต/แขวง
+              setValue("Buyer.Preferred_District", "", { shouldDirty: true });
+              setValue("Buyer.Preferred_Subdistrict", "", {
+                shouldDirty: true,
+              });
+            }}
+            onDistrictChange={(v) => {
+              if (!isMetro(buyerVals?.Preferred_Province)) return; // กันหลุด
+              setValue("Buyer.Preferred_District", v, { shouldDirty: true });
+              setValue("Buyer.Preferred_Subdistrict", "", {
+                shouldDirty: true,
+              });
+            }}
+            onSubDistrictChange={(v) => {
+              if (!isMetro(buyerVals?.Preferred_Province)) return; // กันหลุด
+              setValue("Buyer.Preferred_Subdistrict", v, { shouldDirty: true });
+            }}
+          />
+
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+              ความต้องการที่จอดรถ
+            </label>
+            <select
+              {...f.Buyer.Parking_Needs}
+              className="w-full rounded border px-3 py-2"
+              disabled={loading}
+            >
+              <option value="">-</option>
+              <option value="oneCar">1 คัน</option>
+              <option value="twoCars">2 คัน</option>
+              <option value="threePlus">3 คันขึ้นไป</option>
+              <option value="Not_required">ไม่ต้องการ</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+              สิ่งอำนวยความสะดวกใกล้เคียง
+            </label>
+            <select
+              {...f.Buyer.Nearby_Facilities}
+              className="w-full rounded border px-3 py-2"
+              disabled={loading}
+            >
+              <option value="">-</option>
+              <option value="BTS_MRT">BTS/MRT</option>
+              <option value="School">โรงเรียน</option>
+              <option value="Hospital">โรงพยาบาล</option>
+              <option value="Mall_Market">ห้าง/ตลาด</option>
+              <option value="Park_Nature">สวนสาธารณะ</option>
+            </select>
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="block text-sm text-gray-600 mb-1">
+              รูปแบบการใช้ชีวิต
+            </label>
+            <select
+              {...f.Buyer.Lifestyle_Preferences}
+              className="w-full rounded border px-3 py-2"
+              disabled={loading}
+            >
+              <option value="">-</option>
+              <option value="Work_from_Home">ทำงานที่บ้าน</option>
+              <option value="Have_Pets">เลี้ยงสัตว์</option>
+              <option value="Need_a_Home_Office">ต้องการห้องทำงาน</option>
+              <option value="Like_Gardening">ชอบทำสวน</option>
+            </select>
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="block text-sm text-gray-600 mb-1">
+              ความต้องการพิเศษ (ถ้ามี)
+            </label>
+            <textarea
+              {...f.Buyer.Special_Requirements}
+              className="w-full rounded border px-3 py-2"
+              rows={3}
+              placeholder="เช่น ต้องการที่เงียบ ใกล้รถไฟฟ้า"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="sm:col-span-2 flex justify-between mt-2">
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={onCancel}
+              disabled={loading}
+            >
+              ยกเลิก
+            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setStep(1)}
+                disabled={loading}
+              >
+                ย้อนกลับ
+              </Button>
+              <Button
+                type="button"
+                className="bg-[#2C3E50] hover:bg-[#1a252f] text-white"
+                onClick={() => setStep(3)}
+                disabled={loading}
+              >
+                ถัดไป
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ---------- หน้า 3: ผู้ขาย ---------- */}
+      <div className={step === 3 ? "" : "hidden"}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+              เลขบัตรประชาชน
+            </label>
+            <input
+              {...f.Seller.National_ID}
+              className="w-full rounded border px-3 py-2"
+              placeholder="13 หลัก"
+              disabled={loading}
+              onChange={(e) => {
+                e.target.value = e.target.value.replace(/\D/g, "").slice(0, 13);
+              }}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+              ชื่อบริษัท
+            </label>
+            <input
+              {...f.Seller.Company_Name}
+              className="w-full rounded border px-3 py-2"
+              placeholder="เช่น บริษัท สมาร์ทโฮม จำกัด"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="block text-sm text-gray-600 mb-1">
+              เลขที่ใบอนุญาตนายหน้า
+            </label>
+            <input
+              {...f.Seller.RealEstate_License}
+              className="w-full rounded border px-3 py-2"
+              placeholder="เช่น 62-xxxxxxxx"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="sm:col-span-2 flex justify-between mt-2">
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={onCancel}
+              disabled={loading}
+            >
+              ยกเลิก
+            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setStep(2)}
+                disabled={loading}
+              >
+                ย้อนกลับ
+              </Button>
+              <Button
+                type="submit"
+                className="bg-[#2C3E50] hover:bg-[#1a252f] text-white flex items-center gap-2"
+                disabled={!isDirty || loading}
+                aria-busy={loading}
+              >
+                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                {loading ? "กำลังบันทึก..." : "บันทึกทั้งหมด"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </form>
+  );
+}
