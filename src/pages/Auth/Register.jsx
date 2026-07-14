@@ -226,7 +226,13 @@ const Register = () => {
       const res = await preregister(payload);
       const message = res?.data?.message || res?.message || "สมัครสมาชิกสำเร็จ";
       alert(message);
-      navigate("/login");
+      
+      const token = res?.data?.token || res?.token;
+      if (token) {
+        navigate(`/verifyemail?token=${token}`);
+      } else {
+        navigate("/login");
+      }
     } catch (err) {
       setServerError(
         err?.response?.data?.message || err?.message || "Server error"
