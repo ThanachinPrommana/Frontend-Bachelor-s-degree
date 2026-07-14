@@ -317,10 +317,11 @@ export default function PostUpload() {
         transformRequest: [(data) => data],
       });
 
-      form.reset();
+      // navigate ก่อน แล้วค่อย reset เพื่อให้ location.state ส่งถึง PostConfirm ครบ
       navigate("/seller/post-for-sale/confirm", {
         state: { postId: response.data.id },
       });
+      form.reset();
     } catch (apiError) {
       const message =
         apiError?.response?.data?.message ||

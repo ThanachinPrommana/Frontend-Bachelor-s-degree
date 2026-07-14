@@ -13,11 +13,8 @@ import {
   AlertDialogFooter,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import axios from "axios";
+import { apiClient } from "@/api/authconfig";
 import { useFormContext } from "react-hook-form";
-
-/** ใช้ env ก่อน แล้วค่อย fallback localhost */
-const API_URL = import.meta.env?.VITE_API_URL || "http://localhost:8200";
 
 const nfBaht = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 });
 const nfArea = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 2 });
@@ -165,9 +162,8 @@ const PostConfirm = () => {
     const controller = new AbortController();
     (async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/propertypost/${postId}`, {
+        const res = await apiClient.get(`/propertypost/${postId}`, {
           signal: controller.signal,
-          withCredentials: true,
         });
         setPostData(res.data);
       } catch (err) {
