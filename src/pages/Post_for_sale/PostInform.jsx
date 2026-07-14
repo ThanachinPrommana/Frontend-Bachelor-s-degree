@@ -19,26 +19,67 @@ import { postInformSchema } from "@/components/schemas/postSchemas/postInformSch
 import { validateStep } from "@/lib/zodRHF";
 
 /* ========= helpers ========= */
-const normalizeUrl = (val) => {
+
+/**
+ * Converts a bare Line ID to the correct deep-link URL.
+ * Accepts:
+ *   - Full URL  → kept as-is (after basic validation)
+ *   - Bare ID   → prepended with https://line.me/ti/p/~
+ * Prevents double-prefix bugs (https://https://...).
+ */
+const normalizeLineUrl = (val) => {
   if (!val) return "";
   const raw = String(val).trim();
   if (!raw) return "";
-  const withProto = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-  try {
-    const u = new URL(withProto);
-    if (!/^https?:$/i.test(u.protocol)) return "";
-    return u.toString();
-  } catch {
-    return "";
+
+  // Already a full URL — validate and return
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const u = new URL(raw);
+      if (!/^https?:$/i.test(u.protocol)) return "";
+      return u.toString();
+    } catch {
+      return "";
+    }
   }
+
+  // Bare ID — build the Line deep-link
+  return `https://line.me/ti/p/~${raw}`;
+};
+
+/**
+ * Converts a bare Facebook username to the correct profile URL.
+ * Accepts:
+ *   - Full URL  → kept as-is (after basic validation)
+ *   - Bare name → prepended with https://facebook.com/
+ * Prevents double-prefix bugs.
+ */
+const normalizeFacebookUrl = (val) => {
+  if (!val) return "";
+  const raw = String(val).trim();
+  if (!raw) return "";
+
+  // Already a full URL — validate and return
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const u = new URL(raw);
+      if (!/^https?:$/i.test(u.protocol)) return "";
+      return u.toString();
+    } catch {
+      return "";
+    }
+  }
+
+  // Bare username — build the Facebook profile URL
+  return `https://facebook.com/${raw}`;
 };
 
 const sanitize = (v) => ({
   ...v,
   Name: v?.Name?.trim() || "",
   Phone: (v?.Phone || "").replace(/\D+/g, "").trim(),
-  Link_line: normalizeUrl(v?.Link_line),
-  Link_facbook: normalizeUrl(v?.Link_facbook),
+  Link_line: normalizeLineUrl(v?.Link_line),
+  Link_facbook: normalizeFacebookUrl(v?.Link_facbook),
 });
 
 const PostInform = () => {
@@ -83,9 +124,10 @@ const PostInform = () => {
             <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground flex items-start gap-3">
               <Info className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
-                กรุณากรอกเบอร์โทรที่ติดต่อได้จริง และใส่ลิงก์แบบเต็ม{" "}
-                <span className="font-medium">https://</span>{" "}
-                เพื่อให้ผู้ซื้อคลิกได้ทันที
+                กรุณากรอกเบอร์โทรที่ติดต่อได้จริง
+                {" — สำหรับ LINE และ Facebook "}
+                <span className="font-medium">พิมพ์แค่ ID หรือชื่อผู้ใช้ก็พอ</span>
+                {" ระบบจะสร้างลิงก์ให้อัตโนมัติ"}
               </p>
             </div>
 
@@ -177,13 +219,13 @@ const PostInform = () => {
                         <MessageCircle className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
                           {...field}
-                          type="url"
+                          type="text"
                           value={field.value ?? ""}
-                          placeholder="https://line.me/ti/p/..."
+                          placeholder="Line ID หรือ https://line.me/ti/p/..."
                           className="pl-9 h-11"
-                          autoComplete="url"
+                          autoComplete="off"
                           onBlur={(e) =>
-                            field.onChange(normalizeUrl(e.target.value))
+                            field.onChange(normalizeLineUrl(e.target.value))
                           }
                           aria-invalid={!!form.formState.errors?.Link_line}
                         />
@@ -203,13 +245,13 @@ const PostInform = () => {
                         <Facebook className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
                           {...field}
-                          type="url"
+                          type="text"
                           value={field.value ?? ""}
-                          placeholder="https://facebook.com/username"
+                          placeholder="ชื่อผู้ใช้ Facebook หรือ https://facebook.com/..."
                           className="pl-9 h-11"
-                          autoComplete="url"
+                          autoComplete="off"
                           onBlur={(e) =>
-                            field.onChange(normalizeUrl(e.target.value))
+                            field.onChange(normalizeFacebookUrl(e.target.value))
                           }
                           aria-invalid={!!form.formState.errors?.Link_facbook}
                         />
