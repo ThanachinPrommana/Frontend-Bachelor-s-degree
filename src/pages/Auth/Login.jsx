@@ -10,7 +10,7 @@ import Logo from "@/components/Logo";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { authUser, revalidateUser } = useAuth();
+  const { authUser, setAuthUser } = useAuth();
   const [serverError, setServerError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -35,8 +35,10 @@ const Login = () => {
     setServerError("");
     setIsSubmitting(true);
     try {
-      await login(formData);
-      await revalidateUser();
+      const data = await login(formData);
+      if (data?.user) {
+        setAuthUser(data.user);
+      }
     } catch (err) {
       setServerError(
         err?.response?.data?.message || "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่"
